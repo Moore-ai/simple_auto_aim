@@ -65,6 +65,32 @@ min_detect_count: 5
 max_temp_lost_count: 15
 outpost_max_temp_lost_count: 75
 
+#####-----EKF参数-----#####
+ekf:
+  # 过程噪声（Piecewise White Noise Model）
+  accel_var: 100                  # 加速度方差 v1（前哨站除外）
+  angular_accel_var: 400          # 角加速度方差 v2（前哨站除外）
+  outpost_accel_var: 10           # 前哨站加速度方差
+  outpost_angular_accel_var: 0.1  # 前哨站角加速度方差
+
+  # 观测噪声
+  obs_yaw_var: 4e-3               # yaw 观测方差
+  obs_pitch_var: 4e-3             # pitch 观测方差
+  obs_armor_yaw_base: 9e-2        # armor_yaw 基础方差
+
+  # 初始协方差 P0 对角线（按兵种分）
+  P0:
+    default: [1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1]
+    balance: [1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1]
+    outpost: [1, 64, 1, 64, 1, 81, 0.4, 100, 1e-4, 0, 0]
+    base: [1, 64, 1, 64, 1, 64, 0.4, 100, 1e-4, 0, 0]
+
+  # 初始半径
+  radius:
+    default: 0.2
+    outpost: 0.2765
+    base: 0.3205
+
 #####-----aimer参数-----#####
 yaw_offset: -2.5 # degree -2.5
 pitch_offset: 0  # degree 2

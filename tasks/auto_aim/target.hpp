@@ -14,6 +14,20 @@
 namespace auto_aim
 {
 
+// EKF 配置参数结构体
+struct EKFConfig
+{
+  // 过程噪声
+  double accel_var = 100;
+  double angular_accel_var = 400;
+  double outpost_accel_var = 10;
+  double outpost_angular_accel_var = 0.1;
+  // 观测噪声
+  double obs_yaw_var = 4e-3;
+  double obs_pitch_var = 4e-3;
+  double obs_armor_yaw_base = 9e-2;
+};
+
 class Target
 {
 public:
@@ -26,7 +40,7 @@ public:
   Target() = default;
   Target(
     const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
-    Eigen::VectorXd P0_dig);
+    Eigen::VectorXd P0_dig, const EKFConfig & ekf_config = {});
   Target(double x, double vyaw, double radius, double h);
 
   void predict(std::chrono::steady_clock::time_point t);
@@ -49,6 +63,8 @@ private:
   int armor_num_;
   int switch_count_;
   int update_count_;
+
+  EKFConfig ekf_config_;
 
   bool is_switch_, is_converged_;
 

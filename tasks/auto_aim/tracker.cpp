@@ -1,11 +1,10 @@
 #include "tracker.hpp"
 
-#include <yaml-cpp/yaml.h>
-
 #include <tuple>
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
+#include "tools/yaml.hpp"
 
 namespace auto_aim
 {
@@ -18,12 +17,40 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   last_timestamp_(std::chrono::steady_clock::now()),
   omni_target_priority_{ArmorPriority::fifth}
 {
-  auto yaml = YAML::LoadFile(config_path);
-  enemy_color_ = (yaml["enemy_color"].as<std::string>() == "red") ? Color::red : Color::blue;
-  min_detect_count_ = yaml["min_detect_count"].as<int>();
-  max_temp_lost_count_ = yaml["max_temp_lost_count"].as<int>();
-  outpost_max_temp_lost_count_ = yaml["outpost_max_temp_lost_count"].as<int>();
+  auto yaml = tools::load(config_path);
+  enemy_color_ = (tools::read<std::string>(yaml, "enemy_color") == "red") ? Color::red : Color::blue;
+  min_detect_count_ = tools::read<int>(yaml, "min_detect_count");
+  max_temp_lost_count_ = tools::read<int>(yaml, "max_temp_lost_count");
+  outpost_max_temp_lost_count_ = tools::read<int>(yaml, "outpost_max_temp_lost_count");
   normal_temp_lost_count_ = max_temp_lost_count_;
+
+  // 读取 EKF 配置
+  auto ekf_cfg = yaml["ekf"];
+  ekf_config_.accel_var = tools::read<double>(ekf_cfg, "accel_var");
+  ekf_config_.angular_accel_var = tools::read<double>(ekf_cfg, "angular_accel_var");
+  ekf_config_.outpost_accel_var = tools::read<double>(ekf_cfg, "outpost_accel_var");
+  ekf_config_.outpost_angular_accel_var = tools::read<double>(ekf_cfg, "outpost_angular_accel_var");
+  ekf_config_.obs_yaw_var = tools::read<double>(ekf_cfg, "obs_yaw_var");
+  ekf_config_.obs_pitch_var = tools::read<double>(ekf_cfg, "obs_pitch_var");
+  ekf_config_.obs_armor_yaw_base = tools::read<double>(ekf_cfg, "obs_armor_yaw_base");
+
+  // 读取 P0 和 radius
+  auto P0_cfg = ekf_cfg["P0"];
+  auto radius_cfg = ekf_cfg["radius"];
+
+  auto read_P0 = [&](const std::string & key) -> Eigen::VectorXd {
+    auto vec = P0_cfg[key].as<std::vector<double>>();
+    return Eigen::Map<Eigen::VectorXd>(vec.data(), vec.size());
+  };
+
+  P0_default_ = read_P0("default");
+  P0_balance_ = read_P0("balance");
+  P0_outpost_ = read_P0("outpost");
+  P0_base_ = read_P0("base");
+
+  radius_default_ = tools::read<double>(radius_cfg, "default");
+  radius_outpost_ = tools::read<double>(radius_cfg, "outpost");
+  radius_base_ = tools::read<double>(radius_cfg, "base");
 }
 
 std::string Tracker::state() const { return state_; }
@@ -241,23 +268,19 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
                      armor.name == ArmorName::five);
 
   if (is_balance) {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1}};
-    target_ = Target(armor, t, 0.2, 2, P0_dig);
+    target_ = Target(armor, t, radius_default_, 2, P0_balance_, ekf_config_);
   }
 
   else if (armor.name == ArmorName::outpost) {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 81, 0.4, 100, 1e-4, 0, 0}};
-    target_ = Target(armor, t, 0.2765, 3, P0_dig);
+    target_ = Target(armor, t, radius_outpost_, 3, P0_outpost_, ekf_config_);
   }
 
   else if (armor.name == ArmorName::base) {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1e-4, 0, 0}};
-    target_ = Target(armor, t, 0.3205, 3, P0_dig);
+    target_ = Target(armor, t, radius_base_, 3, P0_base_, ekf_config_);
   }
 
   else {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1}};
-    target_ = Target(armor, t, 0.2, 4, P0_dig);
+    target_ = Target(armor, t, radius_default_, 4, P0_default_, ekf_config_);
   }
 
   return true;

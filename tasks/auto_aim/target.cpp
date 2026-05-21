@@ -9,13 +9,14 @@ namespace auto_aim
 {
 Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
-  Eigen::VectorXd P0_dig)
+  Eigen::VectorXd P0_dig, const EKFConfig & ekf_config)
 : name(armor.name),
   armor_type(armor.type),
   jumped(false),
   last_id(0),
   update_count_(0),
   armor_num_(armor_num),
+  ekf_config_(ekf_config),
   t_(t),
   is_switch_(false),
   is_converged_(false),
@@ -95,11 +96,11 @@ void Target::predict(double dt)
   // https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python/blob/master/07-Kalman-Filter-Math.ipynb
   double v1, v2;
   if (name == ArmorName::outpost) {
-    v1 = 10;   // 前哨站加速度方差
-    v2 = 0.1;  // 前哨站角加速度方差
+    v1 = ekf_config_.outpost_accel_var;
+    v2 = ekf_config_.outpost_angular_accel_var;
   } else {
-    v1 = 100;  // 加速度方差
-    v2 = 400;  // 角加速度方差
+    v1 = ekf_config_.accel_var;
+    v2 = ekf_config_.angular_accel_var;
   }
   auto a = dt * dt * dt * dt / 4;
   auto b = dt * dt * dt / 2;
@@ -192,8 +193,8 @@ void Target::update_ypda(const Armor & armor, int id)
   auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
   auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
   Eigen::VectorXd R_dig{
-    {4e-3, 4e-3, log(std::abs(delta_angle) + 1) + 1,
-     log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + 9e-2}};
+    {ekf_config_.obs_yaw_var, ekf_config_.obs_pitch_var, log(std::abs(delta_angle) + 1) + 1,
+     log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + ekf_config_.obs_armor_yaw_base}};
 
   //测量过程噪声偏差的方差
   Eigen::MatrixXd R = R_dig.asDiagonal();

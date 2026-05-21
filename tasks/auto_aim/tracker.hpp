@@ -43,6 +43,13 @@ private:
   std::chrono::steady_clock::time_point last_timestamp_;
   ArmorPriority omni_target_priority_;
 
+  // EKF 配置（一次性读取，传递给 Target）
+  EKFConfig ekf_config_;
+  // EKF 初始协方差 P0（按兵种）
+  Eigen::VectorXd P0_default_, P0_balance_, P0_outpost_, P0_base_;
+  // EKF 初始半径（按兵种）
+  double radius_default_, radius_outpost_, radius_base_;
+
   void state_machine(bool found);
 
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
