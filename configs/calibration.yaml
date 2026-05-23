@@ -2,7 +2,10 @@ pattern_cols: 10
 pattern_rows: 7
 center_distance_mm: 40
 
-R_gimbal2imubody: [1, 0, 0, 0, 1, 0,  0, 0, 1]
+# 云台坐标系到 IMU 本体坐标系的变换
+gimbal2imubody:
+  xyz: [0, 0, 0]                    # m 平移
+  rpy: [0, 0, 0]                    # rad [yaw, pitch, roll]
 
 camera_name: "hikrobot"
 exposure_ms: 3

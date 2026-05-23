@@ -35,7 +35,7 @@ Eigen::Quaterniond read_q(const std::string & q_path)
 
 void load(
   const std::string & input_folder, const std::string & config_path,
-  std::vector<double> & R_gimbal2imubody_data, std::vector<cv::Mat> & R_gimbal2world_list,
+  Eigen::Matrix3d & R_gimbal2imubody, std::vector<cv::Mat> & R_gimbal2world_list,
   std::vector<cv::Mat> & t_gimbal2world_list, std::vector<cv::Mat> & rvecs,
   std::vector<cv::Mat> & tvecs)
 {
@@ -44,12 +44,12 @@ void load(
   auto pattern_cols = yaml["pattern_cols"].as<int>();
   auto pattern_rows = yaml["pattern_rows"].as<int>();
   auto center_distance_mm = yaml["center_distance_mm"].as<double>();
-  R_gimbal2imubody_data = yaml["R_gimbal2imubody"].as<std::vector<double>>();
+  auto rpy_gi = yaml["gimbal2imubody"]["rpy"].as<std::vector<double>>();
+  R_gimbal2imubody = tools::rotation_matrix(Eigen::Vector3d(rpy_gi.data()));
   auto camera_matrix_data = yaml["camera_matrix"].as<std::vector<double>>();
   auto distort_coeffs_data = yaml["distort_coeffs"].as<std::vector<double>>();
 
   cv::Size pattern_size(pattern_cols, pattern_rows);
-  Eigen::Matrix<double, 3, 3, Eigen::RowMajor> R_gimbal2imubody(R_gimbal2imubody_data.data());
   cv::Matx33d camera_matrix(camera_matrix_data.data());
   cv::Mat distort_coeffs(distort_coeffs_data);
 
@@ -105,27 +105,47 @@ void load(
 }
 
 void print_yaml(
-  const std::vector<double> & R_gimbal2imubody_data, const cv::Mat & R_camera2gimbal,
+  const Eigen::Matrix3d & R_gimbal2imubody, const cv::Mat & R_camera2gimbal,
   const cv::Mat & t_camera2gimbal, const Eigen::Vector3d & ypr)
 {
-  YAML::Emitter result;
-  std::vector<double> R_camera2gimbal_data(
-    R_camera2gimbal.begin<double>(), R_camera2gimbal.end<double>());
-  std::vector<double> t_camera2gimbal_data(
-    t_camera2gimbal.begin<double>(), t_camera2gimbal.end<double>());
+  // 从旋转矩阵反算 rpy
+  Eigen::Vector3d rpy_gi = tools::eulers(R_gimbal2imubody, 2, 1, 0);
 
+  // 标定结果 R_camera2gimbal 是 camera_optical_frame → gimbal 的组合变换
+  // 分解出去除光轴旋转的 camera_joint（gimbal → camera_link）:
+  // R_cj = R_combined * R_op^T
+  Eigen::Matrix3d R_cg_eigen;
+  cv::cv2eigen(R_camera2gimbal, R_cg_eigen);
+  const Eigen::Matrix3d R_optical = tools::rotation_matrix(Eigen::Vector3d(-CV_PI / 2, 0, -CV_PI / 2));
+  Eigen::Matrix3d R_cj = R_cg_eigen * R_optical.transpose();
+  Eigen::Vector3d rpy_cj = tools::eulers(R_cj, 2, 1, 0);
+
+  // t_camera2gimbal → xyz（不变，因为 t_optical = 0）
+  std::vector<double> xyz_cj(3);
+  for (int i = 0; i < 3; i++) xyz_cj[i] = t_camera2gimbal.at<double>(i);
+
+  YAML::Emitter result;
   result << YAML::BeginMap;
-  result << YAML::Key << "R_gimbal2imubody";
-  result << YAML::Value << YAML::Flow << R_gimbal2imubody_data;
+
+  result << YAML::Key << "gimbal2imubody";
+  result << YAML::Value << YAML::BeginMap;
+  result << YAML::Key << "xyz" << YAML::Value << YAML::Flow << std::vector<double>{0, 0, 0};
+  result << YAML::Key << "rpy" << YAML::Value << YAML::Flow
+         << std::vector<double>{rpy_gi[0], rpy_gi[1], rpy_gi[2]};
+  result << YAML::EndMap;
   result << YAML::Newline;
   result << YAML::Newline;
   result << YAML::Comment(fmt::format(
     "相机同理想情况的偏角: yaw{:.2f} pitch{:.2f} roll{:.2f} degree", ypr[0], ypr[1], ypr[2]));
-  result << YAML::Key << "R_camera2gimbal";
-  result << YAML::Value << YAML::Flow << R_camera2gimbal_data;
-  result << YAML::Key << "t_camera2gimbal";
-  result << YAML::Value << YAML::Flow << t_camera2gimbal_data;
+
+  result << YAML::Key << "camera_joint";
+  result << YAML::Value << YAML::BeginMap;
+  result << YAML::Key << "xyz" << YAML::Value << YAML::Flow << xyz_cj;
+  result << YAML::Key << "rpy" << YAML::Value << YAML::Flow
+         << std::vector<double>{rpy_cj[0], rpy_cj[1], rpy_cj[2]};
+  result << YAML::EndMap;
   result << YAML::Newline;
+
   result << YAML::EndMap;
 
   fmt::print("\n{}\n", result.c_str());
@@ -143,11 +163,11 @@ int main(int argc, char * argv[])
   auto config_path = cli.get<std::string>("config-path");
 
   // 从输入文件夹中加载标定所需的数据
-  std::vector<double> R_gimbal2imubody_data;
+  Eigen::Matrix3d R_gimbal2imubody;
   std::vector<cv::Mat> R_gimbal2world_list, t_gimbal2world_list;
   std::vector<cv::Mat> rvecs, tvecs;
   load(
-    input_folder, config_path, R_gimbal2imubody_data, R_gimbal2world_list, t_gimbal2world_list,
+    input_folder, config_path, R_gimbal2imubody, R_gimbal2world_list, t_gimbal2world_list,
     rvecs, tvecs);
 
   // 手眼标定
@@ -164,5 +184,5 @@ int main(int argc, char * argv[])
   Eigen::Vector3d ypr = tools::eulers(R_camera2ideal, 1, 0, 2) * 57.3;  // degree
 
   // 输出yaml
-  print_yaml(R_gimbal2imubody_data, R_camera2gimbal, t_camera2gimbal, ypr);
+  print_yaml(R_gimbal2imubody, R_camera2gimbal, t_camera2gimbal, ypr);
 }

@@ -80,23 +80,30 @@ second_tolerance: 2 # 远距离射击容差，degree
 judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
-camera_name: "hikrobot"
-exposure_ms: 2
-gain: 16
-vid_pid: "2bdf:0001"
+camera_name: "hikrobot"           # 相机型号："hikrobot"（海康）或 "mindvision"（迈德威）
+exposure_ms: 2                    # 曝光时间 (ms)，越大图像越亮但运动模糊越严重
+gain: 16                          # 增益，越大图像越亮但噪声越大
+vid_pid: "2bdf:0001"              # 相机 USB 的 VID:PID（用于 mindvision 和 hikrobot）
 
-# -1  0  0
-#  0 -1  0
-#  0  0  1
-R_gimbal2imubody: [-1, 0, 0, 0, -1, 0, 0, 0, 1]
+# 云台坐标系到 IMU 本体坐标系的变换
+gimbal2imubody:
+  xyz: [0, 0, 0]                    # m 平移（云台与 IMU 无平移偏移）
+  rpy: [3.1415926536, 0, 0]         # rad [yaw, pitch, roll] 绕 Z 轴 180° 旋转（翻转 x 和 y）
 
 # 重投影误差: 0.2697px
 camera_matrix: [1818.3669452465165, 0, 751.06226574703498, 0, 1822.494494078506, 530.43671556112133, 0, 0, 1]
 distort_coeffs: [-0.077944626599568856, 0.15447826031486889, -0.0025714394278524674, 0.00083016311301273629, 0]
 
-# 相机同理想情况的偏角: yaw0.46 pitch0.61 roll-1.53 degree
-R_camera2gimbal: [-0.0083195760046954614, 0.010498791137270739, 0.99991027599468041, -0.99960756138647755, -0.026835747568381807, -0.0080352891314148939, 0.026748978935305992, -0.99958472279097077, 0.010717933047771133]
-t_camera2gimbal: [0.094969301833534511, 0.095006290298006682, 0.050987066291756609]
+# 云台到相机的固定变换（gimbal_link → camera_link），对应 HFUT 的 camera_joint
+# 代码内部会自动乘上固定的光轴转换（camera_link → camera_optical_frame, rpy=[-π/2, 0, -π/2]）
+camera_joint:
+  xyz: [0.094969, 0.095006, 0.050987]  # m
+  rpy: [-0.0080358371, -0.0107181382, -0.0267537069]  # rad [yaw, pitch, roll] 相机安装偏角（已去除光轴转换）
+
+# HFUT hero 参数参考：
+# camera_joint:
+#   xyz: [0.174275, 0.000, 0.086463]
+#   rpy: [0.0, 0.1296, 0.0]
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x100
