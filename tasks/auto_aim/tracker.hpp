@@ -5,6 +5,7 @@
 #include <chrono>
 #include <list>
 #include <string>
+#include <unordered_map>
 
 #include "armor.hpp"
 #include "solver.hpp"
@@ -43,6 +44,10 @@ private:
   std::chrono::steady_clock::time_point last_timestamp_;
   ArmorPriority omni_target_priority_;
 
+  // 优先级配置
+  bool use_priority_;
+  std::unordered_map<ArmorName, ArmorPriority> priority_map_;
+
   // EKF 配置（一次性读取，传递给 Target）
   EKFConfig ekf_config_;
   // EKF 初始协方差 P0（按兵种）
@@ -55,6 +60,10 @@ private:
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 
   bool update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
+
+  void sort_armors(std::list<Armor> & armors) const;
+
+  void assign_priorities(std::list<Armor> & armors) const;
 };
 
 }  // namespace auto_aim

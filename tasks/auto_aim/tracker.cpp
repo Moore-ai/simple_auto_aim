@@ -24,6 +24,29 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   outpost_max_temp_lost_count_ = tools::read<int>(yaml, "outpost_max_temp_lost_count");
   normal_temp_lost_count_ = max_temp_lost_count_;
 
+  // 读取优先级配置
+  use_priority_ = yaml["use_priority"] ? yaml["use_priority"].as<bool>() : false;
+  if (use_priority_ && yaml["priority_list"]) {
+    auto list = yaml["priority_list"].as<std::vector<std::string>>();
+    for (size_t i = 0; i < list.size(); i++) {
+      bool matched = false;
+      for (size_t j = 0; j < ARMOR_NAMES.size(); j++) {
+        if (ARMOR_NAMES[j] == list[i]) {
+          auto key = static_cast<ArmorName>(j);
+          if (priority_map_.find(key) != priority_map_.end()) {
+            tools::logger()->warn("[Tracker] Duplicate priority entry: {} at index {}", list[i], i);
+          }
+          priority_map_[key] = static_cast<ArmorPriority>(i + 1);
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        tools::logger()->warn("[Tracker] Unknown armor name in priority_list: {}", list[i]);
+      }
+    }
+  }
+
   // 读取 EKF 配置
   auto ekf_cfg = yaml["ekf"];
   ekf_config_.accel_var = tools::read<double>(ekf_cfg, "accel_var");
@@ -76,17 +99,8 @@ std::list<Target> Tracker::track(
   //            solver_.oupost_reprojection_error(a, -15 * CV_PI / 180.0);
   // });
 
-  // 优先选择靠近图像中心的装甲板
-  armors.sort([](const Armor & a, const Armor & b) {
-    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
-    auto distance_1 = cv::norm(a.center - img_center);
-    auto distance_2 = cv::norm(b.center - img_center);
-    return distance_1 < distance_2;
-  });
-
   // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
-  armors.sort(
-    [](const auto_aim::Armor & a, const auto_aim::Armor & b) { return a.priority < b.priority; });
+  sort_armors(armors);
 
   bool found;
   if (state_ == "lost") {
@@ -141,16 +155,13 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
     state_ = "lost";
   }
 
-  // 优先选择靠近图像中心的装甲板
-  armors.sort([](const Armor & a, const Armor & b) {
-    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
-    auto distance_1 = cv::norm(a.center - img_center);
-    auto distance_2 = cv::norm(b.center - img_center);
-    return distance_1 < distance_2;
-  });
+  // 对全向感知队列中的目标也应用 tracker 的优先级方案，保证比较一致性
+  if (use_priority_ && !temp_target.armors.empty()) {
+    assign_priorities(temp_target.armors);
+  }
 
   // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
-  armors.sort([](const Armor & a, const Armor & b) { return a.priority < b.priority; });
+  sort_armors(armors);
 
   bool found;
   if (state_ == "lost") {
@@ -313,6 +324,34 @@ bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock
   }
 
   return true;
+}
+
+void Tracker::sort_armors(std::list<Armor> & armors) const
+{
+  if (use_priority_) {
+    assign_priorities(armors);
+    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
+    armors.sort([img_center](const Armor & a, const Armor & b) {
+      if (a.priority != b.priority) return a.priority < b.priority;
+      return cv::norm(a.center - img_center) < cv::norm(b.center - img_center);
+    });
+  } else {
+    armors.sort([](const Armor & a, const Armor & b) {
+      cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
+      auto distance_1 = cv::norm(a.center - img_center);
+      auto distance_2 = cv::norm(b.center - img_center);
+      return distance_1 < distance_2;
+    });
+    for (auto & armor : armors) armor.priority = ArmorPriority::fifth;
+  }
+}
+
+void Tracker::assign_priorities(std::list<Armor> & armors) const
+{
+  for (auto & armor : armors) {
+    auto it = priority_map_.find(armor.name);
+    armor.priority = (it != priority_map_.end()) ? it->second : static_cast<ArmorPriority>(priority_map_.size() + 1);
+  }
 }
 
 }  // namespace auto_aim
