@@ -1,22 +1,73 @@
 #include "target.hpp"
 
+#include <cassert>
 #include <numeric>
 
+#include "tools/extended_kalman_filter.hpp"
+#include "tools/invariant_pose_filter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 
 namespace auto_aim
 {
+Target::Target(const Target & other)
+: name(other.name),
+  armor_type(other.armor_type),
+  priority(other.priority),
+  jumped(other.jumped),
+  last_id(other.last_id),
+  isinit(other.isinit),
+  armor_num_(other.armor_num_),
+  switch_count_(other.switch_count_),
+  update_count_(other.update_count_),
+  config_(other.config_),
+  filter_method_(other.filter_method_),
+  is_switch_(other.is_switch_),
+  is_converged_(other.is_converged_),
+  t_(other.t_)
+{
+  if (other.filter_) {
+    filter_ = other.filter_->clone();
+  }
+}
+
+Target & Target::operator=(const Target & other)
+{
+  if (this != &other) {
+    name = other.name;
+    armor_type = other.armor_type;
+    priority = other.priority;
+    jumped = other.jumped;
+    last_id = other.last_id;
+    isinit = other.isinit;
+    armor_num_ = other.armor_num_;
+    switch_count_ = other.switch_count_;
+    update_count_ = other.update_count_;
+    config_ = other.config_;
+    filter_method_ = other.filter_method_;
+    is_switch_ = other.is_switch_;
+    is_converged_ = other.is_converged_;
+    t_ = other.t_;
+    if (other.filter_) {
+      filter_ = other.filter_->clone();
+    } else {
+      filter_.reset();
+    }
+  }
+  return *this;
+}
+
 Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
-  Eigen::VectorXd P0_dig, const EKFConfig & ekf_config)
+  Eigen::VectorXd P0_dig, const FilterConfig & filter_config, FilterMethod filter_method)
 : name(armor.name),
   armor_type(armor.type),
   jumped(false),
   last_id(0),
   update_count_(0),
   armor_num_(armor_num),
-  ekf_config_(ekf_config),
+  config_(filter_config),
+  filter_method_(filter_method),
   t_(t),
   is_switch_(false),
   is_converged_(false),
@@ -47,10 +98,15 @@ Target::Target(
     return c;
   };
 
-  ekf_ = tools::ExtendedKalmanFilter(x0, P0, x_add);  //初始化滤波器（预测量、预测量协方差）
+  if (filter_method_ == FilterMethod::INEKF) {
+    filter_ = std::make_unique<tools::InvariantPoseFilter>(x0, P0, x_add);
+  } else {
+    filter_ = std::make_unique<tools::ExtendedKalmanFilter>(x0, P0, x_add);
+  }
 }
 
-Target::Target(double x, double vyaw, double radius, double h) : armor_num_(4)
+Target::Target(double x, double vyaw, double radius, double h)
+: armor_num_(4), filter_method_(FilterMethod::EKF)
 {
   Eigen::VectorXd x0{{x, 0, 0, 0, 0, 0, 0, vyaw, radius, 0, h}};
   Eigen::VectorXd P0_dig{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
@@ -63,7 +119,7 @@ Target::Target(double x, double vyaw, double radius, double h) : armor_num_(4)
     return c;
   };
 
-  ekf_ = tools::ExtendedKalmanFilter(x0, P0, x_add);  //初始化滤波器（预测量、预测量协方差）
+  filter_ = std::make_unique<tools::ExtendedKalmanFilter>(x0, P0, x_add);  //初始化滤波器（预测量、预测量协方差）
 }
 
 void Target::predict(std::chrono::steady_clock::time_point t)
@@ -96,11 +152,11 @@ void Target::predict(double dt)
   // https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python/blob/master/07-Kalman-Filter-Math.ipynb
   double v1, v2;
   if (name == ArmorName::outpost) {
-    v1 = ekf_config_.outpost_accel_var;
-    v2 = ekf_config_.outpost_angular_accel_var;
+    v1 = config_.process_noise.outpost_accel_var;
+    v2 = config_.process_noise.outpost_angular_accel_var;
   } else {
-    v1 = ekf_config_.accel_var;
-    v2 = ekf_config_.angular_accel_var;
+    v1 = config_.process_noise.accel_var;
+    v2 = config_.process_noise.angular_accel_var;
   }
   auto a = dt * dt * dt * dt / 4;
   auto b = dt * dt * dt / 2;
@@ -130,10 +186,10 @@ void Target::predict(double dt)
   };
 
   // 前哨站转速特判
-  if (this->convergened() && this->name == ArmorName::outpost && std::abs(this->ekf_.x[7]) > 2)
-    this->ekf_.x[7] = this->ekf_.x[7] > 0 ? 2.51 : -2.51;
+  if (this->convergened() && this->name == ArmorName::outpost && std::abs(this->filter_->x[7]) > 2)
+    this->filter_->x[7] = this->filter_->x[7] > 0 ? 2.51 : -2.51;
 
-  ekf_.predict(F, Q, f);
+  filter_->predict(F, Q, f);
 }
 
 void Target::update(const Armor & armor)
@@ -182,58 +238,85 @@ void Target::update(const Armor & armor)
   last_id = id;
   update_count_++;
 
-  update_ypda(armor, id);
+  update_filter(armor, id);
 }
 
-void Target::update_ypda(const Armor & armor, int id)
+void Target::update_filter(const Armor & armor, int id)
 {
-  //观测jacobi
-  Eigen::MatrixXd H = h_jacobian(ekf_.x, id);
-  // Eigen::VectorXd R_dig{{4e-3, 4e-3, 1, 9e-2}};
-  auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
-  auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
-  Eigen::VectorXd R_dig{
-    {ekf_config_.obs_yaw_var, ekf_config_.obs_pitch_var, log(std::abs(delta_angle) + 1) + 1,
-     log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + ekf_config_.obs_armor_yaw_base}};
+  if (filter_method_ == FilterMethod::INEKF) {
+    // InEKF branch: uses H_xyza, xyz observation
+    Eigen::MatrixXd H = h_jacobian_xyza(filter_->x, id);
+    Eigen::VectorXd R_dig{
+      {config_.inekf.xy_var, config_.inekf.xy_var,
+       config_.inekf.z_var, config_.inekf.yaw_var}
+    };
+    Eigen::MatrixXd R = R_dig.asDiagonal();
 
-  //测量过程噪声偏差的方差
-  Eigen::MatrixXd R = R_dig.asDiagonal();
+    auto h = [&](const Eigen::VectorXd & x) -> Eigen::Vector4d {
+      Eigen::Vector3d xyz = h_armor_xyz(x, id);
+      auto angle = tools::limit_rad(x[6] + id * 2 * CV_PI / armor_num_);
+      return {xyz[0], xyz[1], xyz[2], angle};
+    };
 
-  // 定义非线性转换函数h: x -> z
-  auto h = [&](const Eigen::VectorXd & x) -> Eigen::Vector4d {
-    Eigen::VectorXd xyz = h_armor_xyz(x, id);
-    Eigen::VectorXd ypd = tools::xyz2ypd(xyz);
-    auto angle = tools::limit_rad(x[6] + id * 2 * CV_PI / armor_num_);
-    return {ypd[0], ypd[1], ypd[2], angle};
-  };
+    auto z_subtract = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
+      Eigen::VectorXd c = a - b;
+      c[3] = tools::limit_rad(c[3]);  // yaw wrap only
+      return c;
+    };
 
-  // 防止夹角求差出现异常值
-  auto z_subtract = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
-    Eigen::VectorXd c = a - b;
-    c[0] = tools::limit_rad(c[0]);
-    c[1] = tools::limit_rad(c[1]);
-    c[3] = tools::limit_rad(c[3]);
-    return c;
-  };
+    Eigen::VectorXd z{
+      {armor.xyz_in_world[0], armor.xyz_in_world[1], armor.xyz_in_world[2], armor.ypr_in_world[0]}
+    };
 
-  const Eigen::VectorXd & ypd = armor.ypd_in_world;
-  const Eigen::VectorXd & ypr = armor.ypr_in_world;
-  Eigen::VectorXd z{{ypd[0], ypd[1], ypd[2], ypr[0]}};  //获得观测量
+    filter_->update(z, H, R, h, z_subtract);
+  } else {
+    // EKF branch: uses ypda observation
+    Eigen::MatrixXd H = h_jacobian(filter_->x, id);
+    auto center_yaw = std::atan2(armor.xyz_in_world[1], armor.xyz_in_world[0]);
+    auto delta_angle = tools::limit_rad(armor.ypr_in_world[0] - center_yaw);
+    Eigen::VectorXd R_dig{
+      {config_.ekf.yaw_var, config_.ekf.pitch_var, log(std::abs(delta_angle) + 1) + 1,
+       log(std::abs(armor.ypd_in_world[2]) + 1) / 200 + config_.ekf.armor_yaw_base}};
 
-  ekf_.update(z, H, R, h, z_subtract);
+    Eigen::MatrixXd R = R_dig.asDiagonal();
+
+    auto h = [&](const Eigen::VectorXd & x) -> Eigen::Vector4d {
+      Eigen::VectorXd xyz = h_armor_xyz(x, id);
+      Eigen::VectorXd ypd = tools::xyz2ypd(xyz);
+      auto angle = tools::limit_rad(x[6] + id * 2 * CV_PI / armor_num_);
+      return {ypd[0], ypd[1], ypd[2], angle};
+    };
+
+    auto z_subtract = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
+      Eigen::VectorXd c = a - b;
+      c[0] = tools::limit_rad(c[0]);
+      c[1] = tools::limit_rad(c[1]);
+      c[3] = tools::limit_rad(c[3]);
+      return c;
+    };
+
+    const Eigen::VectorXd & ypd = armor.ypd_in_world;
+    const Eigen::VectorXd & ypr = armor.ypr_in_world;
+    Eigen::VectorXd z{{ypd[0], ypd[1], ypd[2], ypr[0]}};
+
+    filter_->update(z, H, R, h, z_subtract);
+  }
 }
 
-Eigen::VectorXd Target::ekf_x() const { return ekf_.x; }
+Eigen::VectorXd Target::ekf_x() const { return filter_->x; }
 
-const tools::ExtendedKalmanFilter & Target::ekf() const { return ekf_; }
+const tools::FilterBase & Target::filter() const {
+    assert(filter_);
+    return *filter_; 
+}
 
 std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 {
   std::vector<Eigen::Vector4d> _armor_xyza_list;
 
   for (int i = 0; i < armor_num_; i++) {
-    auto angle = tools::limit_rad(ekf_.x[6] + i * 2 * CV_PI / armor_num_);
-    Eigen::Vector3d xyz = h_armor_xyz(ekf_.x, i);
+    auto angle = tools::limit_rad(filter_->x[6] + i * 2 * CV_PI / armor_num_);
+    Eigen::Vector3d xyz = h_armor_xyz(filter_->x, i);
     _armor_xyza_list.push_back({xyz[0], xyz[1], xyz[2], angle});
   }
   return _armor_xyza_list;
@@ -241,12 +324,12 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 
 bool Target::diverged() const
 {
-  auto r_ok = ekf_.x[8] > 0.05 && ekf_.x[8] < 0.5;
-  auto l_ok = ekf_.x[8] + ekf_.x[9] > 0.05 && ekf_.x[8] + ekf_.x[9] < 0.5;
+  auto r_ok = filter_->x[8] > 0.05 && filter_->x[8] < 0.5;
+  auto l_ok = filter_->x[8] + filter_->x[9] > 0.05 && filter_->x[8] + filter_->x[9] < 0.5;
 
   if (r_ok && l_ok) return false;
 
-  tools::logger()->debug("[Target] r={:.3f}, l={:.3f}", ekf_.x[8], ekf_.x[9]);
+  tools::logger()->debug("[Target] r={:.3f}, l={:.3f}", filter_->x[8], filter_->x[9]);
   return true;
 }
 
@@ -315,6 +398,28 @@ Eigen::MatrixXd Target::h_jacobian(const Eigen::VectorXd & x, int id) const
   // clang-format on
 
   return H_armor_ypda * H_armor_xyza;
+}
+
+Eigen::MatrixXd Target::h_jacobian_xyza(const Eigen::VectorXd & x, int id) const
+{
+  auto angle = tools::limit_rad(x[6] + id * 2 * CV_PI / armor_num_);
+  auto use_l_h = (armor_num_ == 4) && (id == 1 || id == 3);
+  auto r = (use_l_h) ? x[8] + x[9] : x[8];
+  auto dx_da = r * std::sin(angle);
+  auto dy_da = -r * std::cos(angle);
+  auto dx_dr = -std::cos(angle);
+  auto dy_dr = -std::sin(angle);
+  auto dx_dl = (use_l_h) ? -std::cos(angle) : 0.0;
+  auto dy_dl = (use_l_h) ? -std::sin(angle) : 0.0;
+  auto dz_dh = (use_l_h) ? 1.0 : 0.0;
+
+  Eigen::MatrixXd H_xyza(4, 11);
+  H_xyza <<
+    1, 0, 0, 0, 0, 0, dx_da, 0, dx_dr, dx_dl,     0,
+    0, 0, 1, 0, 0, 0, dy_da, 0, dy_dr, dy_dl,     0,
+    0, 0, 0, 0, 1, 0,     0, 0,     0,     0, dz_dh,
+    0, 0, 0, 0, 0, 0,     1, 0,     0,     0,     0;
+  return H_xyza;
 }
 
 bool Target::checkinit() { return isinit; }

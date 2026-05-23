@@ -3,30 +3,52 @@
 
 #include <Eigen/Dense>
 #include <chrono>
+#include <memory>
 #include <optional>
 #include <queue>
 #include <string>
 #include <vector>
 
 #include "armor.hpp"
-#include "tools/extended_kalman_filter.hpp"
+#include "tools/filter_base.hpp"
 
 namespace auto_aim
 {
 
-// EKF 配置参数结构体
-struct EKFConfig
+// 过程噪声参数（所有滤波器共用）
+struct ProcessNoiseConfig
 {
-  // 过程噪声
   double accel_var = 100;
   double angular_accel_var = 400;
   double outpost_accel_var = 10;
   double outpost_angular_accel_var = 0.1;
-  // 观测噪声
-  double obs_yaw_var = 4e-3;
-  double obs_pitch_var = 4e-3;
-  double obs_armor_yaw_base = 9e-2;
 };
+
+// EKF 观测噪声（ypd 空间）
+struct EKFObservationConfig
+{
+  double yaw_var = 4e-3;
+  double pitch_var = 4e-3;
+  double armor_yaw_base = 9e-2;
+};
+
+// InEKF 观测噪声（xyz 空间）
+struct InEKFObservationConfig
+{
+  double xy_var = 0.0036;
+  double z_var = 0.0064;
+  double yaw_var = 0.0144;
+};
+
+// 滤波器配置聚合
+struct FilterConfig
+{
+  ProcessNoiseConfig process_noise;
+  EKFObservationConfig ekf;
+  InEKFObservationConfig inekf;
+};
+
+enum class FilterMethod { EKF, INEKF };
 
 class Target
 {
@@ -38,9 +60,14 @@ public:
   int last_id;  // debug only
 
   Target() = default;
+  Target(const Target & other);
+  Target & operator=(const Target & other);
+  Target(Target &&) = default;
+  Target & operator=(Target &&) = default;
   Target(
     const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
-    Eigen::VectorXd P0_dig, const EKFConfig & ekf_config = {});
+    Eigen::VectorXd P0_dig, const FilterConfig & filter_config = {},
+    FilterMethod filter_method = FilterMethod::EKF);
   Target(double x, double vyaw, double radius, double h);
 
   void predict(std::chrono::steady_clock::time_point t);
@@ -48,7 +75,7 @@ public:
   void update(const Armor & armor);
 
   Eigen::VectorXd ekf_x() const;
-  const tools::ExtendedKalmanFilter & ekf() const;
+  const tools::FilterBase & filter() const;
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
 
   bool diverged() const;
@@ -64,17 +91,19 @@ private:
   int switch_count_;
   int update_count_;
 
-  EKFConfig ekf_config_;
+  FilterConfig config_;
 
   bool is_switch_, is_converged_;
 
-  tools::ExtendedKalmanFilter ekf_;
+  std::unique_ptr<tools::FilterBase> filter_;
+  FilterMethod filter_method_;
   std::chrono::steady_clock::time_point t_;
 
-  void update_ypda(const Armor & armor, int id);  // yaw pitch distance angle
+  void update_filter(const Armor & armor, int id);  // yaw pitch distance angle
 
   Eigen::Vector3d h_armor_xyz(const Eigen::VectorXd & x, int id) const;
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
+  Eigen::MatrixXd h_jacobian_xyza(const Eigen::VectorXd & x, int id) const;
 };
 
 }  // namespace auto_aim

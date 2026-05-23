@@ -49,13 +49,25 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
 
   // 读取 EKF 配置
   auto ekf_cfg = yaml["ekf"];
-  ekf_config_.accel_var = tools::read<double>(ekf_cfg, "accel_var");
-  ekf_config_.angular_accel_var = tools::read<double>(ekf_cfg, "angular_accel_var");
-  ekf_config_.outpost_accel_var = tools::read<double>(ekf_cfg, "outpost_accel_var");
-  ekf_config_.outpost_angular_accel_var = tools::read<double>(ekf_cfg, "outpost_angular_accel_var");
-  ekf_config_.obs_yaw_var = tools::read<double>(ekf_cfg, "obs_yaw_var");
-  ekf_config_.obs_pitch_var = tools::read<double>(ekf_cfg, "obs_pitch_var");
-  ekf_config_.obs_armor_yaw_base = tools::read<double>(ekf_cfg, "obs_armor_yaw_base");
+  filter_config_.process_noise.accel_var = tools::read<double>(ekf_cfg, "accel_var");
+  filter_config_.process_noise.angular_accel_var = tools::read<double>(ekf_cfg, "angular_accel_var");
+  filter_config_.process_noise.outpost_accel_var = tools::read<double>(ekf_cfg, "outpost_accel_var");
+  filter_config_.process_noise.outpost_angular_accel_var = tools::read<double>(ekf_cfg, "outpost_angular_accel_var");
+  filter_config_.ekf.yaw_var = tools::read<double>(ekf_cfg, "obs_yaw_var");
+  filter_config_.ekf.pitch_var = tools::read<double>(ekf_cfg, "obs_pitch_var");
+  filter_config_.ekf.armor_yaw_base = tools::read<double>(ekf_cfg, "obs_armor_yaw_base");
+
+  // 读取滤波器类型和 InEKF 参数
+  auto filter_method_str = yaml["filter_method"] ? yaml["filter_method"].as<std::string>() : "ekf";
+  if (filter_method_str == "inekf") {
+    filter_method_ = FilterMethod::INEKF;
+    auto inekf_cfg = yaml["inekf"];
+    filter_config_.inekf.xy_var = tools::read<double>(inekf_cfg, "obs_xy_var");
+    filter_config_.inekf.z_var = tools::read<double>(inekf_cfg, "obs_z_var");
+    filter_config_.inekf.yaw_var = tools::read<double>(inekf_cfg, "obs_yaw_var");
+  } else {
+    filter_method_ = FilterMethod::EKF;
+  }
 
   // 读取 P0 和 radius
   auto P0_cfg = ekf_cfg["P0"];
@@ -123,8 +135,8 @@ std::list<Target> Tracker::track(
   // 收敛效果检测：
   if (
     std::accumulate(
-      target_.ekf().recent_nis_failures.begin(), target_.ekf().recent_nis_failures.end(), 0) >=
-    (0.4 * target_.ekf().window_size)) {
+      target_.filter().recent_nis_failures.begin(), target_.filter().recent_nis_failures.end(), 0) >=
+    (0.4 * target_.filter().window_size)) {
     tools::logger()->debug("[Target] Bad Converge Found!");
     state_ = "lost";
     return {};
@@ -279,19 +291,19 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
                      armor.name == ArmorName::five);
 
   if (is_balance) {
-    target_ = Target(armor, t, radius_default_, 2, P0_balance_, ekf_config_);
+    target_ = Target(armor, t, radius_default_, 2, P0_balance_, filter_config_, filter_method_);
   }
 
   else if (armor.name == ArmorName::outpost) {
-    target_ = Target(armor, t, radius_outpost_, 3, P0_outpost_, ekf_config_);
+    target_ = Target(armor, t, radius_outpost_, 3, P0_outpost_, filter_config_, filter_method_);
   }
 
   else if (armor.name == ArmorName::base) {
-    target_ = Target(armor, t, radius_base_, 3, P0_base_, ekf_config_);
+    target_ = Target(armor, t, radius_base_, 3, P0_base_, filter_config_, filter_method_);
   }
 
   else {
-    target_ = Target(armor, t, radius_default_, 4, P0_default_, ekf_config_);
+    target_ = Target(armor, t, radius_default_, 4, P0_default_, filter_config_, filter_method_);
   }
 
   return true;

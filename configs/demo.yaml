@@ -50,6 +50,9 @@ priority_list:                     # 优先级从高到低排列（未列出兵�
   - outpost
   - base
 
+#####-----滤波器配置-----#####
+filter_method: "ekf"                  # 滤波器类型："ekf"(标准EKF) 或 "inekf"(左不变误差EKF)
+
 #####-----EKF参数-----#####
 ekf:
   # 过程噪声（Piecewise White Noise Model）
@@ -75,6 +78,12 @@ ekf:
     default: 0.2
     outpost: 0.2765
     base: 0.3205
+
+#####-----InEKF参数-----#####
+inekf:
+  obs_xy_var: 0.0036                  # m² XY 位置观测方差（sigma≈0.06m，仅 InEKF 模式使用）
+  obs_z_var: 0.0064                   # m² Z 位置观测方差（sigma≈0.08m）
+  obs_yaw_var: 0.0144                 # rad² yaw 观测方差（sigma≈0.12rad）
 
 #####-----瞄准决策器-----#####
 aim_method: "mpc"                 # 决策方法："mpc"（轨迹规划器，默认）或 "aimer"（传统决策器）

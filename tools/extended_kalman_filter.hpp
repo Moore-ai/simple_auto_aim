@@ -1,55 +1,40 @@
 #ifndef TOOLS__EXTENDED_KALMAN_FILTER_HPP
 #define TOOLS__EXTENDED_KALMAN_FILTER_HPP
 
-#include <Eigen/Dense>
-#include <deque>
-#include <functional>
-#include <map>
+#include <memory>
+
+#include "tools/filter_base.hpp"
 
 namespace tools
 {
-class ExtendedKalmanFilter
+
+class ExtendedKalmanFilter : public FilterBase
 {
 public:
-  Eigen::VectorXd x;
-  Eigen::MatrixXd P;
+  using FilterBase::FilterBase;
 
   ExtendedKalmanFilter() = default;
 
   ExtendedKalmanFilter(
     const Eigen::VectorXd & x0, const Eigen::MatrixXd & P0,
     std::function<Eigen::VectorXd(const Eigen::VectorXd &, const Eigen::VectorXd &)> x_add =
-      [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a + b; });
+      [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a + b; })
+  : FilterBase(x0, P0, x_add) {}
 
-  Eigen::VectorXd predict(const Eigen::MatrixXd & F, const Eigen::MatrixXd & Q);
-
-  Eigen::VectorXd predict(
-    const Eigen::MatrixXd & F, const Eigen::MatrixXd & Q,
-    std::function<Eigen::VectorXd(const Eigen::VectorXd &)> f);
-
+  // Linear-obs update (no h function — uses H*x)
   Eigen::VectorXd update(
     const Eigen::VectorXd & z, const Eigen::MatrixXd & H, const Eigen::MatrixXd & R,
     std::function<Eigen::VectorXd(const Eigen::VectorXd &, const Eigen::VectorXd &)> z_subtract =
       [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a - b; });
 
+  // Nonlinear-obs update (with h function)
   Eigen::VectorXd update(
     const Eigen::VectorXd & z, const Eigen::MatrixXd & H, const Eigen::MatrixXd & R,
     std::function<Eigen::VectorXd(const Eigen::VectorXd &)> h,
     std::function<Eigen::VectorXd(const Eigen::VectorXd &, const Eigen::VectorXd &)> z_subtract =
-      [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a - b; });
+      [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a - b; }) override;
 
-  std::map<std::string, double> data;  //卡方检验数据
-  std::deque<int> recent_nis_failures{0};
-  size_t window_size = 100;
-  double last_nis;
-
-private:
-  Eigen::MatrixXd I;
-  std::function<Eigen::VectorXd(const Eigen::VectorXd &, const Eigen::VectorXd &)> x_add;
-
-  int nees_count_ = 0;
-  int nis_count_ = 0;
-  int total_count_ = 0;
+  std::unique_ptr<FilterBase> clone() const override;
 };
 
 }  // namespace tools

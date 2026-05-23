@@ -48,8 +48,9 @@ private:
   bool use_priority_;
   std::unordered_map<ArmorName, ArmorPriority> priority_map_;
 
-  // EKF 配置（一次性读取，传递给 Target）
-  EKFConfig ekf_config_;
+  // 滤波器配置（一次性读取，传递给 Target）
+  FilterConfig filter_config_;
+  FilterMethod filter_method_;
   // EKF 初始协方差 P0（按兵种）
   Eigen::VectorXd P0_default_, P0_balance_, P0_outpost_, P0_base_;
   // EKF 初始半径（按兵种）
