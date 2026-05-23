@@ -2,6 +2,7 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
+#include "tools/detect_factory.hpp"
 #include "io/camera.hpp"
 #include "io/dm_imu/dm_imu.hpp"
 #include "tasks/auto_aim/aimer.hpp"
@@ -44,10 +45,11 @@ int main(int argc, char * argv[])
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
-  auto_aim::YOLO yolo(config_path, true);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Planner planner(config_path);
+
+  auto detect_armors = create_detector(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
@@ -103,7 +105,7 @@ int main(int argc, char * argv[])
 
     /// 自瞄
     if (mode.load() == io::GimbalMode::AUTO_AIM) {
-      auto armors = yolo.detect(img);
+      auto armors = detect_armors(img, -1);
       auto targets = tracker.track(armors, t);
       if (!targets.empty())
         target_queue.push(targets.front());

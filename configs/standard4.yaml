@@ -10,6 +10,7 @@ yolov5_model_path: assets/yolov5.xml
 device: GPU
 min_confidence: 0.8
 use_traditional: true
+detect_method: "yolo"              # 检测方法："yolo" 或 "traditional"，traditional 使用纯传统灯条检测
 
 #####-----ROI-----#####
 roi:
