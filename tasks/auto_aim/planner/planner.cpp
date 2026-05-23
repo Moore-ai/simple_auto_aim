@@ -19,6 +19,11 @@ Planner::Planner(const std::string & config_path)
   decision_speed_ = tools::read<double>(yaml, "decision_speed");
   high_speed_delay_time_ = tools::read<double>(yaml, "high_speed_delay_time");
   low_speed_delay_time_ = tools::read<double>(yaml, "low_speed_delay_time");
+  rho_ = tools::read<double>(yaml, "rho");
+  max_iter_ = tools::read<int>(yaml, "max_iter");
+  bullet_speed_min_ = tools::read<double>(yaml, "bullet_speed_min");
+  bullet_speed_max_ = tools::read<double>(yaml, "bullet_speed_max");
+  bullet_speed_default_ = tools::read<double>(yaml, "bullet_speed_default");
 
   setup_yaw_solver(config_path);
   setup_pitch_solver(config_path);
@@ -27,8 +32,8 @@ Planner::Planner(const std::string & config_path)
 Plan Planner::plan(Target target, double bullet_speed)
 {
   // 0. Check bullet speed
-  if (bullet_speed < 10 || bullet_speed > 25) {
-    bullet_speed = 22;
+  if (bullet_speed < bullet_speed_min_ || bullet_speed > bullet_speed_max_) {
+    bullet_speed = bullet_speed_default_;
   }
 
   // 1. Predict fly_time
@@ -119,7 +124,7 @@ void Planner::setup_yaw_solver(const std::string & config_path)
   Eigen::VectorXd f{{0, 0}};
   Eigen::Matrix<double, 2, 1> Q(Q_yaw.data());
   Eigen::Matrix<double, 1, 1> R(R_yaw.data());
-  tiny_setup(&yaw_solver_, A, B, f, Q.asDiagonal(), R.asDiagonal(), 1.0, 2, 1, HORIZON, 0);
+  tiny_setup(&yaw_solver_, A, B, f, Q.asDiagonal(), R.asDiagonal(), rho_, 2, 1, HORIZON, 0);
 
   Eigen::MatrixXd x_min = Eigen::MatrixXd::Constant(2, HORIZON, -1e17);
   Eigen::MatrixXd x_max = Eigen::MatrixXd::Constant(2, HORIZON, 1e17);
@@ -127,7 +132,7 @@ void Planner::setup_yaw_solver(const std::string & config_path)
   Eigen::MatrixXd u_max = Eigen::MatrixXd::Constant(1, HORIZON - 1, max_yaw_acc);
   tiny_set_bound_constraints(yaw_solver_, x_min, x_max, u_min, u_max);
 
-  yaw_solver_->settings->max_iter = 10;
+  yaw_solver_->settings->max_iter = max_iter_;
 }
 
 void Planner::setup_pitch_solver(const std::string & config_path)
@@ -142,7 +147,7 @@ void Planner::setup_pitch_solver(const std::string & config_path)
   Eigen::VectorXd f{{0, 0}};
   Eigen::Matrix<double, 2, 1> Q(Q_pitch.data());
   Eigen::Matrix<double, 1, 1> R(R_pitch.data());
-  tiny_setup(&pitch_solver_, A, B, f, Q.asDiagonal(), R.asDiagonal(), 1.0, 2, 1, HORIZON, 0);
+  tiny_setup(&pitch_solver_, A, B, f, Q.asDiagonal(), R.asDiagonal(), rho_, 2, 1, HORIZON, 0);
 
   Eigen::MatrixXd x_min = Eigen::MatrixXd::Constant(2, HORIZON, -1e17);
   Eigen::MatrixXd x_max = Eigen::MatrixXd::Constant(2, HORIZON, 1e17);
@@ -150,7 +155,7 @@ void Planner::setup_pitch_solver(const std::string & config_path)
   Eigen::MatrixXd u_max = Eigen::MatrixXd::Constant(1, HORIZON - 1, max_pitch_acc);
   tiny_set_bound_constraints(pitch_solver_, x_min, x_max, u_min, u_max);
 
-  pitch_solver_->settings->max_iter = 10;
+  pitch_solver_->settings->max_iter = max_iter_;
 }
 
 Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double bullet_speed)

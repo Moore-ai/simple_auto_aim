@@ -12,29 +12,29 @@ min_confidence: 0.8
 use_traditional: true
 
 #####-----ROI-----#####
-roi: 
+roi:
   x: 420
   y: 50
   width: 600
   height: 600
 
-use_roi: false
+use_roi: false                    # 是否启用 ROI 裁切，启用后会只检测该区域，减少计算量
 
 #####-----传统方法参数-----#####
-threshold: 150
-max_angle_error: 45 # degree
-min_lightbar_ratio: 1.5
-max_lightbar_ratio: 20
-min_lightbar_length: 8
-min_armor_ratio: 1
-max_armor_ratio: 5
-max_side_ratio: 1.5
-max_rectangular_error: 25 # degree
+threshold: 150                    # 灰度图二值化阈值，越低对反光越敏感
+max_angle_error: 45               # degree 灯条最大偏角容差，超过则视为无效灯条
+min_lightbar_ratio: 1.5           # 灯条最小长宽比，滤除方形/圆形反光区域
+max_lightbar_ratio: 20            # 灯条最大长宽比，滤除过长伪影
+min_lightbar_length: 8            # 像素 灯条最小长度，滤除噪声点
+min_armor_ratio: 1                # 装甲板最小宽高比，滤除过窄组合
+max_armor_ratio: 5                # 装甲板最大宽高比，滤除过宽组合
+max_side_ratio: 1.5               # 左右灯条最大长度差比例，滤除不对称组合
+max_rectangular_error: 25         # degree 装甲板矩形偏差容差，控制角点是否共面
 
 #####-----tracker参数-----#####
-min_detect_count: 5
-max_temp_lost_count: 15
-outpost_max_temp_lost_count: 75
+min_detect_count: 5               # 帧 连续检测到目标后，状态从 detecting → tracking
+max_temp_lost_count: 15           # 帧 短暂丢失上限，超过则状态从 temp_lost → lost
+outpost_max_temp_lost_count: 75   # 帧 前哨站短暂丢失上限，高于普通值（前哨站旋转时遮挡时间长）
 
 #####-----EKF参数-----#####
 ekf:
@@ -63,13 +63,14 @@ ekf:
     base: 0.3205
 
 #####-----aimer参数-----#####
-yaw_offset: 2 # degree -2.5
-pitch_offset: 6.5 # degree 2
-comming_angle: 55 # degree
-leaving_angle: 20 # degree
-decision_speed: 7 # rad/s
-high_speed_delay_time: 0.0 # s
-low_speed_delay_time: 0.0 # s planner use this value
+yaw_offset: 2 # degree（Planner/Aimer 共用）瞄准 yaw 修正量，-2.5 was previous
+pitch_offset: 6.5 # degree（Planner/Aimer 共用）瞄准 pitch 修正量，2 was previous
+comming_angle: 55 # degree（仅 Aimer 使用）小陀螺迎向角度阈值
+leaving_angle: 20 # degree（仅 Aimer 使用）小陀螺离去角度阈值
+# ------
+decision_speed: 7 # rad/s（Planner/Aimer 共用）转速阈值，高于此值用高速延迟
+high_speed_delay_time: 0.0 # s（Planner/Aimer 共用）高转速目标发弹延迟
+low_speed_delay_time: 0.0 # s（Planner/Aimer 共用）低转速目标发弹延迟
 
 #####-----shooter参数-----#####
 first_tolerance: 3 # 近距离射击容差，degree
@@ -104,22 +105,28 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port: "/dev/gimbal"
+com_port: "/dev/gimbal"           # Gimbal 串口设备路径
 yaw_kp: 0
 yaw_kd: 0
 pitch_kp: 0
 pitch_kd: 0
 
 #####-----planner-----#####
-fire_thresh: 0.0035
+fire_thresh: 0.0035              # 开火阈值（rad）：参考轨迹与规划轨迹在发射时刻的偏差 < 此值才开火
+rho: 1.0                         # ADMM 惩罚参数，影响收敛速度
+max_iter: 10                     # ADMM 最大迭代次数，越大求解越精确但耗时更长
 
-max_yaw_acc: 50
-Q_yaw: [9e6, 0]
-R_yaw: [1]
+max_yaw_acc: 50                  # yaw 最大角加速度约束 (rad/s²)，越大云台越激进
+Q_yaw: [9e6, 0]                  # yaw MPC 跟踪权重 [角度误差权重, 角速度误差权重]
+R_yaw: [1]                       # yaw MPC 控制量惩罚，越大运动越平滑
 
-max_pitch_acc: 100
-Q_pitch: [9e6, 0]
-R_pitch: [1]
+max_pitch_acc: 100               # pitch 最大角加速度约束 (rad/s²)
+Q_pitch: [9e6, 0]                # pitch MPC 跟踪权重 [角度误差权重, 角速度误差权重]
+R_pitch: [1]                     # pitch MPC 控制量惩罚
+
+bullet_speed_min: 10             # 弹速下限 (m/s)，低于此值视为无效
+bullet_speed_max: 25             # 弹速上限 (m/s)，高于此值视为无效
+bullet_speed_default: 22         # 弹速默认回退值 (m/s)，弹速无效时使用
 
 #####-----buff_detector参数-----#####
 model: "assets/yolo11_buff_int8.xml"

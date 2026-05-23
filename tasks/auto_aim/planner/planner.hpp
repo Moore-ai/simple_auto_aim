@@ -2,7 +2,6 @@
 #define AUTO_AIM__PLANNER_HPP
 
 #include <Eigen/Dense>
-#include <list>
 #include <optional>
 
 #include "tasks/auto_aim/target.hpp"
@@ -44,6 +43,10 @@ private:
   double pitch_offset_;
   double fire_thresh_;
   double low_speed_delay_time_, high_speed_delay_time_, decision_speed_;
+
+  double rho_;
+  int max_iter_;
+  double bullet_speed_min_, bullet_speed_max_, bullet_speed_default_;
 
   TinySolver * yaw_solver_;
   TinySolver * pitch_solver_;
