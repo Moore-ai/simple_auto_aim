@@ -2,10 +2,10 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 
+#include "tools/aim_factory.hpp"
 #include "tools/detect_factory.hpp"
 #include "io/camera.hpp"
 #include "io/dm_imu/dm_imu.hpp"
-#include "tasks/auto_aim/aimer.hpp"
 #include "tasks/auto_aim/multithread/commandgener.hpp"
 #include "tasks/auto_aim/multithread/mt_detector.hpp"
 #include "tasks/auto_aim/shooter.hpp"
@@ -47,9 +47,9 @@ int main(int argc, char * argv[])
 
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
-  auto_aim::Planner planner(config_path);
 
   auto detect_armors = create_detector(config_path);
+  auto aim_fn = create_aim_fn(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
@@ -77,7 +77,7 @@ int main(int argc, char * argv[])
       if (!target_queue.empty() && mode == io::GimbalMode::AUTO_AIM) {
         auto target = target_queue.front();
         auto gs = gimbal.state();
-        auto plan = planner.plan(target, gs.bullet_speed);
+        auto plan = aim_fn(target, gs.bullet_speed, std::chrono::steady_clock::now());
 
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,

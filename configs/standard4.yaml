@@ -64,6 +64,9 @@ ekf:
     outpost: 0.2765
     base: 0.3205
 
+#####-----瞄准决策器-----#####
+aim_method: "mpc"                 # 决策方法："mpc"（轨迹规划器，默认）或 "aimer"（传统决策器）
+
 #####-----aimer参数-----#####
 yaw_offset: -2 # degree（Planner/Aimer 共用）瞄准 yaw 修正量，-2.5 was previous
 pitch_offset: 0 # degree（Planner/Aimer 共用）瞄准 pitch 修正量，2 was previous
