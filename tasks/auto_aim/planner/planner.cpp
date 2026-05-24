@@ -21,6 +21,23 @@ Planner::Planner(const std::string & config_path)
   low_speed_delay_time_ = tools::read<double>(yaml, "low_speed_delay_time");
   rho_ = tools::read<double>(yaml, "rho");
   max_iter_ = tools::read<int>(yaml, "max_iter");
+
+  // 读取 AIMD 自适应延迟配置
+  auto aimd_yaml = yaml["aimd"];
+  tools::AdaptiveDelayController::Config aimd_cfg;
+  aimd_cfg.enable = aimd_yaml ? tools::read<bool>(aimd_yaml, "enable") : false;
+  if (aimd_cfg.enable) {
+    aimd_cfg.initial_delay = tools::read<double>(aimd_yaml, "initial_delay");
+    aimd_cfg.min_delay = tools::read<double>(aimd_yaml, "min_delay");
+    aimd_cfg.max_delay = tools::read<double>(aimd_yaml, "max_delay");
+    aimd_cfg.add_step = tools::read<double>(aimd_yaml, "add_step");
+    aimd_cfg.mul_factor = tools::read<double>(aimd_yaml, "mul_factor");
+    aimd_cfg.fire_wait_threshold = tools::read<int>(aimd_yaml, "fire_wait_threshold");
+    aimd_cfg.max_linear_speed = tools::read<double>(aimd_yaml, "max_linear_speed");
+    aimd_cfg.max_angular_speed = tools::read<double>(aimd_yaml, "max_angular_speed");
+  }
+  aimd_ctrl_.init(aimd_cfg);
+  aimd_enabled_ = aimd_cfg.enable;
   bullet_speed_min_ = tools::read<double>(yaml, "bullet_speed_min");
   bullet_speed_max_ = tools::read<double>(yaml, "bullet_speed_max");
   bullet_speed_default_ = tools::read<double>(yaml, "bullet_speed_default");
@@ -100,16 +117,30 @@ Plan Planner::plan(Target target, double bullet_speed)
 
 Plan Planner::plan(std::optional<Target> target, double bullet_speed)
 {
-  if (!target.has_value()) return {false};
+  if (!target.has_value()) {
+    aimd_ctrl_.reset();
+    last_fire_advice_ = false;
+    return {false};
+  }
 
+  // AIMD 自适应延迟
+  const auto & ekf = target->ekf_x();
   double delay_time =
-    std::abs(target->ekf_x()[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
+    std::abs(ekf[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
+  if (aimd_enabled_) {
+    double v_ang = std::abs(ekf[7]);
+    double v_lin = std::hypot(ekf[1], ekf[3]);
+    aimd_ctrl_.update(last_fire_advice_, v_lin, v_ang);
+    delay_time = aimd_ctrl_.getDelay();
+  }
 
   auto future = std::chrono::steady_clock::now() + std::chrono::microseconds(int(delay_time * 1e6));
 
   target->predict(future);
 
-  return plan(*target, bullet_speed);
+  auto result = plan(*target, bullet_speed);
+  last_fire_advice_ = result.fire;
+  return result;
 }
 
 void Planner::setup_yaw_solver(const std::string & config_path)

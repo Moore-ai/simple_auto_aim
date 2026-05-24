@@ -6,6 +6,7 @@
 
 #include "tasks/auto_aim/target.hpp"
 #include "tinympc/tiny_api.hpp"
+#include "tools/adaptive_delay_controller.hpp"
 
 namespace auto_aim
 {
@@ -47,6 +48,10 @@ private:
   double rho_;
   int max_iter_;
   double bullet_speed_min_, bullet_speed_max_, bullet_speed_default_;
+
+  tools::AdaptiveDelayController aimd_ctrl_;
+  bool aimd_enabled_{false};
+  bool last_fire_advice_{false};
 
   TinySolver * yaw_solver_;
   TinySolver * pitch_solver_;

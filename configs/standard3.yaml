@@ -153,6 +153,18 @@ bullet_speed_min: 10             # 弹速下限 (m/s)，低于此值视为无效
 bullet_speed_max: 25             # 弹速上限 (m/s)，高于此值视为无效
 bullet_speed_default: 22         # 弹速默认回退值 (m/s)，弹速无效时使用
 
+#####-----AIMD自适应延迟(选配)-----#####
+aimd:
+  enable: false                    # 是否启用 AIMD 自适应延迟（开火反馈动态调整预测延迟）
+  initial_delay: 0.015             # s 延迟初始值
+  min_delay: 0.0                   # s 延迟下限
+  max_delay: 0.10                  # s 延迟上限
+  add_step: 0.005                  # s 开火成功时每帧线性减量
+  mul_factor: 1.2                  # 连续未开火时乘性增幅因子
+  fire_wait_threshold: 10          # 帧 连续未开火超过此帧数后开始增大延迟
+  max_linear_speed: 3.0            # m/s 线速度归一化参考值
+  max_angular_speed: 10.0          # rad/s 角速度归一化参考值
+
 #####-----buff_detector参数-----#####
 model: "assets/yolo11_buff_int8.xml"
 
