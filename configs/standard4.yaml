@@ -53,18 +53,13 @@ priority_list:                     # 优先级从高到低排列（未列出兵�
 #####-----滤波器配置-----#####
 filter_method: "ekf"                  # 滤波器类型："ekf"(标准EKF) 或 "inekf"(左不变误差EKF)
 
-#####-----EKF参数-----#####
-ekf:
+#####-----滤波器共用参数（EKF/InEKF 共用）-----#####
+filter:
   # 过程噪声（Piecewise White Noise Model）
   accel_var: 100                  # 加速度方差 v1（前哨站除外）
   angular_accel_var: 400          # 角加速度方差 v2（前哨站除外）
   outpost_accel_var: 10           # 前哨站加速度方差
   outpost_angular_accel_var: 0.1  # 前哨站角加速度方差
-
-  # 观测噪声
-  obs_yaw_var: 4e-3               # yaw 观测方差
-  obs_pitch_var: 4e-3             # pitch 观测方差
-  obs_armor_yaw_base: 9e-2        # armor_yaw 基础方差
 
   # 初始协方差 P0 对角线（按兵种分）
   P0:
@@ -79,11 +74,17 @@ ekf:
     outpost: 0.2765
     base: 0.3205
 
-#####-----InEKF参数-----#####
-inekf:
-  obs_xy_var: 0.0036                  # m² XY 位置观测方差（sigma≈0.06m，仅 InEKF 模式使用）
-  obs_z_var: 0.0064                   # m² Z 位置观测方差（sigma≈0.08m）
-  obs_yaw_var: 0.0144                 # rad² yaw 观测方差（sigma≈0.12rad）
+#####-----EKF 特有观测噪声（ypd 空间，仅 filter_method="ekf" 时使用）-----#####
+ekf_obs:
+  yaw_var: 4e-3               # yaw 观测方差
+  pitch_var: 4e-3             # pitch 观测方差
+  armor_yaw_base: 9e-2        # armor_yaw 基础方差
+
+#####-----InEKF 特有观测噪声（xyz 空间，仅 filter_method="inekf" 时使用）-----#####
+inekf_obs:
+  xy_var: 0.0036              # m² XY 位置观测方差（sigma≈0.06m）
+  z_var: 0.0064               # m² Z 位置观测方差（sigma≈0.08m）
+  yaw_var: 0.0144             # rad² yaw 观测方差（sigma≈0.12rad）
 
 #####-----瞄准决策器-----#####
 aim_method: "mpc"                 # 决策方法："mpc"（轨迹规划器，默认）或 "aimer"（传统决策器）

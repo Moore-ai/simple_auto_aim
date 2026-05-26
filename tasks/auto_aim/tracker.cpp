@@ -47,31 +47,32 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
     }
   }
 
-  // 读取 EKF 配置
-  auto ekf_cfg = yaml["ekf"];
-  filter_config_.process_noise.accel_var = tools::read<double>(ekf_cfg, "accel_var");
-  filter_config_.process_noise.angular_accel_var = tools::read<double>(ekf_cfg, "angular_accel_var");
-  filter_config_.process_noise.outpost_accel_var = tools::read<double>(ekf_cfg, "outpost_accel_var");
-  filter_config_.process_noise.outpost_angular_accel_var = tools::read<double>(ekf_cfg, "outpost_angular_accel_var");
-  filter_config_.ekf.yaw_var = tools::read<double>(ekf_cfg, "obs_yaw_var");
-  filter_config_.ekf.pitch_var = tools::read<double>(ekf_cfg, "obs_pitch_var");
-  filter_config_.ekf.armor_yaw_base = tools::read<double>(ekf_cfg, "obs_armor_yaw_base");
+  // 读取滤波器共用参数（filter 段：过程噪声、P0、radius，EKF/InEKF 共用）
+  auto filter_cfg = yaml["filter"];
+  filter_config_.process_noise.accel_var = tools::read<double>(filter_cfg, "accel_var");
+  filter_config_.process_noise.angular_accel_var = tools::read<double>(filter_cfg, "angular_accel_var");
+  filter_config_.process_noise.outpost_accel_var = tools::read<double>(filter_cfg, "outpost_accel_var");
+  filter_config_.process_noise.outpost_angular_accel_var = tools::read<double>(filter_cfg, "outpost_angular_accel_var");
 
-  // 读取滤波器类型和 InEKF 参数
+  // 读取滤波器类型和特有参数
   auto filter_method_str = yaml["filter_method"] ? yaml["filter_method"].as<std::string>() : "ekf";
   if (filter_method_str == "inekf") {
     filter_method_ = FilterMethod::INEKF;
-    auto inekf_cfg = yaml["inekf"];
-    filter_config_.inekf.xy_var = tools::read<double>(inekf_cfg, "obs_xy_var");
-    filter_config_.inekf.z_var = tools::read<double>(inekf_cfg, "obs_z_var");
-    filter_config_.inekf.yaw_var = tools::read<double>(inekf_cfg, "obs_yaw_var");
+    auto obs_cfg = yaml["inekf_obs"];
+    filter_config_.inekf.xy_var = tools::read<double>(obs_cfg, "xy_var");
+    filter_config_.inekf.z_var = tools::read<double>(obs_cfg, "z_var");
+    filter_config_.inekf.yaw_var = tools::read<double>(obs_cfg, "yaw_var");
   } else {
     filter_method_ = FilterMethod::EKF;
+    auto obs_cfg = yaml["ekf_obs"];
+    filter_config_.ekf.yaw_var = tools::read<double>(obs_cfg, "yaw_var");
+    filter_config_.ekf.pitch_var = tools::read<double>(obs_cfg, "pitch_var");
+    filter_config_.ekf.armor_yaw_base = tools::read<double>(obs_cfg, "armor_yaw_base");
   }
 
-  // 读取 P0 和 radius
-  auto P0_cfg = ekf_cfg["P0"];
-  auto radius_cfg = ekf_cfg["radius"];
+  // 读取 P0 和 radius（共用参数，filter 段下）
+  auto P0_cfg = filter_cfg["P0"];
+  auto radius_cfg = filter_cfg["radius"];
 
   auto read_P0 = [&](const std::string & key) -> Eigen::VectorXd {
     auto vec = P0_cfg[key].as<std::vector<double>>();
