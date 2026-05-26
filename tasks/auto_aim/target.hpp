@@ -38,6 +38,7 @@ struct InEKFObservationConfig
   double xy_var = 0.0036;
   double z_var = 0.0064;
   double yaw_var = 0.0144;
+  double dist_scale_denom = 25.0;  // 距离自适应分母 d²/dist_scale_denom，d=sqrt(denom) 时 scale=2
 };
 
 // 滤波器配置聚合

@@ -246,9 +246,15 @@ void Target::update_filter(const Armor & armor, int id)
   if (filter_method_ == FilterMethod::INEKF) {
     // InEKF branch: uses H_xyza, xyz observation
     Eigen::MatrixXd H = h_jacobian_xyza(filter_->x, id);
+    // 距离自适应观测噪声：PnP 深度不确定性 ~ d²（三角测距原理）
+    double d = armor.ypd_in_world[2];
+    double denom = std::max(config_.inekf.dist_scale_denom, 1.0);
+    double dist_scale = 1.0 + d * d / denom;
     Eigen::VectorXd R_dig{
-      {config_.inekf.xy_var, config_.inekf.xy_var,
-       config_.inekf.z_var, config_.inekf.yaw_var}
+      {config_.inekf.xy_var * dist_scale,
+       config_.inekf.xy_var * dist_scale,
+       config_.inekf.z_var * dist_scale,
+       config_.inekf.yaw_var}
     };
     Eigen::MatrixXd R = R_dig.asDiagonal();
 

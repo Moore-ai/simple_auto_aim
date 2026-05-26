@@ -62,6 +62,7 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
     filter_config_.inekf.xy_var = tools::read<double>(obs_cfg, "xy_var");
     filter_config_.inekf.z_var = tools::read<double>(obs_cfg, "z_var");
     filter_config_.inekf.yaw_var = tools::read<double>(obs_cfg, "yaw_var");
+    filter_config_.inekf.dist_scale_denom = tools::read<double>(obs_cfg, "dist_scale_denom");
   } else {
     filter_method_ = FilterMethod::EKF;
     auto obs_cfg = yaml["ekf_obs"];

@@ -85,6 +85,7 @@ inekf_obs:
   xy_var: 0.0036              # m² XY 位置观测方差（sigma≈0.06m）
   z_var: 0.0064               # m² Z 位置观测方差（sigma≈0.08m）
   yaw_var: 0.0144             # rad² yaw 观测方差（sigma≈0.12rad）
+  dist_scale_denom: 25.0      # 距离自适应分母，d=sqrt(denom) 时 scale=2，调参阶段按需修改
 
 #####-----瞄准决策器-----#####
 aim_method: "mpc"                 # 决策方法："mpc"（轨迹规划器，默认）或 "aimer"（传统决策器）
