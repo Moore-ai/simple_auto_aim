@@ -49,9 +49,20 @@ private:
   int max_iter_;
   double bullet_speed_min_, bullet_speed_max_, bullet_speed_default_;
 
+  struct ManeuverAdaptConfig
+  {
+    bool enable = false;
+    double nis_threshold = 10.0;
+    double damping_factor = 0.7;
+    double ema_alpha = 0.3;
+  };
+
   tools::AdaptiveDelayController aimd_ctrl_;
   bool aimd_enabled_{false};
   bool last_fire_advice_{false};
+
+  ManeuverAdaptConfig maneuver_;
+  double nis_avg_{0.0};
 
   TinySolver * yaw_solver_;
   TinySolver * pitch_solver_;

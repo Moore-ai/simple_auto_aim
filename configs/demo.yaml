@@ -170,6 +170,13 @@ aimd:
   max_linear_speed: 3.0            # m/s 线速度归一化参考值
   max_angular_speed: 10.0          # rad/s 角速度归一化参考值
 
+#####-----机动自适应(选配)-----#####
+maneuver_adapt:
+  enable: false                    # 启用机动自适应（NIS→轨迹速度阻尼）
+  nis_threshold: 10.0             # NIS EMA 超过此值视为机动
+  damping_factor: 0.7             # 机动时轨迹速度最大衰减比例(0=不衰减,1=完全停止)
+  ema_alpha: 0.3                  # NIS EMA 平滑系数
+
 #####-----buff_detector参数-----#####
 detect:
   contrast: 1

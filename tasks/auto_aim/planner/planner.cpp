@@ -1,5 +1,6 @@
 #include "planner.hpp"
 
+#include <algorithm>
 #include <vector>
 
 #include "tools/math_tools.hpp"
@@ -42,6 +43,17 @@ Planner::Planner(const std::string & config_path)
   bullet_speed_max_ = tools::read<double>(yaml, "bullet_speed_max");
   bullet_speed_default_ = tools::read<double>(yaml, "bullet_speed_default");
 
+  // 读取机动自适应配置
+  auto maneuver_yaml = yaml["maneuver_adapt"];
+  if (maneuver_yaml) {
+    maneuver_.enable = tools::read<bool>(maneuver_yaml, "enable");
+    if (maneuver_.enable) {
+      maneuver_.nis_threshold = std::max(tools::read<double>(maneuver_yaml, "nis_threshold"), 1.0);
+      maneuver_.damping_factor = std::clamp(tools::read<double>(maneuver_yaml, "damping_factor"), 0.0, 1.0);
+      maneuver_.ema_alpha = std::clamp(tools::read<double>(maneuver_yaml, "ema_alpha"), 0.01, 1.0);
+    }
+  }
+
   setup_yaw_solver(config_path);
   setup_pitch_solver(config_path);
 }
@@ -77,7 +89,19 @@ Plan Planner::plan(Target target, double bullet_speed)
     return {false};
   }
 
-  // 3. Solve yaw
+  // 3. 机动自适应：NIS 高时衰减轨迹速度，使跟踪更平滑
+  if (maneuver_.enable) {
+    double nis = target.filter().last_nis;
+    if (std::isfinite(nis)) {
+      nis_avg_ = maneuver_.ema_alpha * nis + (1.0 - maneuver_.ema_alpha) * nis_avg_;
+      double alpha = std::clamp(nis_avg_ / maneuver_.nis_threshold, 0.0, 1.0);
+      double damp = 1.0 - alpha * maneuver_.damping_factor;
+      traj.row(1) *= damp;
+      traj.row(3) *= damp;
+    }
+  }
+
+  // 4. Solve yaw
   Eigen::VectorXd x0(2);
   x0 << traj(0, 0), traj(1, 0);
   tiny_set_x0(yaw_solver_, x0);
@@ -120,6 +144,7 @@ Plan Planner::plan(std::optional<Target> target, double bullet_speed)
   if (!target.has_value()) {
     aimd_ctrl_.reset();
     last_fire_advice_ = false;
+    nis_avg_ = 0.0;
     return {false};
   }
 
