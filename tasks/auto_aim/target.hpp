@@ -42,11 +42,19 @@ struct InEKFObservationConfig
 };
 
 // 滤波器配置聚合
+struct VelClampConfig
+{
+  bool enable = false;
+  double max_linear_speed = 5.0;  // m/s
+  double max_yaw_rate = 10.0;     // rad/s
+};
+
 struct FilterConfig
 {
   ProcessNoiseConfig process_noise;
   EKFObservationConfig ekf;
   InEKFObservationConfig inekf;
+  VelClampConfig vel_clamp;
 };
 
 enum class FilterMethod { EKF, INEKF };

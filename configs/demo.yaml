@@ -177,6 +177,12 @@ maneuver_adapt:
   damping_factor: 0.7             # 机动时轨迹速度最大衰减比例(0=不衰减,1=完全停止)
   ema_alpha: 0.3                  # NIS EMA 平滑系数
 
+#####-----速度限幅(选配)-----#####
+vel_clamp:
+  enable: false                    # 启用速度限幅（钳位 EKF 速度状态）
+  max_linear_speed: 5.0           # m/s 最大线速度（均适用 vx/vy/vz）
+  max_yaw_rate: 10.0              # rad/s 最大 yaw 角速度
+
 #####-----buff_detector参数-----#####
 detect:
   contrast: 1

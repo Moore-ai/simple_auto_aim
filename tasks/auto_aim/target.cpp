@@ -1,5 +1,6 @@
 #include "target.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <numeric>
 
@@ -306,6 +307,14 @@ void Target::update_filter(const Armor & armor, int id)
     Eigen::VectorXd z{{ypd[0], ypd[1], ypd[2], ypr[0]}};
 
     filter_->update(z, H, R, h, z_subtract);
+  }
+
+  // 速度限幅：防止极端速度估计导致轨迹不平滑
+  if (config_.vel_clamp.enable) {
+    filter_->x[1] = std::clamp(filter_->x[1], -config_.vel_clamp.max_linear_speed, config_.vel_clamp.max_linear_speed);
+    filter_->x[3] = std::clamp(filter_->x[3], -config_.vel_clamp.max_linear_speed, config_.vel_clamp.max_linear_speed);
+    filter_->x[5] = std::clamp(filter_->x[5], -config_.vel_clamp.max_linear_speed, config_.vel_clamp.max_linear_speed);
+    filter_->x[7] = std::clamp(filter_->x[7], -config_.vel_clamp.max_yaw_rate, config_.vel_clamp.max_yaw_rate);
   }
 }
 

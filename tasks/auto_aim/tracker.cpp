@@ -71,6 +71,16 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
     filter_config_.ekf.armor_yaw_base = tools::read<double>(obs_cfg, "armor_yaw_base");
   }
 
+  // 读取速度限幅配置
+  auto vel_clamp_yaml = yaml["vel_clamp"];
+  if (vel_clamp_yaml) {
+    filter_config_.vel_clamp.enable = tools::read<bool>(vel_clamp_yaml, "enable");
+    if (filter_config_.vel_clamp.enable) {
+      filter_config_.vel_clamp.max_linear_speed = std::max(tools::read<double>(vel_clamp_yaml, "max_linear_speed"), 0.1);
+      filter_config_.vel_clamp.max_yaw_rate = std::max(tools::read<double>(vel_clamp_yaml, "max_yaw_rate"), 0.1);
+    }
+  }
+
   // 读取 P0 和 radius（共用参数，filter 段下）
   auto P0_cfg = filter_cfg["P0"];
   auto radius_cfg = filter_cfg["radius"];
