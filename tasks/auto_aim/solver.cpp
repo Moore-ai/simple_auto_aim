@@ -49,6 +49,10 @@ Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3
   Eigen::Matrix<double, 1, 5> distort_coeffs(distort_coeffs_data.data());
   cv::eigen2cv(camera_matrix, camera_matrix_);
   cv::eigen2cv(distort_coeffs, distort_coeffs_);
+
+  if (yaml["cost_fn"]) {
+    cost_fn_ = yaml["cost_fn"].as<std::string>();
+  }
 }
 
 Eigen::Matrix3d Solver::R_gimbal2world() const { return R_gimbal2world_; }
@@ -264,7 +268,11 @@ double Solver::armor_reprojection_error(
 {
   auto image_points = reproject_armor(armor.xyz_in_world, yaw, armor.type, armor.name);
   auto error = 0.0;
-  for (int i = 0; i < 4; i++) error += cv::norm(armor.points[i] - image_points[i]);
+  if (cost_fn_ == "l2") {
+    for (int i = 0; i < 4; i++) error += std::pow(cv::norm(armor.points[i] - image_points[i]), 2);
+  } else if (cost_fn_ == "l1") {
+    for (int i = 0; i < 4; i++) error += cv::norm(armor.points[i] - image_points[i]);
+  }
   // auto error = SJTU_cost(image_points, armor.points, inclined);
 
   return error;
