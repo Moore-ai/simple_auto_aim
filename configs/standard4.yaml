@@ -52,7 +52,7 @@ priority_list:                     # 优先级从高到低排列（未列出兵�
   - base
 
 #####-----滤波器配置-----#####
-filter_method: "ekf"                  # 滤波器类型："ekf"(标准EKF) 或 "inekf"(左不变误差EKF)
+filter_method: "ekf"                  # 滤波器类型："ekf"(标准EKF), "inekf"(左不变误差EKF), "ukf"(无迹卡尔曼滤波)
 
 #####-----滤波器共用参数（EKF/InEKF 共用）-----#####
 filter:
@@ -87,6 +87,16 @@ inekf_obs:
   z_var: 0.0064               # m² Z 位置观测方差（sigma≈0.08m）
   yaw_var: 0.0144             # rad² yaw 观测方差（sigma≈0.12rad）
   dist_scale_denom: 25.0      # 距离自适应分母，d=sqrt(denom) 时 scale=2，调参阶段按需修改
+
+#####-----UKF 特有观测噪声（xyz 空间，仅 filter_method="ukf" 时使用）-----#####
+ukf_obs:
+  xy_var: 0.0036              # m² XY 位置观测方差
+  z_var: 0.0064               # m² Z 位置观测方差
+  yaw_var: 0.0144             # rad² yaw 观测方差
+  dist_scale_denom: 25.0      # 距离自适应分母
+  sigma_alpha: 0.001          # UKF sigma 点扩散系数
+  sigma_beta: 2.0             # UKF 先验分布参数 (2.0=高斯)
+  sigma_kappa: 0.0            # UKF 次级缩放参数
 
 #####-----瞄准决策器-----#####
 aim_method: "mpc"                 # 决策方法："mpc"（轨迹规划器，默认）或 "aimer"（传统决策器）

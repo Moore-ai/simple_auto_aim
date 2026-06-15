@@ -49,15 +49,28 @@ struct VelClampConfig
   double max_yaw_rate = 10.0;     // rad/s
 };
 
+// UKF 观测噪声（xyz 空间，与 InEKF 共用结构）
+struct UKFObservationConfig
+{
+  double xy_var = 0.0036;
+  double z_var = 0.0064;
+  double yaw_var = 0.0144;
+  double dist_scale_denom = 25.0;
+  double sigma_alpha = 0.001;  // UKF sigma point spread
+  double sigma_beta = 2.0;     // UKF prior knowledge (2.0 = Gaussian)
+  double sigma_kappa = 0.0;    // UKF secondary scaling
+};
+
 struct FilterConfig
 {
   ProcessNoiseConfig process_noise;
   EKFObservationConfig ekf;
   InEKFObservationConfig inekf;
+  UKFObservationConfig ukf;
   VelClampConfig vel_clamp;
 };
 
-enum class FilterMethod { EKF, INEKF };
+enum class FilterMethod { EKF, INEKF, UKF };
 
 class Target
 {

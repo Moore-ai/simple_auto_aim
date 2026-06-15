@@ -27,9 +27,9 @@ public:
 
   virtual std::unique_ptr<FilterBase> clone() const = 0;
 
-  Eigen::VectorXd predict(const Eigen::MatrixXd & F, const Eigen::MatrixXd & Q);
+  virtual Eigen::VectorXd predict(const Eigen::MatrixXd & F, const Eigen::MatrixXd & Q);
 
-  Eigen::VectorXd predict(
+  virtual Eigen::VectorXd predict(
     const Eigen::MatrixXd & F, const Eigen::MatrixXd & Q,
     std::function<Eigen::VectorXd(const Eigen::VectorXd &)> f);
 

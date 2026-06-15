@@ -8,6 +8,7 @@
 #include "tools/invariant_pose_filter.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
+#include "tools/unscented_kalman_filter.hpp"
 
 namespace auto_aim
 {
@@ -101,6 +102,9 @@ Target::Target(
 
   if (filter_method_ == FilterMethod::INEKF) {
     filter_ = std::make_unique<tools::InvariantPoseFilter>(x0, P0, x_add);
+  } else if (filter_method_ == FilterMethod::UKF) {
+    filter_ = std::make_unique<tools::UnscentedKalmanFilter>(
+      x0, P0, x_add, config_.ukf.sigma_alpha, config_.ukf.sigma_beta, config_.ukf.sigma_kappa);
   } else {
     filter_ = std::make_unique<tools::ExtendedKalmanFilter>(x0, P0, x_add);
   }
@@ -247,7 +251,7 @@ void Target::update_filter(const Armor & armor, int id)
   if (filter_method_ == FilterMethod::INEKF) {
     // InEKF branch: uses H_xyza, xyz observation
     Eigen::MatrixXd H = h_jacobian_xyza(filter_->x, id);
-    // 距离自适应观测噪声：PnP 深度不确定性 ~ d²（三角测距原理）
+    // 距离自适应观测噪声
     double d = armor.ypd_in_world[2];
     double denom = std::max(config_.inekf.dist_scale_denom, 1.0);
     double dist_scale = 1.0 + d * d / denom;
@@ -276,6 +280,36 @@ void Target::update_filter(const Armor & armor, int id)
     };
 
     filter_->update(z, H, R, h, z_subtract);
+  } else if (filter_method_ == FilterMethod::UKF) {
+    // UKF branch: ignores H, uses sigma-point propagation through h
+    double d = armor.ypd_in_world[2];
+    double denom = std::max(config_.ukf.dist_scale_denom, 1.0);
+    double dist_scale = 1.0 + d * d / denom;
+    Eigen::VectorXd R_dig{
+      {config_.ukf.xy_var * dist_scale,
+       config_.ukf.xy_var * dist_scale,
+       config_.ukf.z_var * dist_scale,
+       config_.ukf.yaw_var}
+    };
+    Eigen::MatrixXd R = R_dig.asDiagonal();
+
+    auto h = [&](const Eigen::VectorXd & x) -> Eigen::Vector4d {
+      Eigen::Vector3d xyz = h_armor_xyz(x, id);
+      auto angle = tools::limit_rad(x[6] + id * 2 * CV_PI / armor_num_);
+      return {xyz[0], xyz[1], xyz[2], angle};
+    };
+
+    auto z_subtract = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
+      Eigen::VectorXd c = a - b;
+      c[3] = tools::limit_rad(c[3]);
+      return c;
+    };
+
+    Eigen::VectorXd z{
+      {armor.xyz_in_world[0], armor.xyz_in_world[1], armor.xyz_in_world[2], armor.ypr_in_world[0]}
+    };
+
+    filter_->update(z, Eigen::MatrixXd{}, R, h, z_subtract);
   } else {
     // EKF branch: uses ypda observation
     Eigen::MatrixXd H = h_jacobian(filter_->x, id);

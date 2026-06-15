@@ -63,6 +63,16 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
     filter_config_.inekf.z_var = tools::read<double>(obs_cfg, "z_var");
     filter_config_.inekf.yaw_var = tools::read<double>(obs_cfg, "yaw_var");
     filter_config_.inekf.dist_scale_denom = tools::read<double>(obs_cfg, "dist_scale_denom");
+  } else if (filter_method_str == "ukf") {
+    filter_method_ = FilterMethod::UKF;
+    auto obs_cfg = yaml["ukf_obs"];
+    filter_config_.ukf.xy_var = tools::read<double>(obs_cfg, "xy_var");
+    filter_config_.ukf.z_var = tools::read<double>(obs_cfg, "z_var");
+    filter_config_.ukf.yaw_var = tools::read<double>(obs_cfg, "yaw_var");
+    filter_config_.ukf.dist_scale_denom = tools::read<double>(obs_cfg, "dist_scale_denom");
+    filter_config_.ukf.sigma_alpha = tools::read<double>(obs_cfg, "sigma_alpha");
+    filter_config_.ukf.sigma_beta = tools::read<double>(obs_cfg, "sigma_beta");
+    filter_config_.ukf.sigma_kappa = tools::read<double>(obs_cfg, "sigma_kappa");
   } else {
     filter_method_ = FilterMethod::EKF;
     auto obs_cfg = yaml["ekf_obs"];
