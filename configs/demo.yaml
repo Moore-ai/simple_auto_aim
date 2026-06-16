@@ -107,6 +107,9 @@ pitch_offset: -1.4 # degree（Planner/Aimer 共用）瞄准 pitch 修正量，2 
 comming_angle: 60 # degree（仅 Aimer 使用）小陀螺迎向角度阈值
 leaving_angle: 20 # degree（仅 Aimer 使用）小陀螺离去角度阈值
 # ------
+decision_speed_enable: true # 启用 decision_speed 高低速阈值（影响开火延迟）
+speed_hysteresis: 0.0 # rad/s 滞回半宽，防临界抖动
+extra_delay: 0.015 # s 关闭高低速阈值时使用的固定延迟
 decision_speed: 8 # rad/s（Planner/Aimer 共用）转速阈值，高于此值用高速延迟
 high_speed_delay_time: 0.030 # s（Planner/Aimer 共用）高转速目标发弹延迟
 low_speed_delay_time: 0.015 # s（Planner/Aimer 共用）低转速目标发弹延迟

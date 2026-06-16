@@ -22,6 +22,15 @@ Aimer::Aimer(const std::string & config_path)
   high_speed_delay_time_ = yaml["high_speed_delay_time"].as<double>();
   low_speed_delay_time_ = yaml["low_speed_delay_time"].as<double>();
   decision_speed_ = yaml["decision_speed"].as<double>();
+  if (yaml["decision_speed_enable"]) decision_speed_enable_ = yaml["decision_speed_enable"].as<bool>();
+  if (yaml["extra_delay"]) extra_delay_ = yaml["extra_delay"].as<double>();
+  if (yaml["speed_hysteresis"]) speed_hysteresis_ = yaml["speed_hysteresis"].as<double>();
+  if (decision_speed_enable_) {
+    tools::logger()->info("[Aimer] decision speed delay: enable=true, center={:.1f}, hyst={:.1f}, low={:.3f}, high={:.3f}",
+                          decision_speed_, speed_hysteresis_, low_speed_delay_time_, high_speed_delay_time_);
+  } else {
+    tools::logger()->info("[Aimer] decision speed delay: enable=false, fixed delay={:.3f}", extra_delay_);
+  }
   if (yaml["left_yaw_offset"].IsDefined() && yaml["right_yaw_offset"].IsDefined()) {
     left_yaw_offset_ = yaml["left_yaw_offset"].as<double>() / 57.3;    // degree to rad
     right_yaw_offset_ = yaml["right_yaw_offset"].as<double>() / 57.3;  // degree to rad
@@ -36,8 +45,19 @@ io::Command Aimer::aim(
   if (targets.empty()) return {false, false, 0, 0};
   auto target = targets.front();
 
-  double delay_time =
-    target.ekf_x()[7] > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
+  // 转速阈值延迟（带滞回）
+  double delay_time;
+  if (decision_speed_enable_) {
+    double speed = target.ekf_x()[7];
+    if (high_speed_state_) {
+      if (speed < decision_speed_ - speed_hysteresis_) high_speed_state_ = false;
+    } else {
+      if (speed > decision_speed_ + speed_hysteresis_) high_speed_state_ = true;
+    }
+    delay_time = high_speed_state_ ? high_speed_delay_time_ : low_speed_delay_time_;
+  } else {
+    delay_time = extra_delay_;
+  }
 
   if (bullet_speed < 14) bullet_speed = 23;
 

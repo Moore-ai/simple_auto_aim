@@ -41,6 +41,10 @@ private:
   double high_speed_delay_time_;
   double low_speed_delay_time_;
   double decision_speed_;
+  double extra_delay_{0.015};
+  double speed_hysteresis_{0.0};
+  bool decision_speed_enable_{true};
+  bool high_speed_state_{false};
 
   AimPoint choose_aim_point(const Target & target);
 };

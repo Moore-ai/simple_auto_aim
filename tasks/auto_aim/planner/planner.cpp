@@ -20,6 +20,15 @@ Planner::Planner(const std::string & config_path)
   decision_speed_ = tools::read<double>(yaml, "decision_speed");
   high_speed_delay_time_ = tools::read<double>(yaml, "high_speed_delay_time");
   low_speed_delay_time_ = tools::read<double>(yaml, "low_speed_delay_time");
+  if (yaml["decision_speed_enable"]) decision_speed_enable_ = yaml["decision_speed_enable"].as<bool>();
+  if (yaml["extra_delay"]) extra_delay_ = yaml["extra_delay"].as<double>();
+  if (yaml["speed_hysteresis"]) speed_hysteresis_ = yaml["speed_hysteresis"].as<double>();
+  if (decision_speed_enable_) {
+    tools::logger()->info("[Planner] decision speed delay: enable=true, center={:.1f}, hyst={:.1f}, low={:.3f}, high={:.3f}",
+                          decision_speed_, speed_hysteresis_, low_speed_delay_time_, high_speed_delay_time_);
+  } else {
+    tools::logger()->info("[Planner] decision speed delay: enable=false, fixed delay={:.3f}", extra_delay_);
+  }
   rho_ = tools::read<double>(yaml, "rho");
   max_iter_ = tools::read<int>(yaml, "max_iter");
 
@@ -148,10 +157,22 @@ Plan Planner::plan(std::optional<Target> target, double bullet_speed)
     return {false};
   }
 
-  // AIMD 自适应延迟
+  // 转速阈值延迟（带滞回）
   const auto & ekf = target->ekf_x();
-  double delay_time =
-    std::abs(ekf[7]) > decision_speed_ ? high_speed_delay_time_ : low_speed_delay_time_;
+  double delay_time;
+  if (decision_speed_enable_) {
+    double speed = std::abs(ekf[7]);
+    if (high_speed_state_) {
+      if (speed < decision_speed_ - speed_hysteresis_) high_speed_state_ = false;
+    } else {
+      if (speed > decision_speed_ + speed_hysteresis_) high_speed_state_ = true;
+    }
+    delay_time = high_speed_state_ ? high_speed_delay_time_ : low_speed_delay_time_;
+  } else {
+    delay_time = extra_delay_;
+  }
+
+  // AIMD 自适应延迟
   if (aimd_enabled_) {
     double v_ang = std::abs(ekf[7]);
     double v_lin = std::hypot(ekf[1], ekf[3]);
