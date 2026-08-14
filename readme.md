@@ -319,6 +319,23 @@ DPS = 单位时间射击窗口占比 \times 射频 \times 单发子弹伤害
 这里不需要考虑开火延迟，因为在射击轨迹上任意时间发射均会命中[3]。在实际代码实现中，除了图像处理延迟可以直接计算外，我们把其余延迟时间的总和作为一个调试参数[8]，通过拍摄慢动作视频、比较击杀时间等方式进行调整，约15ms。
 
 
+## Web 可视化调试（standard_mpc）
+
+Web 调试仅接入 `standard_mpc` 的自瞄 MPC 链路。启动视觉程序和 Web 服务两个进程：
+
+```bash
+./build/standard_mpc configs/standard3.yaml
+./run_web.sh
+```
+
+在与机器人处于同一隔离网络的电脑浏览器访问 `http://<机器人IP>:9000`。`run_web.sh` 会在项目根目录创建或复用 `.venv`，并用该虚拟环境启动 FastAPI/Uvicorn 服务。
+
+两个进程通过以下本机 IPC 文件交换数据：
+
+- `/dev/shm/sp_vision_25_frame`：2 MiB 共享内存中的 JPEG 视频帧；
+- `/dev/shm/sp_vision_25_data.json`：MPC 曲线数据；
+- `/dev/shm/sp_vision_25_log.json`：当前帧结构化调试日志。
+
 ## 5 未来优化方向
 将轨迹规划器部署到更多兵种上。由于时间有限，国赛中仅步兵使用了轨迹规划器。我们非常期待其在英雄（射频低）、哨兵（惯量大）、无人机（射频高）上的表现。
 
