@@ -85,6 +85,7 @@ Plan Planner::plan(Target target, double bullet_speed)
     }
   }
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  auto fly_time = bullet_traj.fly_time;
   target.predict(bullet_traj.fly_time);
 
   // 2. Get trajectory
@@ -127,6 +128,9 @@ Plan Planner::plan(Target target, double bullet_speed)
 
   Plan plan;
   plan.control = true;
+  plan.debug_xyza = debug_xyza;
+  plan.fly_time = fly_time;
+  plan.debug_valid = true;
 
   plan.target_yaw = tools::limit_rad(traj(0, HALF_HORIZON) + yaw0);
   plan.target_pitch = traj(2, HALF_HORIZON);

@@ -28,6 +28,9 @@ struct Plan
   float pitch;
   float pitch_vel;
   float pitch_acc;
+  Eigen::Vector4d debug_xyza{Eigen::Vector4d::Zero()};
+  double fly_time{0.0};
+  bool debug_valid{false};
 };
 
 class Planner
