@@ -69,10 +69,12 @@ log_headers="$(curl --fail --silent --show-error --dump-header - --output /dev/n
 log_body="$(curl --fail --silent --show-error http://127.0.0.1:9000/log)"
 
 set +e
-video_headers="$(curl --silent --max-time 2 --dump-header - --output /dev/null http://127.0.0.1:9000/video)"
+video_body=/tmp/sp_vision_25_video
+video_headers="$(curl --silent --max-time 2 --dump-header - --output "$video_body" http://127.0.0.1:9000/video)"
 video_status=$?
 set -e
 [ "$video_status" -eq 0 ] || [ "$video_status" -eq 28 ]
+grep -q -- "--frame" "$video_body"
 
 grep -qi '^content-type: text/html' <<<"$index_headers"
 grep -q 'Web 调试器' <<<"$index_body"
