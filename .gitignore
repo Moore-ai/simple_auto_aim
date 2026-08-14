@@ -16,3 +16,4 @@ records_25/
 
 docs/
 compile_commands.json
+.venv/
