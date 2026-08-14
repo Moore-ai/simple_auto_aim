@@ -34,6 +34,9 @@ struct WebDebugContext
   io::GimbalState gimbal{};
   std::vector<auto_aim::Armor> armors;
   std::optional<auto_aim::Target> target;
+  nlohmann::json tracker_json{nullptr};
+  double target_velocity_norm{0.0};
+  double target_yaw_rate{0.0};
   auto_aim::Plan plan{};
   std::vector<std::vector<cv::Point2f>> projected_target_armors;
   std::vector<cv::Point2f> projected_aim_armor;

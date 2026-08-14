@@ -35,17 +35,6 @@ nlohmann::json vector_json(const Eigen::VectorXd & vector)
   return result;
 }
 
-nlohmann::json matrix_json(const Eigen::MatrixXd & matrix)
-{
-  nlohmann::json result = nlohmann::json::array();
-  for (Eigen::Index row = 0; row < matrix.rows(); ++row) {
-    nlohmann::json values = nlohmann::json::array();
-    for (Eigen::Index column = 0; column < matrix.cols(); ++column) values.push_back(matrix(row, column));
-    result.push_back(std::move(values));
-  }
-  return result;
-}
-
 const char * mode_string(io::GimbalMode mode)
 {
   switch (mode) {
@@ -159,20 +148,6 @@ nlohmann::json plan_json(const auto_aim::Plan & plan)
   };
 }
 
-nlohmann::json target_json(const auto_aim::Target & target)
-{
-  const auto & filter = target.filter();
-  return {
-    {"name", armor_name_string(target.name)},
-    {"armor_type", armor_type_string(target.armor_type)},
-    {"priority", target.priority},
-    {"jumped", target.jumped},
-    {"last_id", target.last_id},
-    {"state", vector_json(target.ekf_x())},
-    {"filter", {{"residual_nis_nees", filter.data}, {"last_nis", filter.last_nis}, {"P", matrix_json(filter.P)}}},
-  };
-}
-
 void draw_polygon(cv::Mat & image, const std::vector<cv::Point2f> & points, const cv::Scalar & color)
 {
   if (points.empty()) return;
@@ -226,9 +201,6 @@ nlohmann::json WebDebug::make_log_json(const WebDebugContext & context)
   nlohmann::json armors = nlohmann::json::array();
   for (const auto & armor : context.armors) armors.push_back(armor_json(armor));
 
-  nlohmann::json tracker = nullptr;
-  if (context.target && context.target->isinit) tracker = target_json(*context.target);
-
   return {
     {"frame_id", context.frame_id},
     {"time", context.elapsed_seconds},
@@ -236,7 +208,7 @@ nlohmann::json WebDebug::make_log_json(const WebDebugContext & context)
     {"mode", mode_string(context.mode)},
     {"gimbal", gimbal_json(context.gimbal)},
     {"detector", {{"count", context.armors.size()}, {"armors", std::move(armors)}}},
-    {"tracker", std::move(tracker)},
+    {"tracker", context.tracker_json},
     {"mpc", plan_json(context.plan)},
     {"command", {{"control", context.plan.control}, {"fire", context.plan.fire}, {"yaw", context.plan.yaw}, {"pitch", context.plan.pitch}}},
   };
@@ -287,6 +259,9 @@ void WebDebug::draw(cv::Mat & image, const WebDebugContext & context) const
       context.plan.yaw_vel, context.plan.pitch_vel, context.plan.yaw_acc, context.plan.pitch_acc,
       context.plan.control),
     {10, 44}, cv::FONT_HERSHEY_SIMPLEX, 0.4, {255, 255, 255}, 1, cv::LINE_AA);
+  cv::putText(
+    image, cv::format("V_norm %.3f  V_yaw %.3f", context.target_velocity_norm, context.target_yaw_rate),
+    {10, 62}, cv::FONT_HERSHEY_SIMPLEX, 0.4, {50, 255, 50}, 1, cv::LINE_AA);
   if (context.plan.fire) {
     cv::putText(image, "Fire!", {10, 72}, cv::FONT_HERSHEY_SIMPLEX, 0.8, {0, 0, 255}, 2, cv::LINE_AA);
   }
@@ -294,8 +269,7 @@ void WebDebug::draw(cv::Mat & image, const WebDebugContext & context) const
 
 void WebDebug::append_data(const WebDebugContext & context)
 {
-  const double target_v_yaw =
-    context.target && context.target->isinit ? context.target->ekf_x()[7] : 0.0;
+  const double target_v_yaw = context.target_yaw_rate;
   const std::initializer_list<std::pair<const char *, double>> values = {
     {"time", context.elapsed_seconds},
     {"yaw", context.plan.yaw},

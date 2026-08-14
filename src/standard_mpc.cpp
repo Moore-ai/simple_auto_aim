@@ -154,6 +154,12 @@ int main(int argc, char * argv[])
         }
 
         const auto state = target.ekf_x();
+        nlohmann::json tracker_state = nlohmann::json::array();
+        for (Eigen::Index i = 0; i < state.size(); ++i) tracker_state.push_back(state[i]);
+        context.tracker_json = {
+          {"last_id", target.last_id}, {"jumped", target.jumped}, {"state", tracker_state}};
+        context.target_velocity_norm = std::hypot(state[1], state[3], state[5]);
+        context.target_yaw_rate = state[7];
         const cv::Point3f center(state[0], state[2], state[4]);
         const auto velocity_points = solver.world2pixel({
           center,
