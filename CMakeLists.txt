@@ -107,6 +107,9 @@ add_executable(web_debug_test tests/web_debug_test.cpp)
 target_link_libraries(web_debug_test ${OpenCV_LIBS} fmt::fmt tools io auto_aim)
 target_compile_options(web_debug_test PRIVATE -UNDEBUG)
 
+add_executable(standard_mpc_web_compile_test tests/standard_mpc_web_compile_test.cpp)
+target_link_libraries(standard_mpc_web_compile_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+
 add_executable(planner_test_offline tests/planner_test_offline.cpp)
 target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 
