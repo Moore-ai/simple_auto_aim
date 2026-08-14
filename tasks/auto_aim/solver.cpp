@@ -28,20 +28,12 @@ Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3
 {
   auto yaml = YAML::LoadFile(config_path);
 
-  auto gimbal2imubody = yaml["gimbal2imubody"];
-  auto rpy_gi = gimbal2imubody["rpy"].as<std::vector<double>>();
-  R_gimbal2imubody_ = tools::rotation_matrix(Eigen::Vector3d(rpy_gi.data()));
-
-  auto camera_joint = yaml["camera_joint"];
-  auto xyz_cj = camera_joint["xyz"].as<std::vector<double>>();
-  auto rpy_cj = camera_joint["rpy"].as<std::vector<double>>();
-  t_camera2gimbal_ = Eigen::Vector3d(xyz_cj.data());
-  R_camera2gimbal_ = tools::rotation_matrix(Eigen::Vector3d(rpy_cj.data()));
-
-  // camera_optical_frame → gimbal_link: combine camera_joint (gimbal_link → camera_link)
-  // with fixed optical_joint (camera_link → camera_optical_frame, rpy=[-π/2, 0, -π/2])
-  const Eigen::Matrix3d R_optical = tools::rotation_matrix(Eigen::Vector3d(-CV_PI / 2, 0, -CV_PI / 2));
-  R_camera2gimbal_ = R_camera2gimbal_ * R_optical;
+  auto R_gimbal2imubody_data = yaml["R_gimbal2imubody"].as<std::vector<double>>();
+  auto R_camera2gimbal_data = yaml["R_camera2gimbal"].as<std::vector<double>>();
+  auto t_camera2gimbal_data = yaml["t_camera2gimbal"].as<std::vector<double>>();
+  R_gimbal2imubody_ = Eigen::Matrix<double, 3, 3, Eigen::RowMajor>(R_gimbal2imubody_data.data());
+  R_camera2gimbal_ = Eigen::Matrix<double, 3, 3, Eigen::RowMajor>(R_camera2gimbal_data.data());
+  t_camera2gimbal_ = Eigen::Matrix<double, 3, 1>(t_camera2gimbal_data.data());
 
   auto camera_matrix_data = yaml["camera_matrix"].as<std::vector<double>>();
   auto distort_coeffs_data = yaml["distort_coeffs"].as<std::vector<double>>();
