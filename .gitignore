@@ -17,3 +17,5 @@ records_25/
 docs/
 compile_commands.json
 .venv/
+__pycache__/
+tests/__pycache__/
