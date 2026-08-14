@@ -103,6 +103,10 @@ target_link_libraries(planner_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim too
 add_executable(planner_debug_test tests/planner_debug_test.cpp)
 target_link_libraries(planner_debug_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 
+add_executable(web_debug_test tests/web_debug_test.cpp)
+target_link_libraries(web_debug_test ${OpenCV_LIBS} fmt::fmt tools io auto_aim)
+target_compile_options(web_debug_test PRIVATE -UNDEBUG)
+
 add_executable(planner_test_offline tests/planner_test_offline.cpp)
 target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 
