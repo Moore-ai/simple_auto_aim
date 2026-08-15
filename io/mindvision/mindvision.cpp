@@ -11,7 +11,7 @@ using namespace std::chrono_literals;
 namespace io
 {
 MindVision::MindVision(double exposure_ms, double gamma, const std::string & vid_pid)
-: exposure_ms_(exposure_ms),
+: exposure_us_(exposure_ms * 1e3),
   gamma_(gamma),
   handle_(-1),
   quit_(false),
@@ -59,6 +59,16 @@ void MindVision::read(cv::Mat & img, std::chrono::steady_clock::time_point & tim
   timestamp = data.timestamp;
 }
 
+double MindVision::get_exposure_us() const
+{
+  return exposure_us_.load();
+}
+
+void MindVision::set_exposure_us(double exposure_us)
+{
+  exposure_us_.store(exposure_us);
+}
+
 void MindVision::open()
 {
   int camera_num = 1;
@@ -77,7 +87,7 @@ void MindVision::open()
   height_ = camera_capbility.sResolutionRange.iHeightMax;
 
   CameraSetAeState(handle_, FALSE);                        // 关闭自动曝光
-  CameraSetExposureTime(handle_, exposure_ms_ * 1e3);      // 设置曝光
+  CameraSetExposureTime(handle_, exposure_us_.load());     // 设置曝光
   CameraSetGamma(handle_, gamma_ * 1e2);                   // 设置伽马
   CameraSetIspOutFormat(handle_, CAMERA_MEDIA_TYPE_BGR8);  // 设置输出格式为BGR
   CameraSetTriggerMode(handle_, 0);                        // 设置为连续采集模式
@@ -89,10 +99,17 @@ void MindVision::open()
   capture_thread_ = std::thread{[this] {
     tSdkFrameHead head;
     BYTE * raw;
+    auto applied_exposure_us = exposure_us_.load();
 
     ok_ = true;
     while (!quit_) {
       std::this_thread::sleep_for(1ms);
+
+      const auto requested_exposure_us = exposure_us_.load();
+      if (requested_exposure_us != applied_exposure_us) {
+        CameraSetExposureTime(handle_, requested_exposure_us);
+        applied_exposure_us = requested_exposure_us;
+      }
 
       auto img = cv::Mat(height_, width_, CV_8UC3);
 

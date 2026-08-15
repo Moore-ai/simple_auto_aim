@@ -2,6 +2,7 @@
 #define IO__MINDVISION_HPP
 
 #include <chrono>
+#include <atomic>
 #include <opencv2/opencv.hpp>
 #include <thread>
 
@@ -17,6 +18,8 @@ public:
   MindVision(double exposure_ms, double gamma, const std::string & vid_pid);
   ~MindVision() override;
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
+  double get_exposure_us() const override;
+  void set_exposure_us(double exposure_us) override;
 
 private:
   struct CameraData
@@ -25,7 +28,8 @@ private:
     std::chrono::steady_clock::time_point timestamp;
   };
 
-  double exposure_ms_, gamma_;
+  std::atomic<double> exposure_us_;
+  double gamma_;
   CameraHandle handle_;
   int height_, width_;
   bool quit_, ok_;

@@ -113,6 +113,9 @@ target_link_libraries(standard_mpc_web_compile_test ${OpenCV_LIBS} fmt::fmt yaml
 add_executable(planner_test_offline tests/planner_test_offline.cpp)
 target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 
+add_executable(auto_exposure_test tests/auto_exposure_test.cpp io/auto_exposure.cpp)
+target_link_libraries(auto_exposure_test ${OpenCV_LIBS})
+
 # 检查 ROS 环境
 find_package(ament_cmake QUIET)
 find_package(rclcpp QUIET)

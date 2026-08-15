@@ -19,6 +19,8 @@ public:
   HikRobot(double exposure_ms, double gain, const std::string & vid_pid);
   ~HikRobot() override;
   void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
+  double get_exposure_us() const override;
+  void set_exposure_us(double exposure_us) override;
 
 private:
   struct CameraData
@@ -27,7 +29,7 @@ private:
     std::chrono::steady_clock::time_point timestamp;
   };
 
-  double exposure_us_;
+  std::atomic<double> exposure_us_;
   double gain_;
 
   std::thread daemon_thread_;

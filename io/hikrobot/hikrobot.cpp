@@ -51,6 +51,16 @@ void HikRobot::read(cv::Mat & img, std::chrono::steady_clock::time_point & times
   timestamp = data.timestamp;
 }
 
+double HikRobot::get_exposure_us() const
+{
+  return exposure_us_.load();
+}
+
+void HikRobot::set_exposure_us(double exposure_us)
+{
+  exposure_us_.store(exposure_us);
+}
+
 void HikRobot::capture_start()
 {
   capturing_ = false;
@@ -85,7 +95,7 @@ void HikRobot::capture_start()
   set_enum_value("BalanceWhiteAuto", MV_BALANCEWHITE_AUTO_CONTINUOUS);
   set_enum_value("ExposureAuto", MV_EXPOSURE_AUTO_MODE_OFF);
   set_enum_value("GainAuto", MV_GAIN_MODE_OFF);
-  set_float_value("ExposureTime", exposure_us_);
+  set_float_value("ExposureTime", exposure_us_.load());
   set_float_value("Gain", gain_);
   MV_CC_SetFrameRate(handle_, 150);
 
@@ -102,9 +112,16 @@ void HikRobot::capture_start()
 
     MV_FRAME_OUT raw;
     MV_CC_PIXEL_CONVERT_PARAM cvt_param;
+    auto applied_exposure_us = exposure_us_.load();
 
     while (!capture_quit_) {
       std::this_thread::sleep_for(1ms);
+
+      const auto requested_exposure_us = exposure_us_.load();
+      if (requested_exposure_us != applied_exposure_us) {
+        set_float_value("ExposureTime", requested_exposure_us);
+        applied_exposure_us = requested_exposure_us;
+      }
 
       unsigned int ret;
       unsigned int nMsec = 100;

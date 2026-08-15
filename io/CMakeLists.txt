@@ -6,6 +6,7 @@ add_subdirectory(serial)
 
 # 创建目标 io
 add_library(io STATIC 
+    auto_exposure.cpp
     hikrobot/hikrobot.cpp    
     mindvision/mindvision.cpp  
     usbcamera/usbcamera.cpp  
