@@ -16,4 +16,7 @@ add_library(tools OBJECT
     logger.cpp
     pid.cpp
     crc.cpp
+    web_debug.cpp
 )
+
+target_include_directories(tools PRIVATE ${PROJECT_SOURCE_DIR}/io/serial/include)

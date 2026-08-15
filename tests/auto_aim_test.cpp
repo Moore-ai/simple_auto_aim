@@ -20,6 +20,7 @@ const std::string keys =
   "{config-path c  | configs/demo.yaml | yaml配置文件的路径}"
   "{start-index s  | 0                 | 视频起始帧下标    }"
   "{end-index e    | 0                 | 视频结束帧下标    }"
+  "{no-gui         | false             | 禁用OpenCV图形界面}"
   "{@input-path    | assets/demo/demo  | avi和txt文件的路径}";
 
 int main(int argc, char * argv[])
@@ -34,6 +35,7 @@ int main(int argc, char * argv[])
   auto config_path = cli.get<std::string>("config-path");
   auto start_index = cli.get<int>("start-index");
   auto end_index = cli.get<int>("end-index");
+  auto no_gui = cli.get<bool>("no-gui");
 
   tools::Plotter plotter;
   tools::Exiter exiter;
@@ -43,7 +45,7 @@ int main(int argc, char * argv[])
   cv::VideoCapture video(video_path);
   std::ifstream text(text_path);
 
-  auto_aim::YOLO yolo(config_path);
+  auto_aim::YOLO yolo(config_path, !no_gui);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Aimer aimer(config_path);
@@ -188,10 +190,12 @@ int main(int argc, char * argv[])
 
     plotter.plot(data);
 
-    cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
-    cv::imshow("reprojection", img);
-    auto key = cv::waitKey(30);
-    if (key == 'q') break;
+    if (!no_gui) {
+      cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
+      cv::imshow("reprojection", img);
+      auto key = cv::waitKey(30);
+      if (key == 'q') break;
+    }
   }
 
   return 0;

@@ -156,6 +156,7 @@ std::list<Target> Tracker::track(
 
   // 收敛效果检测：
   if (
+    state_ != "lost" &&
     std::accumulate(
       target_.filter().recent_nis_failures.begin(), target_.filter().recent_nis_failures.end(), 0) >=
     (0.4 * target_.filter().window_size)) {

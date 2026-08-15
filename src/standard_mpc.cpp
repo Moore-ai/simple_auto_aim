@@ -1,4 +1,5 @@
 #include <chrono>
+#include <mutex>
 #include <opencv2/opencv.hpp>
 #include <thread>
 
@@ -22,6 +23,7 @@
 #include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
 #include "tools/recorder.hpp"
+#include "tools/web_debug.hpp"
 
 const std::string keys =
   "{help h usage ? | | 输出命令行参数说明}"
@@ -41,6 +43,7 @@ int main(int argc, char * argv[])
   tools::Exiter exiter;
   tools::Plotter plotter;
   tools::Recorder recorder;
+  tools::WebDebug web_debug;
 
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
@@ -68,6 +71,10 @@ int main(int argc, char * argv[])
 
   std::atomic<io::GimbalMode> mode{io::GimbalMode::IDLE};
   auto last_mode{io::GimbalMode::IDLE};
+  std::mutex plan_mutex;
+  auto_aim::Plan latest_plan{};
+  uint64_t frame_id = 0;
+  const auto start_time = std::chrono::steady_clock::now();
 
   auto plan_thread = std::thread([&]() {
     auto t0 = std::chrono::steady_clock::now();
@@ -78,6 +85,10 @@ int main(int argc, char * argv[])
         auto target = target_queue.front();
         auto gs = gimbal.state();
         auto plan = aim_fn(target, gs.bullet_speed, std::chrono::steady_clock::now());
+        {
+          std::lock_guard<std::mutex> lock(plan_mutex);
+          latest_plan = plan;
+        }
 
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
@@ -111,6 +122,63 @@ int main(int argc, char * argv[])
         target_queue.push(targets.front());
       else
         target_queue.push(std::nullopt);
+
+      auto plan = auto_aim::Plan{};
+      {
+        std::lock_guard<std::mutex> lock(plan_mutex);
+        plan = latest_plan;
+      }
+
+      tools::WebDebugContext context;
+      context.frame_id = frame_id++;
+      context.elapsed_seconds =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time).count();
+      context.latency_ms =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count();
+      context.mode = mode.load();
+      context.gimbal = gimbal.state();
+      context.armors = {armors.begin(), armors.end()};
+      context.plan = plan;
+
+      if (!targets.empty()) {
+        const auto & target = targets.front();
+        context.target = target;
+        for (const auto & xyza : target.armor_xyza_list()) {
+          context.projected_target_armors.push_back(solver.reproject_armor(
+            xyza.head<3>(), xyza[3], target.armor_type, target.name));
+        }
+
+        if (plan.debug_valid) {
+          context.projected_aim_armor = solver.reproject_armor(
+            plan.debug_xyza.head<3>(), plan.debug_xyza[3], target.armor_type, target.name);
+        }
+
+        const auto state = target.ekf_x();
+        nlohmann::json tracker_state = nlohmann::json::array();
+        for (Eigen::Index i = 0; i < state.size(); ++i) tracker_state.push_back(state[i]);
+        context.tracker_json = {
+          {"last_id", target.last_id}, {"jumped", target.jumped}, {"state", tracker_state}};
+        context.target_velocity_norm = std::hypot(state[1], state[3], state[5]);
+        context.target_yaw_rate = state[7];
+        const cv::Point3f center(state[0], state[2], state[4]);
+        const auto velocity_points = solver.world2pixel({
+          center,
+          {static_cast<float>(state[0] + state[1]), static_cast<float>(state[2] + state[3]),
+           static_cast<float>(state[4] + state[5])},
+        });
+        if (velocity_points.size() == 2)
+          context.target_velocity_arrow = std::make_pair(velocity_points[0], velocity_points[1]);
+
+        const auto yaw_radius_points = solver.world2pixel({
+          center,
+          {static_cast<float>(state[0] + state[8] * std::cos(state[6])),
+           static_cast<float>(state[2] + state[8] * std::sin(state[6])), static_cast<float>(state[4])},
+        });
+        if (yaw_radius_points.size() == 2)
+          context.target_yaw_rate_arrow = std::make_pair(yaw_radius_points[0], yaw_radius_points[1]);
+      }
+
+      web_debug.publish(context, img);
     }
 
     /// 打符

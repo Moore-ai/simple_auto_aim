@@ -15,7 +15,7 @@
 namespace auto_aim
 {
 YOLOV8::YOLOV8(const std::string & config_path, bool debug)
-: classifier_(config_path), detector_(config_path), debug_(debug)
+: classifier_(config_path), detector_(config_path, debug), debug_(debug)
 {
   auto yaml = YAML::LoadFile(config_path);
 
