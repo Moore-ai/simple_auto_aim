@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <numeric>
 #include <set>
 
@@ -59,62 +58,6 @@ void load_reprojection_config(
     observation_cfg["r_sigma_px_by_length_ratio"] &&
     observation_cfg["r_sigma_length_by_length_ratio"] &&
     observation_cfg["r_sigma_angle"];
-}
-
-struct PredictedUVL
-{
-  Eigen::Vector4d value = Eigen::Vector4d::Constant(std::numeric_limits<double>::quiet_NaN());
-  Eigen::Matrix<double, 4, 11> jacobian = Eigen::Matrix<double, 4, 11>::Zero();
-  bool valid = false;
-};
-
-Eigen::Matrix<double, 4, 11> projection_parameter_jacobian(
-  const Eigen::Matrix<double, 3, 11> & center_jacobian)
-{
-  Eigen::Matrix<double, 4, 11> result = Eigen::Matrix<double, 4, 11>::Zero();
-  result.topRows<3>() = center_jacobian;
-  result(3, 6) = 1.0;
-  return result;
-}
-
-PredictedUVL make_predicted_uvl(
-  const Eigen::Vector3d & center, const Eigen::VectorXd & x,
-  const ReprojectionMeasurement & measurement, int armor_num,
-  ArmorType armor_type, ArmorName armor_name, const Solver & solver,
-  const Eigen::Matrix<double, 3, 11> & center_jacobian)
-{
-  PredictedUVL result;
-  const auto armor_angle = tools::limit_rad(
-    x[6] + measurement.armor_id * 2 * CV_PI / std::max(armor_num, 1));
-  const auto projection = solver.project_armor_with_jacobian(
-    center, armor_angle, armor_type, armor_name);
-  if (!projection.valid || projection.points.size() != 4 || projection.point_jacobian.size() != 4) {
-    return result;
-  }
-
-  const auto top_index = measurement.right ? 1U : 0U;
-  const auto bottom_index = measurement.right ? 2U : 3U;
-  const auto delta = projection.points[bottom_index] - projection.points[top_index];
-  const auto dx = static_cast<double>(delta.x);
-  const auto dy = static_cast<double>(delta.y);
-  const auto length_squared = dx * dx + dy * dy;
-  if (length_squared <= 1e-12) return result;
-
-  const auto parameter_jacobian = projection_parameter_jacobian(center_jacobian);
-  const auto top_jacobian = projection.point_jacobian[top_index] * parameter_jacobian;
-  const auto bottom_jacobian = projection.point_jacobian[bottom_index] * parameter_jacobian;
-  const auto delta_x_jacobian = bottom_jacobian.row(0) - top_jacobian.row(0);
-  const auto delta_y_jacobian = bottom_jacobian.row(1) - top_jacobian.row(1);
-
-  result.value = uvl_from_endpoints(
-    projection.points[top_index], projection.points[bottom_index]);
-  result.jacobian.row(0) = (dy * delta_x_jacobian - dx * delta_y_jacobian) / length_squared;
-  result.jacobian.row(1) = (top_jacobian.row(0) + bottom_jacobian.row(0)) * 0.5;
-  result.jacobian.row(2) = (top_jacobian.row(1) + bottom_jacobian.row(1)) * 0.5;
-  result.jacobian.row(3) =
-    (dx * delta_x_jacobian + dy * delta_y_jacobian) / std::sqrt(length_squared);
-  result.valid = result.value.allFinite() && result.jacobian.allFinite();
-  return result;
 }
 
 }  // namespace
@@ -467,7 +410,7 @@ bool ObservationPath::update_reprojection(
   if (target.update_reprojection(
       measurements, armor_measurements, solver_, config_.reprojection)) {
     debug_info_.last_update_source = "reprojection";
-    debug_info_.last_nis = target.filter().last_nis;
+    debug_info_.last_nis = target.last_nis();
     tools::logger()->debug(
       "[ObservationPath] reprojection update: armors={}, lights={}, uvl={}, diff={}, nis={:.3f}",
       debug_info_.matched_armor_count, debug_info_.matched_light_count,
@@ -528,7 +471,7 @@ bool ObservationPath::update_pnp(
     if (!measurements.empty() &&
         target.update_lightbar_assist(measurements, solver_, config_.reprojection)) {
       debug_info_.last_update_source = "pnp_lightbar_assist";
-      debug_info_.last_nis = target.filter().last_nis;
+      debug_info_.last_nis = target.last_nis();
       debug_info_.lightbar_assist_update_count++;
     } else if (!measurements.empty()) {
       debug_info_.lightbar_assist_failed_count++;
@@ -539,7 +482,7 @@ bool ObservationPath::update_pnp(
     if (debug_info_.last_update_source != "pnp_lightbar_assist") {
       debug_info_.last_update_source = "pnp";
     }
-    debug_info_.last_nis = target.filter().last_nis;
+    debug_info_.last_nis = target.last_nis();
   } else {
     debug_info_.predict_only_count++;
   }

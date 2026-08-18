@@ -7,6 +7,7 @@
 #include <cmath>
 #include <vector>
 
+#include "target_state.hpp"
 #include "tools/math_tools.hpp"
 
 namespace auto_aim
@@ -99,10 +100,11 @@ inline UVLBatch make_uvl_batch(
   const auto count = observations.size();
   UVLBatch batch;
   batch.z = stack_uvl(observations);
-  batch.H = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(count * 4), 11);
+  batch.H = Eigen::MatrixXd::Zero(
+    static_cast<Eigen::Index>(count * 4), TargetState::dimension);
   batch.R = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(count * 4), static_cast<Eigen::Index>(count * 4));
   for (std::size_t i = 0; i < count; ++i) {
-    batch.H.block<4, 11>(static_cast<Eigen::Index>(i * 4), 0) = jacobians[i];
+    batch.H.block<4, TargetState::dimension>(static_cast<Eigen::Index>(i * 4), 0) = jacobians[i];
     batch.R.diagonal().segment<4>(static_cast<Eigen::Index>(i * 4)) =
       Eigen::Vector4d{angle_var, pixel_var, pixel_var, length_var};
   }

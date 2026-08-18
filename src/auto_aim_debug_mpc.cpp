@@ -88,12 +88,13 @@ int main(int argc, char * argv[])
       data["fired"] = fired ? 1 : 0;
 
       if (target.has_value()) {
-        data["target_z"] = target->ekf_x()[4];   //z
-        data["target_vz"] = target->ekf_x()[5];  //vz
+        const auto state = target->state();
+        data["target_z"] = state.center_z();   //z
+        data["target_vz"] = state.velocity_z();  //vz
       }
 
       if (target.has_value()) {
-        data["w"] = target->ekf_x()[7];
+        data["w"] = target->state().yaw_rate();
       } else {
         data["w"] = 0.0;
       }

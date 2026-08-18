@@ -14,6 +14,8 @@ add_library(auto_aim OBJECT
     solver.cpp
     aimer.cpp
     observation_path.cpp
+    target_estimator.cpp
+    target_state.cpp
     target.cpp
     tracker.cpp
     voter.cpp

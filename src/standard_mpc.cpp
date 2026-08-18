@@ -6,21 +6,14 @@
 #include "tools/aim_factory.hpp"
 #include "tools/detect_factory.hpp"
 #include "io/camera.hpp"
-#include "io/dm_imu/dm_imu.hpp"
-#include "tasks/auto_aim/multithread/commandgener.hpp"
-#include "tasks/auto_aim/multithread/mt_detector.hpp"
-#include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_buff/buff_aimer.hpp"
 #include "tasks/auto_buff/buff_detector.hpp"
 #include "tasks/auto_buff/buff_solver.hpp"
 #include "tasks/auto_buff/buff_target.hpp"
-#include "tasks/auto_buff/buff_type.hpp"
 #include "tools/exiter.hpp"
-#include "tools/img_tools.hpp"
 #include "tools/logger.hpp"
-#include "tools/math_tools.hpp"
 #include "tools/plotter.hpp"
 #include "tools/recorder.hpp"
 #include "tools/web_debug.hpp"
@@ -154,7 +147,8 @@ int main(int argc, char * argv[])
             plan.debug_xyza.head<3>(), plan.debug_xyza[3], target.armor_type, target.name);
         }
 
-        const auto state = target.ekf_x();
+        const auto target_state = target.state();
+        const auto state = target_state.vector();
         nlohmann::json tracker_state = nlohmann::json::array();
         for (Eigen::Index i = 0; i < state.size(); ++i) tracker_state.push_back(state[i]);
         const auto & tracker_debug = tracker.debug_info();
@@ -177,21 +171,27 @@ int main(int argc, char * argv[])
           {"lightbar_assist_failed_count", tracker_debug.lightbar_assist_failed_count},
           {"last_match_cost", tracker_debug.last_match_cost},
           {"last_nis", tracker_debug.last_nis}};
-        context.target_velocity_norm = std::hypot(state[1], state[3], state[5]);
-        context.target_yaw_rate = state[7];
-        const cv::Point3f center(state[0], state[2], state[4]);
+        context.target_velocity_norm = std::hypot(
+          target_state.velocity_x(), target_state.velocity_y(), target_state.velocity_z());
+        context.target_yaw_rate = target_state.yaw_rate();
+        const cv::Point3f center(
+          target_state.center_x(), target_state.center_y(), target_state.center_z());
         const auto velocity_points = solver.world2pixel({
           center,
-          {static_cast<float>(state[0] + state[1]), static_cast<float>(state[2] + state[3]),
-           static_cast<float>(state[4] + state[5])},
+          {static_cast<float>(target_state.center_x() + target_state.velocity_x()),
+           static_cast<float>(target_state.center_y() + target_state.velocity_y()),
+           static_cast<float>(target_state.center_z() + target_state.velocity_z())},
         });
         if (velocity_points.size() == 2)
           context.target_velocity_arrow = std::make_pair(velocity_points[0], velocity_points[1]);
 
         const auto yaw_radius_points = solver.world2pixel({
           center,
-          {static_cast<float>(state[0] + state[8] * std::cos(state[6])),
-           static_cast<float>(state[2] + state[8] * std::sin(state[6])), static_cast<float>(state[4])},
+          {static_cast<float>(target_state.center_x() +
+             target_state.radius() * std::cos(target_state.yaw())),
+           static_cast<float>(target_state.center_y() +
+             target_state.radius() * std::sin(target_state.yaw())),
+           static_cast<float>(target_state.center_z())},
         });
         if (yaw_radius_points.size() == 2)
           context.target_yaw_rate_arrow = std::make_pair(yaw_radius_points[0], yaw_radius_points[1]);

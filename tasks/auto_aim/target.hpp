@@ -3,15 +3,11 @@
 
 #include <Eigen/Dense>
 #include <chrono>
-#include <memory>
-#include <optional>
-#include <queue>
-#include <string>
 #include <vector>
 
 #include "armor.hpp"
 #include "reprojection.hpp"
-#include "tools/filter_base.hpp"
+#include "target_estimator.hpp"
 
 namespace auto_aim
 {
@@ -86,8 +82,6 @@ struct FilterConfig
   VelClampConfig vel_clamp;
 };
 
-enum class FilterMethod { EKF, INEKF, UKF };
-
 class Target
 {
 public:
@@ -123,8 +117,12 @@ public:
     const std::vector<ReprojectionMeasurement> & measurements, const Solver & solver,
     const ReprojectionObservationConfig & observation_config);
 
+  TargetState state() const;
+  Eigen::VectorXd state_vector() const;
   Eigen::VectorXd ekf_x() const;
-  const tools::FilterBase & filter() const;
+  double last_nis() const;
+  const TargetEstimatorDiagnostics & diagnostics() const;
+  bool has_bad_nis_convergence(double failure_rate = 0.4) const;
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
 
   bool diverged() const;
@@ -148,7 +146,7 @@ private:
 
   bool is_switch_, is_converged_;
 
-  std::unique_ptr<tools::FilterBase> filter_;
+  TargetEstimator estimator_;
   FilterMethod filter_method_;
   bool reprojection_mode_ = false;
   ReprojectionObservationConfig reprojection_config_;
@@ -156,15 +154,17 @@ private:
 
   void update_filter(const Armor & armor, int id);  // yaw pitch distance angle
 
-  Eigen::Vector3d h_armor_xyz(const Eigen::VectorXd & x, int id) const;
-  Eigen::Matrix<double, 3, 11> h_armor_xyz_jacobian(const Eigen::VectorXd & x, int id) const;
+  Eigen::Vector3d h_armor_xyz(const TargetState & state, int id) const;
+  Eigen::Matrix<double, 3, TargetState::dimension> h_armor_xyz_jacobian(
+    const TargetState & state, int id) const;
   void constrain_reprojection_state();
   bool update_reprojection_impl(
     const std::vector<ReprojectionMeasurement> & measurements,
     const std::vector<ReprojectionArmorMeasurement> & armor_measurements, const Solver & solver,
     const ReprojectionObservationConfig & observation_config, bool auxiliary_only);
-  Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
-  Eigen::MatrixXd h_jacobian_xyza(const Eigen::VectorXd & x, int id) const;
+  Eigen::MatrixXd h_jacobian(const TargetState & state, int id) const;
+  Eigen::MatrixXd h_jacobian_xyza(const TargetState & state, int id) const;
+  void constrain_velocity();
 };
 
 }  // namespace auto_aim

@@ -116,31 +116,33 @@ int main(int argc, char * argv[])
         tools::draw_points(img, image_points, {255, 0, 0});  // blue
 
       // 观测器内部数据
-      Eigen::VectorXd x = target.ekf_x();
-      data["x"] = x[0];
-      data["vx"] = x[1];
-      data["y"] = x[2];
-      data["vy"] = x[3];
-      data["z"] = x[4];
-      data["vz"] = x[5];
-      data["a"] = x[6] * 57.3;
-      data["w"] = x[7];
-      data["r"] = x[8];
-      data["l"] = x[9];
-      data["h"] = x[10];
+      const auto state = target.state();
+      data["x"] = state.center_x();
+      data["vx"] = state.velocity_x();
+      data["y"] = state.center_y();
+      data["vy"] = state.velocity_y();
+      data["z"] = state.center_z();
+      data["vz"] = state.velocity_z();
+      data["a"] = state.yaw() * 57.3;
+      data["w"] = state.yaw_rate();
+      data["r"] = state.radius();
+      data["l"] = state.radius_diff();
+      data["h"] = state.height_diff();
       data["last_id"] = target.last_id;
-      data["distance"] = std::sqrt(x[0] * x[0] + x[2] * x[2] + x[4] * x[4]);
+      data["distance"] = std::sqrt(
+        state.center_x() * state.center_x() + state.center_y() * state.center_y() +
+        state.center_z() * state.center_z());
 
       // 卡方检验数据
-      data["residual_yaw"] = target.filter().data.at("residual_yaw");
-      data["residual_pitch"] = target.filter().data.at("residual_pitch");
-      data["residual_distance"] = target.filter().data.at("residual_distance");
-      data["residual_angle"] = target.filter().data.at("residual_angle");
-      data["nis"] = target.filter().data.at("nis");
-      data["nees"] = target.filter().data.at("nees");
-      data["nis_fail"] = target.filter().data.at("nis_fail");
-      data["nees_fail"] = target.filter().data.at("nees_fail");
-      data["recent_nis_failures"] = target.filter().data.at("recent_nis_failures");
+      data["residual_yaw"] = target.diagnostics().residual_yaw;
+      data["residual_pitch"] = target.diagnostics().residual_pitch;
+      data["residual_distance"] = target.diagnostics().residual_distance;
+      data["residual_angle"] = target.diagnostics().residual_angle;
+      data["nis"] = target.diagnostics().nis;
+      data["nees"] = target.diagnostics().nees;
+      data["nis_fail"] = target.diagnostics().nis_fail;
+      data["nees_fail"] = target.diagnostics().nees_fail;
+      data["recent_nis_failures"] = target.diagnostics().recent_nis_failures;
     }
     cv::resize(img, img, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("reprojection", img);

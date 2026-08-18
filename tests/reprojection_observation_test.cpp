@@ -36,7 +36,8 @@ int main()
   assert(result.lightbars.size() == 1);
 
   std::vector<Eigen::Vector4d> observations(3, Eigen::Vector4d::Ones());
-  std::vector<Eigen::MatrixXd> jacobians(3, Eigen::MatrixXd::Zero(4, 11));
+  std::vector<Eigen::MatrixXd> jacobians(
+    3, Eigen::MatrixXd::Zero(4, auto_aim::TargetState::dimension));
   const auto batch = auto_aim::make_uvl_batch(observations, jacobians, 4.0, 9.0);
   assert(batch.z.size() == 12);
   assert(batch.H.rows() == 12 && batch.H.cols() == 11);
@@ -210,7 +211,8 @@ int main()
   auto armor = auto_aim::Armor(0, 0.9F, cv::Rect(700, 480, 100, 100), armor_points);
   reprojection_solver.solve(armor);
   auto target = auto_aim::Target(
-    armor, std::chrono::steady_clock::now(), 0.2, 4, Eigen::VectorXd::Ones(11));
+    armor, std::chrono::steady_clock::now(), 0.2, 4,
+    Eigen::VectorXd::Ones(auto_aim::TargetState::dimension));
   auto left = auto_aim::Lightbar();
   left.color = auto_aim::Color::blue;
   left.top = armor_points[0];
@@ -222,16 +224,17 @@ int main()
   const auto updated = target.update_reprojection(
     {{0, false, left}, {0, true, right}}, reprojection_solver, {});
   assert(updated);
-  assert(target.ekf_x().size() == 11);
+  assert(target.state_vector().size() == auto_aim::TargetState::dimension);
 
   auto_aim::ReprojectionObservationConfig diff_config;
   auto reprojection_target = auto_aim::Target(
-    armor, std::chrono::steady_clock::now(), 0.2, 4, Eigen::VectorXd::Ones(11),
+    armor, std::chrono::steady_clock::now(), 0.2, 4,
+    Eigen::VectorXd::Ones(auto_aim::TargetState::dimension),
     {}, auto_aim::FilterMethod::EKF, true, diff_config);
   const auto updated_with_diff = reprojection_target.update_reprojection(
     {{0, false, left}, {0, true, right}}, {{0, armor}}, reprojection_solver, diff_config);
   assert(updated_with_diff);
-  assert(std::isfinite(reprojection_target.filter().last_nis));
+  assert(std::isfinite(reprojection_target.diagnostics().nis));
 
   auto tracker_frame_1 = auto_aim::DetectionResult{{armor}, {left, right}};
   const auto tracker_time = std::chrono::steady_clock::now();
@@ -308,14 +311,16 @@ int main()
   assert(legacy_tracker.debug_info().uvl_observation_count >= 2);
 
   auto constrained_target = auto_aim::Target(
-    armor, std::chrono::steady_clock::now(), 2.0, 4, Eigen::VectorXd::Ones(11),
+    armor, std::chrono::steady_clock::now(), 2.0, 4,
+    Eigen::VectorXd::Ones(auto_aim::TargetState::dimension),
     {}, auto_aim::FilterMethod::EKF, true, diff_config);
   constrained_target.predict(0.0);
-  assert(constrained_target.ekf_x()[8] <= diff_config.radius_max);
+  assert(constrained_target.state().radius() <= diff_config.radius_max);
   auto pnp_target = auto_aim::Target(
-    armor, std::chrono::steady_clock::now(), 2.0, 4, Eigen::VectorXd::Ones(11));
+    armor, std::chrono::steady_clock::now(), 2.0, 4,
+    Eigen::VectorXd::Ones(auto_aim::TargetState::dimension));
   pnp_target.predict(0.0);
-  assert(pnp_target.ekf_x()[8] > diff_config.radius_max);
+  assert(pnp_target.state().radius() > diff_config.radius_max);
 
   const auto predicted_points = reprojection_solver.reproject_armor(
     initialized_targets.front().armor_xyza_list().front().head<3>(),
