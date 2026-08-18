@@ -101,7 +101,7 @@ Plan Planner::plan(Target target, double bullet_speed)
 
   // 3. 机动自适应：NIS 高时衰减轨迹速度，使跟踪更平滑
   if (maneuver_.enable) {
-    double nis = target.filter().last_nis;
+    double nis = target.last_nis();
     if (std::isfinite(nis)) {
       nis_avg_ = maneuver_.ema_alpha * nis + (1.0 - maneuver_.ema_alpha) * nis_avg_;
       double alpha = std::clamp(nis_avg_ / maneuver_.nis_threshold, 0.0, 1.0);
@@ -162,10 +162,10 @@ Plan Planner::plan(std::optional<Target> target, double bullet_speed)
   }
 
   // 转速阈值延迟（带滞回）
-  const auto & ekf = target->ekf_x();
+  const auto state = target->state();
   double delay_time;
   if (decision_speed_enable_) {
-    double speed = std::abs(ekf[7]);
+    double speed = std::abs(state.yaw_rate());
     if (high_speed_state_) {
       if (speed < decision_speed_ - speed_hysteresis_) high_speed_state_ = false;
     } else {
@@ -178,8 +178,8 @@ Plan Planner::plan(std::optional<Target> target, double bullet_speed)
 
   // AIMD 自适应延迟
   if (aimd_enabled_) {
-    double v_ang = std::abs(ekf[7]);
-    double v_lin = std::hypot(ekf[1], ekf[3]);
+    double v_ang = std::abs(state.yaw_rate());
+    double v_lin = std::hypot(state.velocity_x(), state.velocity_y());
     aimd_ctrl_.update(last_fire_advice_, v_lin, v_ang);
     delay_time = aimd_ctrl_.getDelay();
   }

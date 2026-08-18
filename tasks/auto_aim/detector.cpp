@@ -11,7 +11,7 @@
 namespace auto_aim
 {
 Detector::Detector(const std::string & config_path, bool debug)
-: classifier_(config_path), debug_(debug)
+: classifier_(config_path), lightbar_detector_(config_path), debug_(debug)
 {
   auto yaml = YAML::LoadFile(config_path);
 
@@ -30,7 +30,7 @@ Detector::Detector(const std::string & config_path, bool debug)
   std::filesystem::create_directory(save_path_);
 }
 
-std::list<Armor> Detector::detect(const cv::Mat & bgr_img, int frame_count)
+DetectionResult Detector::detect_result(const cv::Mat & bgr_img, int frame_count)
 {
   // 彩色图转灰度图
   cv::Mat gray_img;
@@ -41,26 +41,7 @@ std::list<Armor> Detector::detect(const cv::Mat & bgr_img, int frame_count)
   cv::threshold(gray_img, binary_img, threshold_, 255, cv::THRESH_BINARY);
   if (debug_) cv::imshow("binary_img", binary_img);
 
-  // 获取轮廓点
-  std::vector<std::vector<cv::Point>> contours;
-  cv::findContours(binary_img, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
-
-  // 获取灯条
-  std::size_t lightbar_id = 0;
-  std::list<Lightbar> lightbars;
-  for (const auto & contour : contours) {
-    auto rotated_rect = cv::minAreaRect(contour);
-    auto lightbar = Lightbar(rotated_rect, lightbar_id);
-
-    if (!check_geometry(lightbar)) continue;
-
-    lightbar.color = get_color(bgr_img, contour);
-    lightbars.emplace_back(lightbar);
-    lightbar_id += 1;
-  }
-
-  // 将灯条从左到右排序
-  lightbars.sort([](const Lightbar & a, const Lightbar & b) { return a.center.x < b.center.x; });
+  auto lightbars = lightbar_detector_.detect(bgr_img);
 
   // 获取装甲板
   std::list<Armor> armors;
@@ -116,7 +97,17 @@ std::list<Armor> Detector::detect(const cv::Mat & bgr_img, int frame_count)
 
   if (debug_) show_result(binary_img, bgr_img, lightbars, armors, frame_count);
 
-  return armors;
+  return {armors, lightbars};
+}
+
+std::list<Armor> Detector::detect(const cv::Mat & bgr_img, int frame_count)
+{
+  return detect_result(bgr_img, frame_count).armors;
+}
+
+std::list<Lightbar> Detector::detect_lightbars(const cv::Mat & bgr_img) const
+{
+  return lightbar_detector_.detect(bgr_img);
 }
 
 bool Detector::detect(Armor & armor, const cv::Mat & bgr_img)

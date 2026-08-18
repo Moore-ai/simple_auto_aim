@@ -10,8 +10,12 @@ add_library(auto_aim OBJECT
     armor.cpp
     classifier.cpp 
     detector.cpp
+    lightbar_detector.cpp
     solver.cpp
     aimer.cpp
+    observation_path.cpp
+    target_estimator.cpp
+    target_state.cpp
     target.cpp
     tracker.cpp
     voter.cpp

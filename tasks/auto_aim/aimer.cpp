@@ -48,7 +48,7 @@ io::Command Aimer::aim(
   // 转速阈值延迟（带滞回）
   double delay_time;
   if (decision_speed_enable_) {
-    double speed = target.ekf_x()[7];
+    double speed = target.state().yaw_rate();
     if (high_speed_state_) {
       if (speed < decision_speed_ - speed_hysteresis_) high_speed_state_ = false;
     } else {
@@ -162,14 +162,14 @@ io::Command Aimer::aim(
 
 AimPoint Aimer::choose_aim_point(const Target & target)
 {
-  Eigen::VectorXd ekf_x = target.ekf_x();
+  const auto state = target.state();
   std::vector<Eigen::Vector4d> armor_xyza_list = target.armor_xyza_list();
   auto armor_num = armor_xyza_list.size();
   // 如果装甲板未发生过跳变，则只有当前装甲板的位置已知
   if (!target.jumped) return {true, armor_xyza_list[0]};
 
   // 整车旋转中心的球坐标yaw
-  auto center_yaw = std::atan2(ekf_x[2], ekf_x[0]);
+  auto center_yaw = std::atan2(state.center_y(), state.center_x());
 
   // 如果delta_angle为0，则该装甲板中心和整车中心的连线在世界坐标系的xy平面过原点
   std::vector<double> delta_angle_list;
@@ -179,7 +179,7 @@ AimPoint Aimer::choose_aim_point(const Target & target)
   }
 
   // 不考虑小陀螺
-  if (std::abs(target.ekf_x()[8]) <= 2 && target.name != ArmorName::outpost) {
+  if (std::abs(state.radius()) <= 2 && target.name != ArmorName::outpost) {
     // 选择在可射击范围内的装甲板
     std::vector<int> id_list;
     for (int i = 0; i < armor_num; i++) {
@@ -220,8 +220,10 @@ AimPoint Aimer::choose_aim_point(const Target & target)
   // 在小陀螺时，一侧的装甲板不断出现，另一侧的装甲板不断消失，显然前者被打中的概率更高
   for (int i = 0; i < armor_num; i++) {
     if (std::abs(delta_angle_list[i]) > coming_angle) continue;
-    if (ekf_x[7] > 0 && delta_angle_list[i] < leaving_angle) return {true, armor_xyza_list[i]};
-    if (ekf_x[7] < 0 && delta_angle_list[i] > -leaving_angle) return {true, armor_xyza_list[i]};
+    if (state.yaw_rate() > 0 && delta_angle_list[i] < leaving_angle)
+      return {true, armor_xyza_list[i]};
+    if (state.yaw_rate() < 0 && delta_angle_list[i] > -leaving_angle)
+      return {true, armor_xyza_list[i]};
   }
 
   return {false, armor_xyza_list[0]};

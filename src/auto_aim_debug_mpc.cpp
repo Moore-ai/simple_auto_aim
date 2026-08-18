@@ -88,12 +88,13 @@ int main(int argc, char * argv[])
       data["fired"] = fired ? 1 : 0;
 
       if (target.has_value()) {
-        data["target_z"] = target->ekf_x()[4];   //z
-        data["target_vz"] = target->ekf_x()[5];  //vz
+        const auto state = target->state();
+        data["target_z"] = state.center_z();   //z
+        data["target_vz"] = state.velocity_z();  //vz
       }
 
       if (target.has_value()) {
-        data["w"] = target->ekf_x()[7];
+        data["w"] = target->state().yaw_rate();
       } else {
         data["w"] = 0.0;
       }
@@ -112,8 +113,8 @@ int main(int argc, char * argv[])
     auto q = gimbal.q(t);
 
     solver.set_R_gimbal2world(q);
-    auto armors = yolo.detect(img);
-    auto targets = tracker.track(armors, t);
+    auto detections = yolo.detect_result(img);
+    auto targets = tracker.track(detections, t);
     if (!targets.empty())
       target_queue.push(targets.front());
     else

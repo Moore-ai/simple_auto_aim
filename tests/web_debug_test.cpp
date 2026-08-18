@@ -12,12 +12,14 @@ int main()
   context.gimbal.yaw = 0.1F;
   context.gimbal.pitch = -0.2F;
   context.plan.debug_valid = false;
+  context.lightbars.emplace_back();
 
   const auto log = tools::WebDebug::make_log_json(context);
   assert(log.at("frame_id") == 17);
   assert(log.at("mode") == "AUTO_AIM");
   assert(log.at("gimbal").at("yaw") == 0.1F);
   assert(log.at("mpc").at("debug_valid") == false);
+  assert(log.at("detector").at("lightbar_count") == 1);
 
   tools::WebDebug web({
     "/sp_vision_25_web_debug_test",

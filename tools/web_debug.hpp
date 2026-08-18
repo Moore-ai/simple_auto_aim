@@ -33,6 +33,7 @@ struct WebDebugContext
   io::GimbalMode mode{io::GimbalMode::IDLE};
   io::GimbalState gimbal{};
   std::vector<auto_aim::Armor> armors;
+  std::vector<auto_aim::Lightbar> lightbars;
   std::optional<auto_aim::Target> target;
   nlohmann::json tracker_json{nullptr};
   double target_velocity_norm{0.0};

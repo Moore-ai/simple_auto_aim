@@ -1,5 +1,9 @@
 enemy_color: "red"
 # enemy_color: "blue"
+observation_mode: "pnp" # pnp | reprojection
+
+pnp:
+  enable_lightbar_assist: false
 
 #####-----神经网络参数-----#####
 yolo_name: yolov5
@@ -53,6 +57,25 @@ priority_list:                     # 优先级从高到低排列（未列出兵�
 
 #####-----滤波器配置-----#####
 filter_method: "ekf"                  # 滤波器类型："ekf"(标准EKF), "inekf"(左不变误差EKF), "ukf"(无迹卡尔曼滤波)
+
+reprojection_obs:
+  angle_var: 0.01
+  pixel_var: 16.0
+  length_var: 25.0
+  r_sigma_px_by_length_ratio: 0.2
+  r_sigma_length_by_length_ratio: 0.5
+  r_sigma_angle: 0.1
+  r_sigma_armor_lights_depth_diff: 0.1
+  armor_match_gate: 200.0
+  armor_match_gate_not_all_init: 1000.0
+  armor_match_w_center_err: 5.0
+  armor_match_w_angle_err: 10.0
+  armor_match_w_side_length_err: 1.0
+  light_match_length_ratio_gate: 0.2
+  light_match_angle_gate: 0.2
+  light_match_pos_gate_by_length_ratio: 5.0
+  radius_min: 0.05
+  radius_max: 1.0
 
 #####-----滤波器共用参数（EKF/InEKF 共用）-----#####
 filter:

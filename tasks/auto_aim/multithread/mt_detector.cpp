@@ -64,23 +64,12 @@ void MultiThreadDetector::push(cv::Mat img, std::chrono::steady_clock::time_poin
 
 std::tuple<std::list<Armor>, std::chrono::steady_clock::time_point> MultiThreadDetector::pop()
 {
-  auto [img, t, infer_request] = queue_.pop();
-  infer_request.wait();
-
-  // postprocess
-  auto output_tensor = infer_request.get_output_tensor();
-  auto output_shape = output_tensor.get_shape();
-  cv::Mat output(output_shape[1], output_shape[2], CV_32F, output_tensor.data());
-  auto x_scale = static_cast<double>(640) / img.rows;
-  auto y_scale = static_cast<double>(640) / img.cols;
-  auto scale = std::min(x_scale, y_scale);
-  auto armors = yolo_.postprocess(scale, output, img, 0);  //暂不支持ROI
-
-  return {std::move(armors), t};
+  auto [detections, t] = pop_result();
+  return {std::move(detections.armors), t};
 }
 
-std::tuple<cv::Mat, std::list<Armor>, std::chrono::steady_clock::time_point>
-MultiThreadDetector::debug_pop()
+std::tuple<DetectionResult, std::chrono::steady_clock::time_point>
+MultiThreadDetector::pop_result()
 {
   auto [img, t, infer_request] = queue_.pop();
   infer_request.wait();
@@ -94,7 +83,32 @@ MultiThreadDetector::debug_pop()
   auto scale = std::min(x_scale, y_scale);
   auto armors = yolo_.postprocess(scale, output, img, 0);  //暂不支持ROI
 
-  return {img, std::move(armors), t};
+  return {DetectionResult{std::move(armors), yolo_.detect_lightbars(img)}, t};
+}
+
+std::tuple<cv::Mat, std::list<Armor>, std::chrono::steady_clock::time_point>
+MultiThreadDetector::debug_pop()
+{
+  auto [img, detections, t] = debug_pop_result();
+  return {std::move(img), std::move(detections.armors), t};
+}
+
+std::tuple<cv::Mat, DetectionResult, std::chrono::steady_clock::time_point>
+MultiThreadDetector::debug_pop_result()
+{
+  auto [img, t, infer_request] = queue_.pop();
+  infer_request.wait();
+
+  // postprocess
+  auto output_tensor = infer_request.get_output_tensor();
+  auto output_shape = output_tensor.get_shape();
+  cv::Mat output(output_shape[1], output_shape[2], CV_32F, output_tensor.data());
+  auto x_scale = static_cast<double>(640) / img.rows;
+  auto y_scale = static_cast<double>(640) / img.cols;
+  auto scale = std::min(x_scale, y_scale);
+  auto armors = yolo_.postprocess(scale, output, img, 0);  //暂不支持ROI
+
+  return {img, DetectionResult{std::move(armors), yolo_.detect_lightbars(img)}, t};
 }
 
 }  // namespace multithread

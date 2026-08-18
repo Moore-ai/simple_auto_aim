@@ -22,9 +22,8 @@ bool Shooter::shoot(
 {
   if (!command.control || targets.empty() || !auto_fire_) return false;
 
-  auto target_x = targets.front().ekf_x()[0];
-  auto target_y = targets.front().ekf_x()[2];
-  auto tolerance = std::sqrt(tools::square(target_x) + tools::square(target_y)) > judge_distance_
+  const auto state = targets.front().state();
+  auto tolerance = std::hypot(state.center_x(), state.center_y()) > judge_distance_
                      ? second_tolerance_
                      : first_tolerance_;
   // tools::logger()->debug("d(command.yaw) is {:.4f}", std::abs(last_command_.yaw - command.yaw));

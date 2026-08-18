@@ -10,6 +10,7 @@ namespace auto_aim
 {
 Tracker::Tracker(const std::string & config_path, Solver & solver)
 : solver_{solver},
+  observation_path_{solver},
   detect_count_(0),
   temp_lost_count_(0),
   state_{"lost"},
@@ -81,6 +82,9 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
     filter_config_.ekf.armor_yaw_base = tools::read<double>(obs_cfg, "armor_yaw_base");
   }
 
+  observation_path_.configure(
+    ObservationPathConfig::from_yaml(yaml, filter_method_), enemy_color_);
+
   // 读取速度限幅配置
   auto vel_clamp_yaml = yaml["vel_clamp"];
   if (vel_clamp_yaml) {
@@ -115,6 +119,15 @@ std::string Tracker::state() const { return state_; }
 std::list<Target> Tracker::track(
   std::list<Armor> & armors, std::chrono::steady_clock::time_point t, bool use_enemy_color)
 {
+  DetectionResult detections{armors, {}};
+  auto targets = track(detections, t, use_enemy_color);
+  armors = std::move(detections.armors);
+  return targets;
+}
+
+std::list<Target> Tracker::track(
+  DetectionResult & detections, std::chrono::steady_clock::time_point t, bool use_enemy_color)
+{
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
 
@@ -123,7 +136,8 @@ std::list<Target> Tracker::track(
     tools::logger()->warn("[Tracker] Large dt: {:.3f}s", dt);
     state_ = "lost";
   }
-  // 过滤掉非我方装甲板
+  // 过滤我方装甲板
+  auto & armors = detections.armors;
   armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
 
   // 过滤前哨站顶部装甲板
@@ -139,10 +153,8 @@ std::list<Target> Tracker::track(
   bool found;
   if (state_ == "lost") {
     found = set_target(armors, t);
-  }
-
-  else {
-    found = update_target(armors, t);
+  } else {
+    found = update_target(detections, t);
   }
 
   state_machine(found);
@@ -155,11 +167,7 @@ std::list<Target> Tracker::track(
   }
 
   // 收敛效果检测：
-  if (
-    state_ != "lost" &&
-    std::accumulate(
-      target_.filter().recent_nis_failures.begin(), target_.filter().recent_nis_failures.end(), 0) >=
-    (0.4 * target_.filter().window_size)) {
+  if (state_ != "lost" && target_.has_bad_nis_convergence()) {
     tools::logger()->debug("[Target] Bad Converge Found!");
     state_ = "lost";
     return {};
@@ -174,6 +182,16 @@ std::list<Target> Tracker::track(
 std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
   const std::vector<omniperception::DetectionResult> & detection_queue, std::list<Armor> & armors,
   std::chrono::steady_clock::time_point t, bool use_enemy_color)
+{
+  DetectionResult detections{armors, {}};
+  auto result = track(detection_queue, detections, t, use_enemy_color);
+  armors = std::move(detections.armors);
+  return result;
+}
+
+std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
+  const std::vector<omniperception::DetectionResult> & detection_queue,
+  DetectionResult & detections, std::chrono::steady_clock::time_point t, bool use_enemy_color)
 {
   omniperception::DetectionResult switch_target{std::list<Armor>(), t, 0, 0};
   omniperception::DetectionResult temp_target{std::list<Armor>(), t, 0, 0};
@@ -196,6 +214,7 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
   }
 
   // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
+  auto & armors = detections.armors;
   sort_armors(armors);
 
   bool found;
@@ -230,7 +249,7 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
   }
 
   else {
-    found = update_target(armors, t);
+    found = update_target(detections, t);
   }
 
   pre_state_ = state_;
@@ -306,7 +325,10 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
   if (armors.empty()) return false;
 
   auto & armor = armors.front();
-  solver_.solve(armor);
+  if (!solver_.solve(armor)) {
+    observation_path_.record_predict_only();
+    return false;
+  }
 
   // 根据兵种优化初始化参数
   auto is_balance = (armor.type == ArmorType::big) &&
@@ -314,65 +336,44 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
                      armor.name == ArmorName::five);
 
   if (is_balance) {
-    target_ = Target(armor, t, radius_default_, 2, P0_balance_, filter_config_, filter_method_);
+    target_ = Target(
+      armor, t, radius_default_, 2, P0_balance_, filter_config_, filter_method_,
+      observation_path_.uses_reprojection(), observation_path_.reprojection_config());
+  } else if (armor.name == ArmorName::outpost) {
+    target_ = Target(
+      armor, t, radius_outpost_, 3, P0_outpost_, filter_config_, filter_method_,
+      observation_path_.uses_reprojection(), observation_path_.reprojection_config());
+  } else if (armor.name == ArmorName::base) {
+    target_ = Target(
+      armor, t, radius_base_, 3, P0_base_, filter_config_, filter_method_,
+      observation_path_.uses_reprojection(), observation_path_.reprojection_config());
+  } else {
+    target_ = Target(
+      armor, t, radius_default_, 4, P0_default_, filter_config_, filter_method_,
+      observation_path_.uses_reprojection(), observation_path_.reprojection_config());
   }
 
-  else if (armor.name == ArmorName::outpost) {
-    target_ = Target(armor, t, radius_outpost_, 3, P0_outpost_, filter_config_, filter_method_);
-  }
-
-  else if (armor.name == ArmorName::base) {
-    target_ = Target(armor, t, radius_base_, 3, P0_base_, filter_config_, filter_method_);
-  }
-
-  else {
-    target_ = Target(armor, t, radius_default_, 4, P0_default_, filter_config_, filter_method_);
-  }
-
+  observation_path_.record_initialization();
   return true;
 }
 
-bool Tracker::update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
+bool Tracker::update_target(DetectionResult & detections, std::chrono::steady_clock::time_point t)
 {
-  target_.predict(t);
-
-  int found_count = 0;
-  double min_x = 1e10;  // 画面最左侧
-  for (const auto & armor : armors) {
-    if (armor.name != target_.name || armor.type != target_.armor_type) continue;
-    found_count++;
-    min_x = armor.center.x < min_x ? armor.center.x : min_x;
-  }
-
-  if (found_count == 0) return false;
-
-  for (auto & armor : armors) {
-    if (
-      armor.name != target_.name || armor.type != target_.armor_type
-      //  || armor.center.x != min_x
-    )
-      continue;
-
-    solver_.solve(armor);
-
-    target_.update(armor);
-  }
-
-  return true;
+  return observation_path_.update(target_, detections, t);
 }
 
 void Tracker::sort_armors(std::list<Armor> & armors) const
 {
   if (use_priority_) {
     assign_priorities(armors);
-    cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
+    cv::Point2f img_center((float)1440 / 2, (float)1080 / 2);  // TODO
     armors.sort([img_center](const Armor & a, const Armor & b) {
       if (a.priority != b.priority) return a.priority < b.priority;
       return cv::norm(a.center - img_center) < cv::norm(b.center - img_center);
     });
   } else {
     armors.sort([](const Armor & a, const Armor & b) {
-      cv::Point2f img_center(1440 / 2, 1080 / 2);  // TODO
+      cv::Point2f img_center((float)1440 / 2, (float)1080 / 2);  // TODO
       auto distance_1 = cv::norm(a.center - img_center);
       auto distance_2 = cv::norm(b.center - img_center);
       return distance_1 < distance_2;

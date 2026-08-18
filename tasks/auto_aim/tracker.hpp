@@ -6,8 +6,10 @@
 #include <list>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "armor.hpp"
+#include "observation_path.hpp"
 #include "solver.hpp"
 #include "target.hpp"
 #include "tasks/omniperception/perceptron.hpp"
@@ -15,15 +17,29 @@
 
 namespace auto_aim
 {
+
+using TrackerDebugInfo = ObservationPathDebugInfo;
+
 class Tracker
 {
 public:
   Tracker(const std::string & config_path, Solver & solver);
 
   std::string state() const;
+  bool reprojection_enabled() const { return observation_path_.uses_reprojection(); }
+  const TrackerDebugInfo & debug_info() const { return observation_path_.debug_info(); }
 
   std::list<Target> track(
     std::list<Armor> & armors, std::chrono::steady_clock::time_point t,
+    bool use_enemy_color = true);
+
+  std::list<Target> track(
+    DetectionResult & detections, std::chrono::steady_clock::time_point t,
+    bool use_enemy_color = true);
+
+  std::tuple<omniperception::DetectionResult, std::list<Target>> track(
+    const std::vector<omniperception::DetectionResult> & detection_queue,
+    DetectionResult & detections, std::chrono::steady_clock::time_point t,
     bool use_enemy_color = true);
 
   std::tuple<omniperception::DetectionResult, std::list<Target>> track(
@@ -32,6 +48,7 @@ public:
 
 private:
   Solver & solver_;
+  ObservationPath observation_path_;
   Color enemy_color_;
   int min_detect_count_;
   int max_temp_lost_count_;
@@ -60,7 +77,7 @@ private:
 
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 
-  bool update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
+  bool update_target(DetectionResult & detections, std::chrono::steady_clock::time_point t);
 
   void sort_armors(std::list<Armor> & armors) const;
 
