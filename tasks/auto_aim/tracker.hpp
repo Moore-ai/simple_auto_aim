@@ -3,13 +3,13 @@
 
 #include <Eigen/Dense>
 #include <chrono>
-#include <cstdint>
 #include <list>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "armor.hpp"
+#include "observation_path.hpp"
 #include "solver.hpp"
 #include "target.hpp"
 #include "tasks/omniperception/perceptron.hpp"
@@ -18,24 +18,7 @@
 namespace auto_aim
 {
 
-struct TrackerDebugInfo
-{
-  std::string observation_mode{"pnp"};
-  bool lightbar_assist_enabled = false;
-  std::string last_update_source{"none"};
-  std::size_t matched_armor_count = 0;
-  std::size_t matched_light_count = 0;
-  std::size_t uvl_observation_count = 0;
-  std::size_t diff_observation_count = 0;
-  std::size_t rejected_armor_count = 0;
-  std::size_t rejected_light_count = 0;
-  std::uint64_t pnp_fallback_count = 0;
-  std::uint64_t predict_only_count = 0;
-  std::uint64_t lightbar_assist_update_count = 0;
-  std::uint64_t lightbar_assist_failed_count = 0;
-  double last_match_cost = 0.0;
-  double last_nis = 0.0;
-};
+using TrackerDebugInfo = ObservationPathDebugInfo;
 
 class Tracker
 {
@@ -43,8 +26,8 @@ public:
   Tracker(const std::string & config_path, Solver & solver);
 
   std::string state() const;
-  bool reprojection_enabled() const { return use_reprojection_; }
-  const TrackerDebugInfo & debug_info() const { return debug_info_; }
+  bool reprojection_enabled() const { return observation_path_.uses_reprojection(); }
+  const TrackerDebugInfo & debug_info() const { return observation_path_.debug_info(); }
 
   std::list<Target> track(
     std::list<Armor> & armors, std::chrono::steady_clock::time_point t,
@@ -65,6 +48,7 @@ public:
 
 private:
   Solver & solver_;
+  ObservationPath observation_path_;
   Color enemy_color_;
   int min_detect_count_;
   int max_temp_lost_count_;
@@ -84,10 +68,6 @@ private:
   // 滤波器配置（一次性读取，传递给 Target）
   FilterConfig filter_config_;
   FilterMethod filter_method_;
-  bool use_reprojection_;
-  bool lightbar_assist_enabled_;
-  ReprojectionObservationConfig reprojection_config_;
-  TrackerDebugInfo debug_info_;
   // EKF 初始协方差 P0（按兵种）
   Eigen::VectorXd P0_default_, P0_balance_, P0_outpost_, P0_base_;
   // EKF 初始半径（按兵种）
@@ -98,11 +78,6 @@ private:
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 
   bool update_target(DetectionResult & detections, std::chrono::steady_clock::time_point t);
-  bool update_target_reprojection_enhanced(
-    DetectionResult & detections, std::chrono::steady_clock::time_point t);
-  std::vector<ReprojectionMeasurement> match_independent_lightbars(
-    DetectionResult & detections, const std::vector<Eigen::Vector4d> & predicted_armors,
-    const std::vector<int> & visible_ids, const std::vector<int> & occupied_ids);
 
   void sort_armors(std::list<Armor> & armors) const;
 
