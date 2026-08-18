@@ -8,6 +8,7 @@
 
 #include "armor.hpp"
 #include "classifier.hpp"
+#include "detection_result.hpp"
 #include "lightbar_detector.hpp"
 
 namespace auto_aim
@@ -29,6 +30,7 @@ public:
 private:
   Classifier classifier_;
   LightbarDetector lightbar_detector_;
+  DetectionOptions detection_options_;
 
   double threshold_;
   double max_angle_error_;

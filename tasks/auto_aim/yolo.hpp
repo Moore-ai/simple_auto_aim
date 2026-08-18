@@ -4,6 +4,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "armor.hpp"
+#include "detection_result.hpp"
 #include "lightbar_detector.hpp"
 
 namespace auto_aim
@@ -25,6 +26,7 @@ public:
   DetectionResult detect_result(const cv::Mat & img, int frame_count = -1);
   std::list<Lightbar> detect_lightbars(const cv::Mat & img) const;
   std::list<Armor> detect(const cv::Mat & img, int frame_count = -1);
+  const DetectionOptions & detection_options() const { return detection_options_; }
 
   std::list<Armor> postprocess(
     double scale, cv::Mat & output, const cv::Mat & bgr_img, int frame_count);
@@ -32,6 +34,7 @@ public:
 private:
   std::unique_ptr<YOLOBase> yolo_;
   std::unique_ptr<LightbarDetector> lightbar_detector_;
+  DetectionOptions detection_options_;
 };
 
 }  // namespace auto_aim

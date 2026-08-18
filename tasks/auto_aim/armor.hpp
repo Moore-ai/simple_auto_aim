@@ -127,6 +127,12 @@ struct DetectionResult
 {
   std::list<Armor> armors;
   std::list<Lightbar> lightbars;
+  // True when this result explicitly requested independent lightbar collection.
+  // It remains false for legacy armor-only results, even when the lightbar list is empty.
+  bool lightbars_collected = false;
+
+  bool has_independent_lightbars() const { return !lightbars.empty(); }
+  bool independent_lightbars_collected() const { return lightbars_collected; }
 };
 
 }  // namespace auto_aim

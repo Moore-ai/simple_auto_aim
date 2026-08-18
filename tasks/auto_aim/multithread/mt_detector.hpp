@@ -6,6 +6,7 @@
 #include <openvino/openvino.hpp>
 #include <tuple>
 
+#include "tasks/auto_aim/detection_result.hpp"
 #include "tasks/auto_aim/yolos/yolov5.hpp"
 #include "tools/logger.hpp"
 #include "tools/thread_safe_queue.hpp"
@@ -34,6 +35,9 @@ private:
   ov::CompiledModel compiled_model_;
   std::string device_;
   YOLO yolo_;
+
+  DetectionResult make_detection_result(
+    std::list<Armor> armors, const cv::Mat & image) const;
 
   tools::ThreadSafeQueue<
     std::tuple<cv::Mat, std::chrono::steady_clock::time_point, ov::InferRequest>>

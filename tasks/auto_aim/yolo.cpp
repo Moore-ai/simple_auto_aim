@@ -12,6 +12,7 @@ YOLO::YOLO(const std::string & config_path, bool debug)
   : lightbar_detector_(std::make_unique<LightbarDetector>(config_path))
 {
   auto yaml = YAML::LoadFile(config_path);
+  detection_options_ = DetectionOptions::from_yaml(yaml);
   auto yolo_name = yaml["yolo_name"].as<std::string>();
 
   if (yolo_name == "yolov8") {
@@ -33,7 +34,12 @@ YOLO::YOLO(const std::string & config_path, bool debug)
 
 DetectionResult YOLO::detect_result(const cv::Mat & img, int frame_count)
 {
-  return {yolo_->detect(img, frame_count), detect_lightbars(img)};
+  auto armors = yolo_->detect(img, frame_count);
+  if (!detection_options_.collect_lightbars) return {std::move(armors), {}};
+  DetectionResult result{std::move(armors), {}};
+  result.lightbars_collected = true;
+  result.lightbars = detect_lightbars(img);
+  return result;
 }
 
 std::list<Lightbar> YOLO::detect_lightbars(const cv::Mat & img) const

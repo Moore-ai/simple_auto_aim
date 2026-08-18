@@ -83,7 +83,7 @@ MultiThreadDetector::pop_result()
   auto scale = std::min(x_scale, y_scale);
   auto armors = yolo_.postprocess(scale, output, img, 0);  //暂不支持ROI
 
-  return {DetectionResult{std::move(armors), yolo_.detect_lightbars(img)}, t};
+  return {make_detection_result(std::move(armors), img), t};
 }
 
 std::tuple<cv::Mat, std::list<Armor>, std::chrono::steady_clock::time_point>
@@ -108,7 +108,19 @@ MultiThreadDetector::debug_pop_result()
   auto scale = std::min(x_scale, y_scale);
   auto armors = yolo_.postprocess(scale, output, img, 0);  //暂不支持ROI
 
-  return {img, DetectionResult{std::move(armors), yolo_.detect_lightbars(img)}, t};
+  return {img, make_detection_result(std::move(armors), img), t};
+}
+
+DetectionResult MultiThreadDetector::make_detection_result(
+  std::list<Armor> armors, const cv::Mat & image) const
+{
+  DetectionResult result;
+  result.armors = std::move(armors);
+  if (yolo_.detection_options().collect_lightbars) {
+    result.lightbars_collected = true;
+    result.lightbars = yolo_.detect_lightbars(image);
+  }
+  return result;
 }
 
 }  // namespace multithread

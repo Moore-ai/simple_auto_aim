@@ -14,6 +14,7 @@ Detector::Detector(const std::string & config_path, bool debug)
 : classifier_(config_path), lightbar_detector_(config_path), debug_(debug)
 {
   auto yaml = YAML::LoadFile(config_path);
+  detection_options_ = DetectionOptions::from_yaml(yaml);
 
   threshold_ = yaml["threshold"].as<double>();
   max_angle_error_ = yaml["max_angle_error"].as<double>() / 57.3;  // degree to rad
@@ -97,7 +98,11 @@ DetectionResult Detector::detect_result(const cv::Mat & bgr_img, int frame_count
 
   if (debug_) show_result(binary_img, bgr_img, lightbars, armors, frame_count);
 
-  return {armors, lightbars};
+  DetectionResult result;
+  result.armors = std::move(armors);
+  result.lightbars_collected = detection_options_.collect_lightbars;
+  if (result.lightbars_collected) result.lightbars = std::move(lightbars);
+  return result;
 }
 
 std::list<Armor> Detector::detect(const cv::Mat & bgr_img, int frame_count)

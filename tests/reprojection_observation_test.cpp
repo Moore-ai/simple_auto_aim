@@ -4,7 +4,10 @@
 #include <list>
 #include <sstream>
 
+#include <yaml-cpp/yaml.h>
+
 #include "tasks/auto_aim/armor.hpp"
+#include "tasks/auto_aim/detection_result.hpp"
 #include "tasks/auto_aim/lightbar_detector.hpp"
 #include "tasks/auto_aim/reprojection.hpp"
 #include "tasks/auto_aim/solver.hpp"
@@ -34,6 +37,24 @@ int main()
   result.lightbars.emplace_back();
   assert(result.armors.empty());
   assert(result.lightbars.size() == 1);
+  assert(result.has_independent_lightbars());
+  assert(!result.independent_lightbars_collected());
+  result.lightbars_collected = true;
+  assert(result.independent_lightbars_collected());
+
+  assert(!auto_aim::DetectionOptions::from_yaml(
+    YAML::Load("observation_mode: pnp\nfilter_method: ekf\n"))
+             .collect_lightbars);
+  assert(auto_aim::DetectionOptions::from_yaml(
+           YAML::Load("observation_mode: pnp\nfilter_method: ekf\npnp:\n  "
+                      "enable_lightbar_assist: true\n"))
+           .collect_lightbars);
+  assert(auto_aim::DetectionOptions::from_yaml(
+           YAML::Load("observation_mode: reprojection\nfilter_method: ekf\n"))
+           .collect_lightbars);
+  assert(!auto_aim::DetectionOptions::from_yaml(
+           YAML::Load("observation_mode: reprojection\nfilter_method: inekf\n"))
+             .collect_lightbars);
 
   std::vector<Eigen::Vector4d> observations(3, Eigen::Vector4d::Ones());
   std::vector<Eigen::MatrixXd> jacobians(
