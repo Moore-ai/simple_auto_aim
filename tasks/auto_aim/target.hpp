@@ -119,6 +119,9 @@ public:
     const std::vector<ReprojectionMeasurement> & measurements,
     const std::vector<ReprojectionArmorMeasurement> & armor_measurements, const Solver & solver,
     const ReprojectionObservationConfig & observation_config);
+  bool update_lightbar_assist(
+    const std::vector<ReprojectionMeasurement> & measurements, const Solver & solver,
+    const ReprojectionObservationConfig & observation_config);
 
   Eigen::VectorXd ekf_x() const;
   const tools::FilterBase & filter() const;
@@ -156,6 +159,10 @@ private:
   Eigen::Vector3d h_armor_xyz(const Eigen::VectorXd & x, int id) const;
   Eigen::Matrix<double, 3, 11> h_armor_xyz_jacobian(const Eigen::VectorXd & x, int id) const;
   void constrain_reprojection_state();
+  bool update_reprojection_impl(
+    const std::vector<ReprojectionMeasurement> & measurements,
+    const std::vector<ReprojectionArmorMeasurement> & armor_measurements, const Solver & solver,
+    const ReprojectionObservationConfig & observation_config, bool auxiliary_only);
   Eigen::MatrixXd h_jacobian(const Eigen::VectorXd & x, int id) const;
   Eigen::MatrixXd h_jacobian_xyza(const Eigen::VectorXd & x, int id) const;
 };

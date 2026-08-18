@@ -327,13 +327,29 @@ bool Target::update_reprojection(
   const std::vector<ReprojectionMeasurement> & measurements, const Solver & solver,
   const ReprojectionObservationConfig & observation_config)
 {
-  return update_reprojection(measurements, {}, solver, observation_config);
+  return update_reprojection_impl(measurements, {}, solver, observation_config, false);
 }
 
 bool Target::update_reprojection(
   const std::vector<ReprojectionMeasurement> & measurements,
   const std::vector<ReprojectionArmorMeasurement> & armor_measurements, const Solver & solver,
   const ReprojectionObservationConfig & observation_config)
+{
+  return update_reprojection_impl(
+    measurements, armor_measurements, solver, observation_config, false);
+}
+
+bool Target::update_lightbar_assist(
+  const std::vector<ReprojectionMeasurement> & measurements, const Solver & solver,
+  const ReprojectionObservationConfig & observation_config)
+{
+  return update_reprojection_impl(measurements, {}, solver, observation_config, true);
+}
+
+bool Target::update_reprojection_impl(
+  const std::vector<ReprojectionMeasurement> & measurements,
+  const std::vector<ReprojectionArmorMeasurement> & armor_measurements, const Solver & solver,
+  const ReprojectionObservationConfig & observation_config, bool auxiliary_only)
 {
   if (measurements.empty() || filter_method_ != FilterMethod::EKF || !filter_) return false;
 
@@ -432,15 +448,17 @@ bool Target::update_reprojection(
     filter_->P = P_before_update;
     return false;
   }
-  last_id = measurements.front().armor_id;
-  if (armor_measurements.empty()) {
-    for (const auto & measurement : measurements) mark_armor_id(measurement.armor_id);
-  } else {
-    for (const auto & measurement : armor_measurements) mark_armor_id(measurement.armor_id);
+  if (!auxiliary_only) {
+    last_id = measurements.front().armor_id;
+    if (armor_measurements.empty()) {
+      for (const auto & measurement : measurements) mark_armor_id(measurement.armor_id);
+    } else {
+      for (const auto & measurement : armor_measurements) mark_armor_id(measurement.armor_id);
+    }
+    update_count_ += static_cast<int>(measurements.size() + (observed_depth_diff ? 1 : 0));
+    if (last_id != 0) jumped = true;
+    constrain_reprojection_state();
   }
-  update_count_ += static_cast<int>(measurements.size() + (observed_depth_diff ? 1 : 0));
-  if (last_id != 0) jumped = true;
-  constrain_reprojection_state();
 
   if (config_.vel_clamp.enable) {
     filter_->x[1] = std::clamp(

@@ -1,6 +1,9 @@
 enemy_color: "red"
 observation_mode: "pnp" # pnp | reprojection
 
+pnp:
+  enable_lightbar_assist: false
+
 reprojection_obs:
   angle_var: 0.01
   pixel_var: 16.0

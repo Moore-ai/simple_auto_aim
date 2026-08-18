@@ -7,6 +7,7 @@
 #include <list>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "armor.hpp"
 #include "solver.hpp"
@@ -20,6 +21,7 @@ namespace auto_aim
 struct TrackerDebugInfo
 {
   std::string observation_mode{"pnp"};
+  bool lightbar_assist_enabled = false;
   std::string last_update_source{"none"};
   std::size_t matched_armor_count = 0;
   std::size_t matched_light_count = 0;
@@ -29,6 +31,8 @@ struct TrackerDebugInfo
   std::size_t rejected_light_count = 0;
   std::uint64_t pnp_fallback_count = 0;
   std::uint64_t predict_only_count = 0;
+  std::uint64_t lightbar_assist_update_count = 0;
+  std::uint64_t lightbar_assist_failed_count = 0;
   double last_match_cost = 0.0;
   double last_nis = 0.0;
 };
@@ -81,6 +85,7 @@ private:
   FilterConfig filter_config_;
   FilterMethod filter_method_;
   bool use_reprojection_;
+  bool lightbar_assist_enabled_;
   ReprojectionObservationConfig reprojection_config_;
   TrackerDebugInfo debug_info_;
   // EKF 初始协方差 P0（按兵种）
@@ -95,6 +100,9 @@ private:
   bool update_target(DetectionResult & detections, std::chrono::steady_clock::time_point t);
   bool update_target_reprojection_enhanced(
     DetectionResult & detections, std::chrono::steady_clock::time_point t);
+  std::vector<ReprojectionMeasurement> match_independent_lightbars(
+    DetectionResult & detections, const std::vector<Eigen::Vector4d> & predicted_armors,
+    const std::vector<int> & visible_ids, const std::vector<int> & occupied_ids);
 
   void sort_armors(std::list<Armor> & armors) const;
 

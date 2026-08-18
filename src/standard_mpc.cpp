@@ -163,6 +163,7 @@ int main(int argc, char * argv[])
           {"jumped", target.jumped},
           {"state", tracker_state},
           {"observation_mode", tracker_debug.observation_mode},
+          {"lightbar_assist_enabled", tracker_debug.lightbar_assist_enabled},
           {"last_update_source", tracker_debug.last_update_source},
           {"matched_armor_count", tracker_debug.matched_armor_count},
           {"matched_light_count", tracker_debug.matched_light_count},
@@ -172,6 +173,8 @@ int main(int argc, char * argv[])
           {"rejected_light_count", tracker_debug.rejected_light_count},
           {"pnp_fallback_count", tracker_debug.pnp_fallback_count},
           {"predict_only_count", tracker_debug.predict_only_count},
+          {"lightbar_assist_update_count", tracker_debug.lightbar_assist_update_count},
+          {"lightbar_assist_failed_count", tracker_debug.lightbar_assist_failed_count},
           {"last_match_cost", tracker_debug.last_match_cost},
           {"last_nis", tracker_debug.last_nis}};
         context.target_velocity_norm = std::hypot(state[1], state[3], state[5]);

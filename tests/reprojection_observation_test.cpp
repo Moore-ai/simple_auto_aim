@@ -112,11 +112,13 @@ int main()
 
   auto_aim::Tracker tracker("configs/demo.yaml", solver);
   assert(!tracker.reprojection_enabled());
+  assert(!tracker.debug_info().lightbar_assist_enabled);
 
   std::ifstream config_input("configs/demo.yaml");
   std::stringstream config_buffer;
   config_buffer << config_input.rdbuf();
-  auto config_text = config_buffer.str();
+  const auto pnp_config_text = config_buffer.str();
+  auto config_text = pnp_config_text;
   const auto mode_pos = config_text.find("observation_mode: \"pnp\"");
   assert(mode_pos != std::string::npos);
   config_text.replace(mode_pos, std::string("observation_mode: \"pnp\"").size(),
@@ -128,8 +130,53 @@ int main()
   auto reprojection_tracker =
     auto_aim::Tracker("/tmp/reprojection_observation_test.yaml", reprojection_solver);
   assert(reprojection_tracker.reprojection_enabled());
+  assert(!reprojection_tracker.debug_info().lightbar_assist_enabled);
 
-  auto inekf_config = config_text;
+  auto pnp_without_node = pnp_config_text;
+  const auto pnp_node_pos = pnp_without_node.find("\npnp:\n");
+  assert(pnp_node_pos != std::string::npos);
+  const auto pnp_node_end = pnp_without_node.find("\n\n", pnp_node_pos);
+  assert(pnp_node_end != std::string::npos);
+  pnp_without_node.erase(pnp_node_pos, pnp_node_end - pnp_node_pos);
+  std::ofstream pnp_without_node_output("/tmp/pnp_without_node.yaml");
+  pnp_without_node_output << pnp_without_node;
+  pnp_without_node_output.close();
+  auto pnp_without_node_solver = auto_aim::Solver("/tmp/pnp_without_node.yaml");
+  auto pnp_without_node_tracker =
+    auto_aim::Tracker("/tmp/pnp_without_node.yaml", pnp_without_node_solver);
+  assert(!pnp_without_node_tracker.debug_info().lightbar_assist_enabled);
+
+  auto pnp_assist_config = pnp_config_text;
+  const auto assist_switch_pos = pnp_assist_config.find("enable_lightbar_assist: false");
+  assert(assist_switch_pos != std::string::npos);
+  pnp_assist_config.replace(
+    assist_switch_pos, std::string("enable_lightbar_assist: false").size(),
+    "enable_lightbar_assist: true");
+  std::ofstream pnp_assist_output("/tmp/pnp_lightbar_assist.yaml");
+  pnp_assist_output << pnp_assist_config;
+  pnp_assist_output.close();
+  auto pnp_assist_solver = auto_aim::Solver("/tmp/pnp_lightbar_assist.yaml");
+  auto pnp_assist_tracker =
+    auto_aim::Tracker("/tmp/pnp_lightbar_assist.yaml", pnp_assist_solver);
+  assert(pnp_assist_tracker.debug_info().lightbar_assist_enabled);
+
+  auto pnp_assist_reprojection_config = pnp_assist_config;
+  const auto pnp_mode_pos = pnp_assist_reprojection_config.find("observation_mode: \"pnp\"");
+  assert(pnp_mode_pos != std::string::npos);
+  pnp_assist_reprojection_config.replace(
+    pnp_mode_pos, std::string("observation_mode: \"pnp\"").size(),
+    "observation_mode: \"reprojection\"");
+  std::ofstream pnp_assist_reprojection_output("/tmp/pnp_assist_reprojection.yaml");
+  pnp_assist_reprojection_output << pnp_assist_reprojection_config;
+  pnp_assist_reprojection_output.close();
+  auto pnp_assist_reprojection_solver =
+    auto_aim::Solver("/tmp/pnp_assist_reprojection.yaml");
+  auto pnp_assist_reprojection_tracker = auto_aim::Tracker(
+    "/tmp/pnp_assist_reprojection.yaml", pnp_assist_reprojection_solver);
+  assert(pnp_assist_reprojection_tracker.reprojection_enabled());
+  assert(!pnp_assist_reprojection_tracker.debug_info().lightbar_assist_enabled);
+
+  auto inekf_config = pnp_assist_config;
   const auto filter_pos = inekf_config.find("filter_method: \"ekf\"");
   assert(filter_pos != std::string::npos);
   inekf_config.replace(filter_pos, std::string("filter_method: \"ekf\"").size(),
@@ -141,6 +188,21 @@ int main()
   auto inekf_tracker = auto_aim::Tracker("/tmp/reprojection_inekf_test.yaml", inekf_solver);
   assert(!inekf_tracker.reprojection_enabled());
   assert(inekf_tracker.debug_info().observation_mode == "pnp");
+  assert(!inekf_tracker.debug_info().lightbar_assist_enabled);
+
+  auto ukf_config = pnp_assist_config;
+  const auto ukf_filter_pos = ukf_config.find("filter_method: \"ekf\"");
+  assert(ukf_filter_pos != std::string::npos);
+  ukf_config.replace(ukf_filter_pos, std::string("filter_method: \"ekf\"").size(),
+                     "filter_method: \"ukf\"");
+  std::ofstream ukf_output("/tmp/reprojection_ukf_test.yaml");
+  ukf_output << ukf_config;
+  ukf_output.close();
+  auto ukf_solver = auto_aim::Solver("/tmp/reprojection_ukf_test.yaml");
+  auto ukf_tracker = auto_aim::Tracker("/tmp/reprojection_ukf_test.yaml", ukf_solver);
+  assert(!ukf_tracker.reprojection_enabled());
+  assert(ukf_tracker.debug_info().observation_mode == "pnp");
+  assert(!ukf_tracker.debug_info().lightbar_assist_enabled);
 
   const Eigen::Vector3d armor_center{2.0, 0.0, 0.0};
   const auto armor_points = reprojection_solver.reproject_armor(
@@ -181,6 +243,42 @@ int main()
   assert(!full_update_targets.empty());
   assert(reprojection_tracker.debug_info().matched_armor_count == 1);
   assert(reprojection_tracker.debug_info().uvl_observation_count >= 2);
+
+  auto pnp_assist_init_frame = auto_aim::DetectionResult{{armor}, {left, right}};
+  const auto pnp_assist_init_targets = pnp_assist_tracker.track(
+    pnp_assist_init_frame, tracker_time);
+  assert(!pnp_assist_init_targets.empty());
+  auto pnp_assist_lightbars = std::list<auto_aim::Lightbar>{left, right};
+  const auto predicted_armors = pnp_assist_init_targets.front().armor_xyza_list();
+  for (int id = 1; id < 4; ++id) {
+    const auto points = pnp_assist_solver.reproject_armor(
+      predicted_armors[id].head<3>(), predicted_armors[id][3],
+      auto_aim::ArmorType::small, auto_aim::ArmorName::sentry);
+    auto independent = auto_aim::Lightbar();
+    independent.color = auto_aim::Color::blue;
+    independent.top = points[0];
+    independent.bottom = points[3];
+    pnp_assist_lightbars.push_back(independent);
+  }
+  auto pnp_assist_frame = auto_aim::DetectionResult{{armor}, pnp_assist_lightbars};
+  const auto pnp_assist_targets = pnp_assist_tracker.track(
+    pnp_assist_frame, tracker_time + std::chrono::milliseconds(10));
+  assert(!pnp_assist_targets.empty());
+  assert(pnp_assist_tracker.debug_info().matched_armor_count == 1);
+  assert(pnp_assist_tracker.debug_info().matched_light_count > 0);
+  assert(pnp_assist_tracker.debug_info().uvl_observation_count ==
+    pnp_assist_tracker.debug_info().matched_light_count);
+  assert(pnp_assist_tracker.debug_info().last_update_source == "pnp_lightbar_assist");
+
+  const auto pnp_disabled_init_targets = tracker.track(pnp_assist_init_frame, tracker_time);
+  assert(!pnp_disabled_init_targets.empty());
+  auto pnp_disabled_frame = auto_aim::DetectionResult{{armor}, pnp_assist_lightbars};
+  const auto pnp_disabled_targets = tracker.track(
+    pnp_disabled_frame, tracker_time + std::chrono::milliseconds(10));
+  assert(!pnp_disabled_targets.empty());
+  assert(tracker.debug_info().matched_light_count == 0);
+  assert(tracker.debug_info().uvl_observation_count == 0);
+  assert(tracker.debug_info().last_update_source == "pnp");
 
   auto legacy_config_text = config_text;
   for (const auto * key : {
