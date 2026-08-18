@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "armor.hpp"
-#include "reprojection.hpp"
+#include "observation_geometry.hpp"
 #include "target.hpp"
 
 namespace YAML
@@ -71,6 +71,7 @@ public:
 
 private:
   Solver & solver_;
+  ObservationGeometry geometry_;
   Color enemy_color_{Color::blue};
   ObservationPathConfig config_;
   ObservationPathDebugInfo debug_info_;

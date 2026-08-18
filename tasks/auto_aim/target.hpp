@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "armor.hpp"
-#include "reprojection.hpp"
+#include "observation_geometry.hpp"
 #include "target_estimator.hpp"
 
 namespace auto_aim

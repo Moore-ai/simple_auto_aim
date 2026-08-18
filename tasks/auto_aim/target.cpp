@@ -2,12 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <utility>
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
-#include "reprojection.hpp"
+#include "observation_geometry.hpp"
 #include "solver.hpp"
 
 namespace auto_aim
@@ -237,67 +236,6 @@ void Target::update(const Armor & armor)
   if (reprojection_mode_) constrain_reprojection_state();
 }
 
-namespace
-{
-struct PredictedUVL
-{
-  Eigen::Vector4d value = Eigen::Vector4d::Constant(std::numeric_limits<double>::quiet_NaN());
-  Eigen::Matrix<double, 4, TargetState::dimension> jacobian =
-    Eigen::Matrix<double, 4, TargetState::dimension>::Zero();
-  bool valid = false;
-};
-
-Eigen::Matrix<double, 4, TargetState::dimension> projection_parameter_jacobian(
-  const Eigen::Matrix<double, 3, TargetState::dimension> & center_jacobian)
-{
-  Eigen::Matrix<double, 4, TargetState::dimension> result =
-    Eigen::Matrix<double, 4, TargetState::dimension>::Zero();
-  result.topRows<3>() = center_jacobian;
-  result(3, static_cast<Eigen::Index>(TargetStateComponent::yaw)) = 1.0;
-  return result;
-}
-
-PredictedUVL make_predicted_uvl(
-  const Eigen::Vector3d & center, const TargetState & state,
-  const ReprojectionMeasurement & measurement, int armor_num,
-  ArmorType armor_type, ArmorName armor_name, const Solver & solver,
-  const Eigen::Matrix<double, 3, TargetState::dimension> & center_jacobian)
-{
-  PredictedUVL result;
-  const auto armor_angle = tools::limit_rad(
-    state.yaw() + measurement.armor_id * 2 * CV_PI / std::max(armor_num, 1));
-  const auto projection = solver.project_armor_with_jacobian(
-    center, armor_angle, armor_type, armor_name);
-  if (!projection.valid || projection.points.size() != 4 || projection.point_jacobian.size() != 4) {
-    return result;
-  }
-
-  const auto top_index = measurement.right ? 1U : 0U;
-  const auto bottom_index = measurement.right ? 2U : 3U;
-  const auto delta = projection.points[bottom_index] - projection.points[top_index];
-  const auto dx = static_cast<double>(delta.x);
-  const auto dy = static_cast<double>(delta.y);
-  const auto length_squared = dx * dx + dy * dy;
-  if (length_squared <= 1e-12) return result;
-
-  const auto parameter_jacobian = projection_parameter_jacobian(center_jacobian);
-  const auto top_jacobian = projection.point_jacobian[top_index] * parameter_jacobian;
-  const auto bottom_jacobian = projection.point_jacobian[bottom_index] * parameter_jacobian;
-  const auto delta_x_jacobian = bottom_jacobian.row(0) - top_jacobian.row(0);
-  const auto delta_y_jacobian = bottom_jacobian.row(1) - top_jacobian.row(1);
-
-  result.value = uvl_from_endpoints(
-    projection.points[top_index], projection.points[bottom_index]);
-  result.jacobian.row(0) = (dy * delta_x_jacobian - dx * delta_y_jacobian) / length_squared;
-  result.jacobian.row(1) = (top_jacobian.row(0) + bottom_jacobian.row(0)) * 0.5;
-  result.jacobian.row(2) = (top_jacobian.row(1) + bottom_jacobian.row(1)) * 0.5;
-  result.jacobian.row(3) =
-    (dx * delta_x_jacobian + dy * delta_y_jacobian) / std::sqrt(length_squared);
-  result.valid = result.value.allFinite() && result.jacobian.allFinite();
-  return result;
-}
-}  // namespace
-
 bool Target::update_reprojection(
   const std::vector<ReprojectionMeasurement> & measurements, const Solver & solver,
   const ReprojectionObservationConfig & observation_config)
@@ -328,8 +266,9 @@ bool Target::update_reprojection_impl(
 {
   if (measurements.empty() || filter_method_ != FilterMethod::EKF) return false;
 
+  ObservationGeometry geometry(solver);
   std::vector<Eigen::Vector4d> observations;
-  std::vector<PredictedUVL> predictions;
+  std::vector<PredictedLightbarObservation> predictions;
   observations.reserve(measurements.size());
   predictions.reserve(measurements.size());
   const auto state = estimator_.state();
@@ -337,10 +276,11 @@ bool Target::update_reprojection_impl(
     const auto observation = uvl_from_endpoints(
       measurement.lightbar.top, measurement.lightbar.bottom);
     if (!observation.allFinite() || observation[3] < 1.0) return false;
-    const auto prediction = make_predicted_uvl(
-      h_armor_xyz(state, measurement.armor_id), state, measurement,
-      armor_num_, armor_type, name,
-      solver, h_armor_xyz_jacobian(state, measurement.armor_id));
+    const auto armor_angle = tools::limit_rad(
+      state.yaw() + measurement.armor_id * 2 * CV_PI / std::max(armor_num_, 1));
+    const auto prediction = geometry.project_lightbar(
+      h_armor_xyz(state, measurement.armor_id), armor_angle, measurement.right,
+      armor_type, name, h_armor_xyz_jacobian(state, measurement.armor_id));
     if (!prediction.valid) return false;
     observations.push_back(observation);
     predictions.push_back(prediction);
@@ -374,12 +314,11 @@ bool Target::update_reprojection_impl(
     const auto center = h_armor_xyz(state, id);
     const auto armor_angle = tools::limit_rad(
       state.yaw() + id * 2 * CV_PI / std::max(armor_num_, 1));
-    const auto projection = solver.project_armor_with_jacobian(
-      center, armor_angle, armor_type, name);
+    const auto projection = geometry.project_light_depth_difference(
+      center, armor_angle, armor_type, name, h_armor_xyz_jacobian(state, id));
     if (!projection.valid) return false;
     z[row] = *observed_depth_diff;
-    H.row(row) = projection.light_depth_diff_jacobian * projection_parameter_jacobian(
-      h_armor_xyz_jacobian(state, id));
+    H.row(row) = projection.jacobian;
     const auto sigma = observation_config.r_sigma_armor_lights_depth_diff;
     R(row, row) = sigma * sigma / 2.0;
   }
@@ -388,20 +327,21 @@ bool Target::update_reprojection_impl(
     Eigen::VectorXd result = Eigen::VectorXd::Zero(rows);
     Eigen::Index current_row = 0;
     for (const auto & measurement : measurements) {
-      const auto prediction = make_predicted_uvl(
-        h_armor_xyz(state, measurement.armor_id), state, measurement,
-        armor_num_, armor_type, name,
-        solver, h_armor_xyz_jacobian(state, measurement.armor_id));
-      result.segment<4>(current_row) = prediction.value;
+      const auto armor_angle = tools::limit_rad(
+        state.yaw() + measurement.armor_id * 2 * CV_PI / std::max(armor_num_, 1));
+      const auto prediction = geometry.project_lightbar(
+        h_armor_xyz(state, measurement.armor_id), armor_angle, measurement.right,
+        armor_type, name, h_armor_xyz_jacobian(state, measurement.armor_id));
+      result.segment<4>(current_row) = prediction.uvl;
       current_row += 4;
     }
     if (observed_depth_diff) {
       const auto id = armor_measurements.front().armor_id;
-      const auto projection = solver.project_armor_with_jacobian(
+      const auto projection = geometry.project_light_depth_difference(
         h_armor_xyz(state, id),
         tools::limit_rad(state.yaw() + id * 2 * CV_PI / std::max(armor_num_, 1)),
-        armor_type, name);
-      result[current_row] = projection.light_depth_diff;
+        armor_type, name, h_armor_xyz_jacobian(state, id));
+      result[current_row] = projection.value;
     }
     return result;
   };

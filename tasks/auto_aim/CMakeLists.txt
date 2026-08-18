@@ -13,6 +13,7 @@ add_library(auto_aim OBJECT
     lightbar_detector.cpp
     solver.cpp
     aimer.cpp
+    observation_geometry.cpp
     observation_path.cpp
     target_estimator.cpp
     target_state.cpp

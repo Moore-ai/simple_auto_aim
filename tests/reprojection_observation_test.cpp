@@ -40,7 +40,7 @@ int main()
     3, Eigen::MatrixXd::Zero(4, auto_aim::TargetState::dimension));
   const auto batch = auto_aim::make_uvl_batch(observations, jacobians, 4.0, 9.0);
   assert(batch.z.size() == 12);
-  assert(batch.H.rows() == 12 && batch.H.cols() == 11);
+  assert(batch.H.rows() == 12 && batch.H.cols() == auto_aim::TargetState::dimension);
   assert(batch.R.rows() == 12 && batch.R.cols() == 12);
 
   cv::Mat lightbar_image(480, 640, CV_8UC3, cv::Scalar(0, 0, 0));
@@ -61,6 +61,38 @@ int main()
   const auto reference_projection = solver.reproject_armor(
     {2.0, 0.0, 0.0}, 0.2, auto_aim::ArmorType::small, auto_aim::ArmorName::sentry);
   assert(cv::norm(projection.points[0] - reference_projection[0]) < 1e-3);
+
+  auto_aim::ObservationGeometry geometry(solver);
+  const auto center_jacobian =
+    Eigen::Matrix<double, 3, auto_aim::TargetState::dimension>::Zero();
+  const auto predicted_left_geometry = geometry.project_lightbar(
+    {2.0, 0.0, 0.0}, 0.2, false, auto_aim::ArmorType::small,
+    auto_aim::ArmorName::sentry, center_jacobian);
+  assert(predicted_left_geometry.valid);
+  assert(predicted_left_geometry.uvl[3] > 0.0);
+  auto measured_lightbar = auto_aim::Lightbar();
+  measured_lightbar.top = predicted_left_geometry.top;
+  measured_lightbar.bottom = predicted_left_geometry.bottom;
+  assert(geometry.lightbar_match_cost(
+    measured_lightbar, predicted_left_geometry, auto_aim::ReprojectionObservationConfig{}));
+  measured_lightbar.top.x += 1000.0F;
+  assert(!geometry.lightbar_match_cost(
+    measured_lightbar, predicted_left_geometry, auto_aim::ReprojectionObservationConfig{}));
+
+  assert(geometry.armor_match_cost(
+    reference_projection, {2.0, 0.0, 0.0}, 0.2, auto_aim::ArmorType::small,
+    auto_aim::ArmorName::sentry, auto_aim::ReprojectionObservationConfig{}, true));
+  auto bad_armor_points = reference_projection;
+  bad_armor_points.front().x += 1000.0F;
+  assert(!geometry.armor_match_cost(
+    bad_armor_points, {2.0, 0.0, 0.0}, 0.2, auto_aim::ArmorType::small,
+    auto_aim::ArmorName::sentry, auto_aim::ReprojectionObservationConfig{}, true));
+
+  const auto depth_difference = geometry.project_light_depth_difference(
+    {2.0, 0.0, 0.0}, 0.2, auto_aim::ArmorType::small, auto_aim::ArmorName::sentry,
+    center_jacobian);
+  assert(depth_difference.valid);
+  assert(std::abs(depth_difference.value - projection.light_depth_diff) < 1e-12);
 
   constexpr double epsilon = 1e-3;
   for (int parameter = 0; parameter < 4; ++parameter) {

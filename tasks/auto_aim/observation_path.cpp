@@ -94,7 +94,7 @@ ObservationPathConfig ObservationPathConfig::from_yaml(
   return config;
 }
 
-ObservationPath::ObservationPath(Solver & solver) : solver_{solver} {}
+ObservationPath::ObservationPath(Solver & solver) : solver_{solver}, geometry_{solver} {}
 
 void ObservationPath::configure(const ObservationPathConfig & config, Color enemy_color)
 {
@@ -187,19 +187,17 @@ std::vector<ReprojectionMeasurement> ObservationPath::match_independent_lightbar
   {
     int id;
     bool right;
-    cv::Point2f top;
-    cv::Point2f bottom;
+    PredictedLightbarObservation observation;
   };
   std::vector<PredictedLight> visible_lights;
   const auto closest_id = visible_ids.front();
   auto add_light = [&](int id, bool right) {
     if (id < 0 || id >= armor_count || used_sides.count({id, right})) return;
-    const auto projected = solver_.reproject_armor(
-      predicted_armors[id].head<3>(), predicted_armors[id][3],
+    const auto projected = geometry_.project_lightbar(
+      predicted_armors[id].head<3>(), predicted_armors[id][3], right,
       target.armor_type, target.name);
-    if (projected.size() != 4) return;
-    visible_lights.push_back({id, right, right ? projected[1] : projected[0],
-                              right ? projected[2] : projected[3]});
+    if (!projected.valid) return;
+    visible_lights.push_back({id, right, projected});
   };
   add_light((closest_id + armor_count - 1) % armor_count, true);
   add_light((closest_id + 1) % armor_count, false);
@@ -216,23 +214,13 @@ std::vector<ReprojectionMeasurement> ObservationPath::match_independent_lightbar
   std::vector<std::vector<double>> light_cost(
     light_candidates.size(), std::vector<double>(visible_lights.size(), invalid_cost));
   for (std::size_t obs = 0; obs < light_candidates.size(); ++obs) {
-    const auto observed = uvl_from_endpoints(
-      light_candidates[obs]->top, light_candidates[obs]->bottom);
     bool in_gate = false;
     for (std::size_t candidate = 0; candidate < visible_lights.size(); ++candidate) {
       const auto & predicted = visible_lights[candidate];
-      const auto predicted_uvl = uvl_from_endpoints(predicted.top, predicted.bottom);
-      const auto length_ratio = observed[3] / std::max(predicted_uvl[3], 1.0);
-      const auto angle_error = std::abs(tools::limit_rad(observed[0] - predicted_uvl[0]));
-      const auto position_error = cv::norm(light_candidates[obs]->top - predicted.top) +
-        cv::norm(light_candidates[obs]->bottom - predicted.bottom);
-      if (std::abs(length_ratio - 1.0) > config_.reprojection.light_match_length_ratio_gate ||
-          angle_error > config_.reprojection.light_match_angle_gate ||
-          position_error > predicted_uvl[3] *
-            config_.reprojection.light_match_pos_gate_by_length_ratio) {
-        continue;
-      }
-      light_cost[obs][candidate] = position_error;
+      const auto cost = geometry_.lightbar_match_cost(
+        *light_candidates[obs], predicted.observation, config_.reprojection);
+      if (!cost) continue;
+      light_cost[obs][candidate] = *cost;
       in_gate = true;
     }
     if (!in_gate) debug_info_.rejected_light_count++;
@@ -294,53 +282,20 @@ bool ObservationPath::update_reprojection(
     }
   }
 
-  auto polygon_center = [](const std::vector<cv::Point2f> & points) {
-    cv::Point2f center;
-    for (const auto & point : points) center += point;
-    return center * (1.0F / static_cast<float>(points.size()));
-  };
-  auto edge_angle = [](const cv::Point2f & lhs, const cv::Point2f & rhs) {
-    const auto delta = rhs - lhs;
-    return std::atan2(static_cast<double>(delta.y), static_cast<double>(delta.x));
-  };
-
   constexpr double invalid_cost = 1e12;
   std::vector<std::vector<double>> armor_cost(
     candidates.size(), std::vector<double>(visible_ids.size(), invalid_cost));
   for (std::size_t obs = 0; obs < candidates.size(); ++obs) {
     const auto & measured = candidates[obs]->points;
-    const auto measured_center = polygon_center(measured);
     bool in_gate = false;
     for (std::size_t candidate = 0; candidate < visible_ids.size(); ++candidate) {
       const auto id = visible_ids[candidate];
-      const auto projected = solver_.reproject_armor(
+      const auto cost = geometry_.armor_match_cost(
+        measured,
         predicted_armors[id].head<3>(), predicted_armors[id][3],
-        target.armor_type, target.name);
-      if (projected.size() != 4) continue;
-
-      const auto projected_center = polygon_center(projected);
-      const auto center_error = cv::norm(measured_center - projected_center);
-      double angle_error = 0.0;
-      double measured_perimeter = 0.0;
-      double projected_perimeter = 0.0;
-      for (int edge = 0; edge < 4; ++edge) {
-        const auto next = (edge + 1) % 4;
-        angle_error += std::abs(tools::limit_rad(
-          edge_angle(measured[edge], measured[next]) -
-          edge_angle(projected[edge], projected[next])));
-        measured_perimeter += cv::norm(measured[edge] - measured[next]);
-        projected_perimeter += cv::norm(projected[edge] - projected[next]);
-      }
-      const auto side_length_error = std::abs(projected_perimeter - measured_perimeter) /
-        std::max(projected_perimeter, 1e-6);
-      const auto cost = config_.reprojection.armor_match_w_center_err * center_error +
-        config_.reprojection.armor_match_w_angle_err * angle_error +
-        config_.reprojection.armor_match_w_side_length_err * side_length_error;
-      const auto gate = target.all_armor_ids_seen() ?
-        config_.reprojection.armor_match_gate :
-        config_.reprojection.armor_match_gate_not_all_init;
-      if (std::isfinite(cost) && cost < gate) {
-        armor_cost[obs][candidate] = cost;
+        target.armor_type, target.name, config_.reprojection, target.all_armor_ids_seen());
+      if (cost) {
+        armor_cost[obs][candidate] = *cost;
         in_gate = true;
       }
     }
