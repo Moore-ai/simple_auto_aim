@@ -2,6 +2,8 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <cmath>
+#include <limits>
 #include <vector>
 
 #include "tools/logger.hpp"
@@ -23,6 +25,87 @@ const std::vector<cv::Point3f> SMALL_ARMOR_POINTS{
   {0, -SMALL_ARMOR_WIDTH / 2, LIGHTBAR_LENGTH / 2},
   {0, -SMALL_ARMOR_WIDTH / 2, -LIGHTBAR_LENGTH / 2},
   {0, SMALL_ARMOR_WIDTH / 2, -LIGHTBAR_LENGTH / 2}};
+
+namespace
+{
+Eigen::Matrix3d armor_rotation(double yaw, ArmorName name)
+{
+  const auto pitch = (name == ArmorName::outpost) ? -15.0 * CV_PI / 180.0 : 15.0 * CV_PI / 180.0;
+  const auto sin_yaw = std::sin(yaw);
+  const auto cos_yaw = std::cos(yaw);
+  const auto sin_pitch = std::sin(pitch);
+  const auto cos_pitch = std::cos(pitch);
+  Eigen::Matrix3d result;
+  result << cos_yaw * cos_pitch, -sin_yaw, cos_yaw * sin_pitch,
+    sin_yaw * cos_pitch, cos_yaw, sin_yaw * sin_pitch,
+    -sin_pitch, 0.0, cos_pitch;
+  return result;
+}
+
+Eigen::Matrix3d armor_rotation_derivative(double yaw, ArmorName name)
+{
+  const auto pitch = (name == ArmorName::outpost) ? -15.0 * CV_PI / 180.0 : 15.0 * CV_PI / 180.0;
+  const auto sin_yaw = std::sin(yaw);
+  const auto cos_yaw = std::cos(yaw);
+  const auto sin_pitch = std::sin(pitch);
+  const auto cos_pitch = std::cos(pitch);
+  Eigen::Matrix3d result;
+  result << -sin_yaw * cos_pitch, -cos_yaw, -sin_yaw * sin_pitch,
+    cos_yaw * cos_pitch, -sin_yaw, cos_yaw * sin_pitch,
+    0.0, 0.0, 0.0;
+  return result;
+}
+
+const std::vector<cv::Point3f> & armor_points(ArmorType type)
+{
+  return type == ArmorType::big ? BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
+}
+
+bool project_distorted(
+  const Eigen::Vector3d & point, const cv::Mat & camera_matrix, const cv::Mat & distort_coeffs,
+  cv::Point2f & pixel, Eigen::Matrix<double, 2, 3> & jacobian)
+{
+  if (!point.allFinite() || point.z() <= 1e-9) return false;
+
+  const auto fx = camera_matrix.at<double>(0, 0);
+  const auto fy = camera_matrix.at<double>(1, 1);
+  const auto cx = camera_matrix.at<double>(0, 2);
+  const auto cy = camera_matrix.at<double>(1, 2);
+  const auto k1 = distort_coeffs.at<double>(0, 0);
+  const auto k2 = distort_coeffs.at<double>(0, 1);
+  const auto p1 = distort_coeffs.at<double>(0, 2);
+  const auto p2 = distort_coeffs.at<double>(0, 3);
+  const auto k3 = distort_coeffs.at<double>(0, 4);
+
+  const auto x = point.x() / point.z();
+  const auto y = point.y() / point.z();
+  const auto r2 = x * x + y * y;
+  const auto r4 = r2 * r2;
+  const auto r6 = r4 * r2;
+  const auto radial = 1.0 + k1 * r2 + k2 * r4 + k3 * r6;
+  const auto x_distorted = x * radial + 2.0 * p1 * x * y + p2 * (r2 + 2.0 * x * x);
+  const auto y_distorted = y * radial + p1 * (r2 + 2.0 * y * y) + 2.0 * p2 * x * y;
+
+  pixel = {static_cast<float>(fx * x_distorted + cx), static_cast<float>(fy * y_distorted + cy)};
+
+  const auto radial_dx = 2.0 * x * (k1 + 2.0 * k2 * r2 + 3.0 * k3 * r4);
+  const auto radial_dy = 2.0 * y * (k1 + 2.0 * k2 * r2 + 3.0 * k3 * r4);
+  Eigen::Matrix2d distorted_jacobian;
+  distorted_jacobian <<
+    radial + x * radial_dx + 2.0 * p1 * y + 6.0 * p2 * x,
+    x * radial_dy + 2.0 * p1 * x + 2.0 * p2 * y,
+    y * radial_dx + 2.0 * p1 * y + 2.0 * p2 * x,
+    radial + y * radial_dy + 6.0 * p1 * y + 2.0 * p2 * x;
+
+  Eigen::Matrix<double, 2, 3> normalized_jacobian;
+  normalized_jacobian <<
+    1.0 / point.z(), 0.0, -x / point.z(),
+    0.0, 1.0 / point.z(), -y / point.z();
+  jacobian =
+    (Eigen::DiagonalMatrix<double, 2>(fx, fy) * distorted_jacobian * normalized_jacobian).eval();
+  return pixel.x == pixel.x && pixel.y == pixel.y && jacobian.allFinite();
+}
+}  // namespace
 
 Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3d::Identity())
 {
@@ -56,15 +139,15 @@ void Solver::set_R_gimbal2world(const Eigen::Quaterniond & q)
 }
 
 //solvePnP（获得姿态）
-void Solver::solve(Armor & armor) const
+bool Solver::solve(Armor & armor) const
 {
-  const auto & object_points =
-    (armor.type == ArmorType::big) ? BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
+  if (armor.points.size() != 4) return false;
+  const auto & object_points = armor_points(armor.type);
 
   cv::Vec3d rvec, tvec;
-  cv::solvePnP(
+  if (!cv::solvePnP(
     object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
-    cv::SOLVEPNP_IPPE);
+    cv::SOLVEPNP_IPPE)) return false;
 
   Eigen::Vector3d xyz_in_camera;
   cv::cv2eigen(tvec, xyz_in_camera);
@@ -86,48 +169,101 @@ void Solver::solve(Armor & armor) const
   auto is_balance = (armor.type == ArmorType::big) &&
                     (armor.name == ArmorName::three || armor.name == ArmorName::four ||
                      armor.name == ArmorName::five);
-  if (is_balance) return;
+  if (is_balance) return true;
 
   optimize_yaw(armor);
+  return armor.xyz_in_world.allFinite() && armor.ypr_in_world.allFinite();
+}
+
+std::optional<double> Solver::armor_lights_depth_diff(const Armor & armor) const
+{
+  if (armor.points.size() != 4) return std::nullopt;
+  const auto & object_points = armor_points(armor.type);
+  cv::Vec3d rvec, tvec;
+  if (!cv::solvePnP(
+      object_points, armor.points, camera_matrix_, distort_coeffs_, rvec, tvec, false,
+      cv::SOLVEPNP_IPPE)) {
+    return std::nullopt;
+  }
+
+  cv::Mat rotation_cv;
+  cv::Rodrigues(rvec, rotation_cv);
+  Eigen::Matrix3d rotation;
+  cv::cv2eigen(rotation_cv, rotation);
+  const Eigen::Vector3d translation(tvec[0], tvec[1], tvec[2]);
+  const auto point_in_camera = [&](std::size_t index) {
+    const auto & point = object_points[index];
+    return rotation * Eigen::Vector3d(point.x, point.y, point.z) + translation;
+  };
+  const auto left_center = (point_in_camera(0) + point_in_camera(3)) * 0.5;
+  const auto right_center = (point_in_camera(1) + point_in_camera(2)) * 0.5;
+  const auto result = left_center.z() - right_center.z();
+  return std::isfinite(result) ? std::optional<double>(result) : std::nullopt;
+}
+
+double Solver::armor_visibility_score(
+  const Eigen::Vector3d & xyz_in_world, double yaw, ArmorName name) const
+{
+  const auto R_armor2camera = R_camera2gimbal_.transpose() * R_gimbal2world_.transpose() *
+    armor_rotation(yaw, name);
+  const auto t_armor2camera = R_camera2gimbal_.transpose() *
+    (R_gimbal2world_.transpose() * xyz_in_world - t_camera2gimbal_);
+  const auto front_normal = -R_armor2camera.col(0);
+  return front_normal.dot(-t_armor2camera);
+}
+
+ArmorProjection Solver::project_armor_with_jacobian(
+  const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const
+{
+  ArmorProjection result;
+  const auto & points = armor_points(type);
+  result.points.reserve(points.size());
+  result.point_jacobian.reserve(points.size());
+
+  const auto R_world2camera = R_camera2gimbal_.transpose() * R_gimbal2world_.transpose();
+  const auto t_world2camera = -R_camera2gimbal_.transpose() * t_camera2gimbal_;
+  const auto R_armor2world = armor_rotation(yaw, name);
+  const auto dR_armor2world = armor_rotation_derivative(yaw, name);
+
+  std::vector<Eigen::Vector3d> camera_points;
+  std::vector<Eigen::Matrix<double, 3, 4>> camera_jacobians;
+  camera_points.reserve(points.size());
+  camera_jacobians.reserve(points.size());
+
+  for (const auto & object_point : points) {
+    const Eigen::Vector3d object(object_point.x, object_point.y, object_point.z);
+    const auto world_point = xyz_in_world + R_armor2world * object;
+    const auto camera_point = R_world2camera * world_point + t_world2camera;
+    Eigen::Matrix<double, 3, 4> camera_jacobian;
+    camera_jacobian.leftCols<3>() = R_world2camera;
+    camera_jacobian.col(3) = R_world2camera * dR_armor2world * object;
+    camera_points.push_back(camera_point);
+    camera_jacobians.push_back(camera_jacobian);
+
+    cv::Point2f pixel;
+    Eigen::Matrix<double, 2, 3> pixel_jacobian;
+    if (!project_distorted(camera_point, camera_matrix_, distort_coeffs_, pixel, pixel_jacobian)) {
+      return result;
+    }
+    result.points.push_back(pixel);
+    result.point_jacobian.push_back(pixel_jacobian * camera_jacobian);
+  }
+
+  const auto left_center = (camera_points[0] + camera_points[3]) * 0.5;
+  const auto right_center = (camera_points[1] + camera_points[2]) * 0.5;
+  result.light_depth_diff = left_center.z() - right_center.z();
+  result.light_depth_diff_jacobian =
+    (camera_jacobians[0].row(2) + camera_jacobians[3].row(2) -
+     camera_jacobians[1].row(2) - camera_jacobians[2].row(2)) * 0.5;
+  result.valid = result.light_depth_diff == result.light_depth_diff &&
+    result.light_depth_diff_jacobian.allFinite();
+  return result;
 }
 
 std::vector<cv::Point2f> Solver::reproject_armor(
   const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const
 {
-  auto sin_yaw = std::sin(yaw);
-  auto cos_yaw = std::cos(yaw);
-
-  auto pitch = (name == ArmorName::outpost) ? -15.0 * CV_PI / 180.0 : 15.0 * CV_PI / 180.0;
-  auto sin_pitch = std::sin(pitch);
-  auto cos_pitch = std::cos(pitch);
-
-  // clang-format off
-  const Eigen::Matrix3d R_armor2world {
-    {cos_yaw * cos_pitch, -sin_yaw, cos_yaw * sin_pitch},
-    {sin_yaw * cos_pitch,  cos_yaw, sin_yaw * sin_pitch},
-    {         -sin_pitch,        0,           cos_pitch}
-  };
-  // clang-format on
-
-  // get R_armor2camera t_armor2camera
-  const Eigen::Vector3d & t_armor2world = xyz_in_world;
-  Eigen::Matrix3d R_armor2camera =
-    R_camera2gimbal_.transpose() * R_gimbal2world_.transpose() * R_armor2world;
-  Eigen::Vector3d t_armor2camera =
-    R_camera2gimbal_.transpose() * (R_gimbal2world_.transpose() * t_armor2world - t_camera2gimbal_);
-
-  // get rvec tvec
-  cv::Vec3d rvec;
-  cv::Mat R_armor2camera_cv;
-  cv::eigen2cv(R_armor2camera, R_armor2camera_cv);
-  cv::Rodrigues(R_armor2camera_cv, rvec);
-  cv::Vec3d tvec(t_armor2camera[0], t_armor2camera[1], t_armor2camera[2]);
-
-  // reproject
-  std::vector<cv::Point2f> image_points;
-  const auto & object_points = (type == ArmorType::big) ? BIG_ARMOR_POINTS : SMALL_ARMOR_POINTS;
-  cv::projectPoints(object_points, rvec, tvec, camera_matrix_, distort_coeffs_, image_points);
-  return image_points;
+  return project_armor_with_jacobian(xyz_in_world, yaw, type, name).points;
 }
 
 double Solver::oupost_reprojection_error(Armor armor, const double & pitch)
