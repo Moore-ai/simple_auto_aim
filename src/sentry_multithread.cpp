@@ -76,7 +76,8 @@ int main(int argc, char * argv[])
 
     Eigen::Vector3d gimbal_pos = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
 
-    auto armors = yolo.detect(img);
+    auto detections = yolo.detect_result(img);
+    auto & armors = detections.armors;
 
     decider.get_invincible_armor(ros2.subscribe_enemy_status());
 
@@ -88,7 +89,7 @@ int main(int argc, char * argv[])
 
     decider.sort(detection_queue);
 
-    auto [switch_target, targets] = tracker.track(detection_queue, armors, timestamp);
+    auto [switch_target, targets] = tracker.track(detection_queue, detections, timestamp);
 
     io::Command command{false, false, 0, 0};
 

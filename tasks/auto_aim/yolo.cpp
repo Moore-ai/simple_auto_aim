@@ -9,6 +9,7 @@
 namespace auto_aim
 {
 YOLO::YOLO(const std::string & config_path, bool debug)
+  : lightbar_detector_(std::make_unique<LightbarDetector>(config_path))
 {
   auto yaml = YAML::LoadFile(config_path);
   auto yolo_name = yaml["yolo_name"].as<std::string>();
@@ -28,6 +29,16 @@ YOLO::YOLO(const std::string & config_path, bool debug)
   else {
     throw std::runtime_error("Unknown yolo name: " + yolo_name + "!");
   }
+}
+
+DetectionResult YOLO::detect_result(const cv::Mat & img, int frame_count)
+{
+  return {yolo_->detect(img, frame_count), detect_lightbars(img)};
+}
+
+std::list<Lightbar> YOLO::detect_lightbars(const cv::Mat & img) const
+{
+  return lightbar_detector_->detect(img);
 }
 
 std::list<Armor> YOLO::detect(const cv::Mat & img, int frame_count)

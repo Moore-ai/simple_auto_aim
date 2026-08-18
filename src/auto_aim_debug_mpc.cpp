@@ -112,8 +112,8 @@ int main(int argc, char * argv[])
     auto q = gimbal.q(t);
 
     solver.set_R_gimbal2world(q);
-    auto armors = yolo.detect(img);
-    auto targets = tracker.track(armors, t);
+    auto detections = yolo.detect_result(img);
+    auto targets = tracker.track(detections, t);
     if (!targets.empty())
       target_queue.push(targets.front());
     else

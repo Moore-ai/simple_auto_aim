@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <opencv2/opencv.hpp>
+#include <list>
 #include <string>
 #include <vector>
 
@@ -118,6 +119,14 @@ struct Armor
   Armor(
     int color_id, int num_id, float confidence, const cv::Rect & box,
     std::vector<cv::Point2f> armor_keypoints, cv::Point2f offset);
+};
+
+// Unified output used by the reprojection tracker. Legacy callers can still
+// consume Detector::detect(), which returns only the armor list.
+struct DetectionResult
+{
+  std::list<Armor> armors;
+  std::list<Lightbar> lightbars;
 };
 
 }  // namespace auto_aim

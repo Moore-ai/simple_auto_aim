@@ -54,7 +54,8 @@ int main(int argc, char * argv[])
   nlohmann::json data;
 
   while (!exiter.exit()) {
-    auto [img, armors, t] = detector.debug_pop();
+    auto [img, detections, t] = detector.debug_pop_result();
+    auto & armors = detections.armors;
 
     Eigen::Quaterniond q = dm_imu.imu_at(t);
 
@@ -62,7 +63,7 @@ int main(int argc, char * argv[])
 
     Eigen::Vector3d gimbal_pos = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
 
-    auto targets = tracker.track(armors, t);
+    auto targets = tracker.track(detections, t);
 
     auto command = aimer.aim(targets, t, 22);
 

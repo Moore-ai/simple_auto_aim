@@ -65,7 +65,8 @@ int main(int argc, char * argv[])
   while (!exiter.exit()) {
     auto t0 = std::chrono::steady_clock::now();
     /// 自瞄核心逻辑
-    auto [img, armors, t] = detector.debug_pop();
+    auto [img, detections, t] = detector.debug_pop_result();
+    auto & armors = detections.armors;
     Eigen::Quaterniond q = cboard.imu_at(t - 1ms);
     mode = cboard.mode;
 
@@ -78,7 +79,7 @@ int main(int argc, char * argv[])
 
     Eigen::Vector3d ypr = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
 
-    auto targets = tracker.track(armors, t);
+    auto targets = tracker.track(detections, t);
 
     commandgener.push(targets, t, cboard.bullet_speed, ypr);  // 发送给决策线程
 

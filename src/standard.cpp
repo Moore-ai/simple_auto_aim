@@ -70,9 +70,9 @@ int main(int argc, char * argv[])
 
     Eigen::Vector3d ypr = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
 
-    auto armors = detector.detect(img);
+    auto detections = detector.detect_result(img);
 
-    auto targets = tracker.track(armors, t);
+    auto targets = tracker.track(detections, t);
 
     auto command = aimer.aim(targets, t, cboard.bullet_speed);
 

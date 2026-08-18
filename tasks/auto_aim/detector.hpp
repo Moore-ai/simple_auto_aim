@@ -8,6 +8,7 @@
 
 #include "armor.hpp"
 #include "classifier.hpp"
+#include "lightbar_detector.hpp"
 
 namespace auto_aim
 {
@@ -17,7 +18,9 @@ class Detector
 public:
   Detector(const std::string & config_path, bool debug = true);
 
+  DetectionResult detect_result(const cv::Mat & bgr_img, int frame_count = -1);
   std::list<Armor> detect(const cv::Mat & bgr_img, int frame_count = -1);
+  std::list<Lightbar> detect_lightbars(const cv::Mat & bgr_img) const;
 
   bool detect(Armor & armor, const cv::Mat & bgr_img);
 
@@ -25,6 +28,7 @@ public:
 
 private:
   Classifier classifier_;
+  LightbarDetector lightbar_detector_;
 
   double threshold_;
   double max_angle_error_;

@@ -24,7 +24,10 @@ public:
 
   std::tuple<std::list<Armor>, std::chrono::steady_clock::time_point> pop();  //暂时不支持yolov8
 
+  std::tuple<DetectionResult, std::chrono::steady_clock::time_point> pop_result();
+
   std::tuple<cv::Mat, std::list<Armor>, std::chrono::steady_clock::time_point> debug_pop();
+  std::tuple<cv::Mat, DetectionResult, std::chrono::steady_clock::time_point> debug_pop_result();
 
 private:
   ov::Core core_;

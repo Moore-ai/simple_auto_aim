@@ -78,10 +78,11 @@ int main(int argc, char * argv[])
     solver.set_R_gimbal2world({w, x, y, z});
 
     auto yolo_start = std::chrono::steady_clock::now();
-    auto armors = yolo.detect(img, frame_count);
+    auto detections = yolo.detect_result(img, frame_count);
+    auto & armors = detections.armors;
 
     auto tracker_start = std::chrono::steady_clock::now();
-    auto targets = tracker.track(armors, timestamp);
+    auto targets = tracker.track(detections, timestamp);
 
     auto aimer_start = std::chrono::steady_clock::now();
     auto command = aimer.aim(targets, timestamp, 27, false);
