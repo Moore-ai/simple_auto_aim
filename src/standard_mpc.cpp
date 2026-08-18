@@ -51,7 +51,7 @@ int main(int argc, char * argv[])
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
 
-  auto detect_armors = create_detector(config_path);
+  auto detect_armors = create_detector_result(config_path);
   auto aim_fn = create_aim_fn(config_path);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -116,8 +116,8 @@ int main(int argc, char * argv[])
 
     /// 自瞄
     if (mode.load() == io::GimbalMode::AUTO_AIM) {
-      auto armors = detect_armors(img, -1);
-      auto targets = tracker.track(armors, t);
+      auto detections = detect_armors(img, -1);
+      auto targets = tracker.track(detections, t);
       if (!targets.empty())
         target_queue.push(targets.front());
       else
@@ -137,7 +137,8 @@ int main(int argc, char * argv[])
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count();
       context.mode = mode.load();
       context.gimbal = gimbal.state();
-      context.armors = {armors.begin(), armors.end()};
+      context.armors = {detections.armors.begin(), detections.armors.end()};
+      context.lightbars = {detections.lightbars.begin(), detections.lightbars.end()};
       context.plan = plan;
 
       if (!targets.empty()) {
@@ -156,8 +157,23 @@ int main(int argc, char * argv[])
         const auto state = target.ekf_x();
         nlohmann::json tracker_state = nlohmann::json::array();
         for (Eigen::Index i = 0; i < state.size(); ++i) tracker_state.push_back(state[i]);
+        const auto & tracker_debug = tracker.debug_info();
         context.tracker_json = {
-          {"last_id", target.last_id}, {"jumped", target.jumped}, {"state", tracker_state}};
+          {"last_id", target.last_id},
+          {"jumped", target.jumped},
+          {"state", tracker_state},
+          {"observation_mode", tracker_debug.observation_mode},
+          {"last_update_source", tracker_debug.last_update_source},
+          {"matched_armor_count", tracker_debug.matched_armor_count},
+          {"matched_light_count", tracker_debug.matched_light_count},
+          {"uvl_observation_count", tracker_debug.uvl_observation_count},
+          {"diff_observation_count", tracker_debug.diff_observation_count},
+          {"rejected_armor_count", tracker_debug.rejected_armor_count},
+          {"rejected_light_count", tracker_debug.rejected_light_count},
+          {"pnp_fallback_count", tracker_debug.pnp_fallback_count},
+          {"predict_only_count", tracker_debug.predict_only_count},
+          {"last_match_cost", tracker_debug.last_match_cost},
+          {"last_nis", tracker_debug.last_nis}};
         context.target_velocity_norm = std::hypot(state[1], state[3], state[5]);
         context.target_yaw_rate = state[7];
         const cv::Point3f center(state[0], state[2], state[4]);

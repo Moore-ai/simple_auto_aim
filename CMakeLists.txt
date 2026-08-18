@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(sp_vision)
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -115,6 +117,12 @@ target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto
 
 add_executable(auto_exposure_test tests/auto_exposure_test.cpp io/auto_exposure.cpp)
 target_link_libraries(auto_exposure_test ${OpenCV_LIBS})
+
+add_executable(reprojection_observation_test tests/reprojection_observation_test.cpp)
+target_link_libraries(reprojection_observation_test ${OpenCV_LIBS} fmt::fmt tools auto_aim)
+target_compile_options(reprojection_observation_test PRIVATE -UNDEBUG)
+add_test(NAME reprojection_observation_test COMMAND reprojection_observation_test)
+set_tests_properties(reprojection_observation_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # 检查 ROS 环境
 find_package(ament_cmake QUIET)

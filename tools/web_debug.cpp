@@ -118,6 +118,18 @@ nlohmann::json armor_json(const auto_aim::Armor & armor)
   };
 }
 
+nlohmann::json lightbar_json(const auto_aim::Lightbar & lightbar)
+{
+  return {
+    {"color", color_string(lightbar.color)},
+    {"center", point_json(lightbar.center)},
+    {"top", point_json(lightbar.top)},
+    {"bottom", point_json(lightbar.bottom)},
+    {"length", lightbar.length},
+    {"angle", lightbar.angle},
+  };
+}
+
 nlohmann::json gimbal_json(const io::GimbalState & gimbal)
 {
   return {
@@ -200,6 +212,8 @@ nlohmann::json WebDebug::make_log_json(const WebDebugContext & context)
 {
   nlohmann::json armors = nlohmann::json::array();
   for (const auto & armor : context.armors) armors.push_back(armor_json(armor));
+  nlohmann::json lightbars = nlohmann::json::array();
+  for (const auto & lightbar : context.lightbars) lightbars.push_back(lightbar_json(lightbar));
 
   return {
     {"frame_id", context.frame_id},
@@ -207,7 +221,11 @@ nlohmann::json WebDebug::make_log_json(const WebDebugContext & context)
     {"latency_ms", context.latency_ms},
     {"mode", mode_string(context.mode)},
     {"gimbal", gimbal_json(context.gimbal)},
-    {"detector", {{"count", context.armors.size()}, {"armors", std::move(armors)}}},
+    {"detector", {
+      {"count", context.armors.size()},
+      {"lightbar_count", context.lightbars.size()},
+      {"armors", std::move(armors)},
+      {"lightbars", std::move(lightbars)}}},
     {"tracker", context.tracker_json},
     {"mpc", plan_json(context.plan)},
     {"command", {{"control", context.plan.control}, {"fire", context.plan.fire}, {"yaw", context.plan.yaw}, {"pitch", context.plan.pitch}}},
@@ -239,6 +257,12 @@ void WebDebug::draw(cv::Mat & image, const WebDebugContext & context) const
     cv::putText(
       image, std::string(armor_name_string(armor.name)) + cv::format(" %.2f", armor.confidence),
       armor.box.tl(), cv::FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv::LINE_AA);
+  }
+
+  for (const auto & lightbar : context.lightbars) {
+    const cv::Scalar color = lightbar.color == auto_aim::red ? cv::Scalar(0, 0, 255) :
+      cv::Scalar(255, 0, 0);
+    cv::line(image, lightbar.top, lightbar.bottom, color, 2, cv::LINE_AA);
   }
 
   for (const auto & polygon : context.projected_target_armors) draw_polygon(image, polygon, {0, 255, 0});
