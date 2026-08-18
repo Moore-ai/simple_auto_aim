@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <chrono>
+#include <cstdint>
 #include <list>
 #include <string>
 #include <unordered_map>
@@ -15,15 +16,43 @@
 
 namespace auto_aim
 {
+
+struct TrackerDebugInfo
+{
+  std::string observation_mode{"pnp"};
+  std::string last_update_source{"none"};
+  std::size_t matched_armor_count = 0;
+  std::size_t matched_light_count = 0;
+  std::size_t uvl_observation_count = 0;
+  std::size_t diff_observation_count = 0;
+  std::size_t rejected_armor_count = 0;
+  std::size_t rejected_light_count = 0;
+  std::uint64_t pnp_fallback_count = 0;
+  std::uint64_t predict_only_count = 0;
+  double last_match_cost = 0.0;
+  double last_nis = 0.0;
+};
+
 class Tracker
 {
 public:
   Tracker(const std::string & config_path, Solver & solver);
 
   std::string state() const;
+  bool reprojection_enabled() const { return use_reprojection_; }
+  const TrackerDebugInfo & debug_info() const { return debug_info_; }
 
   std::list<Target> track(
     std::list<Armor> & armors, std::chrono::steady_clock::time_point t,
+    bool use_enemy_color = true);
+
+  std::list<Target> track(
+    DetectionResult & detections, std::chrono::steady_clock::time_point t,
+    bool use_enemy_color = true);
+
+  std::tuple<omniperception::DetectionResult, std::list<Target>> track(
+    const std::vector<omniperception::DetectionResult> & detection_queue,
+    DetectionResult & detections, std::chrono::steady_clock::time_point t,
     bool use_enemy_color = true);
 
   std::tuple<omniperception::DetectionResult, std::list<Target>> track(
@@ -51,6 +80,9 @@ private:
   // 滤波器配置（一次性读取，传递给 Target）
   FilterConfig filter_config_;
   FilterMethod filter_method_;
+  bool use_reprojection_;
+  ReprojectionObservationConfig reprojection_config_;
+  TrackerDebugInfo debug_info_;
   // EKF 初始协方差 P0（按兵种）
   Eigen::VectorXd P0_default_, P0_balance_, P0_outpost_, P0_base_;
   // EKF 初始半径（按兵种）
@@ -60,7 +92,9 @@ private:
 
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 
-  bool update_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
+  bool update_target(DetectionResult & detections, std::chrono::steady_clock::time_point t);
+  bool update_target_reprojection_enhanced(
+    DetectionResult & detections, std::chrono::steady_clock::time_point t);
 
   void sort_armors(std::list<Armor> & armors) const;
 
