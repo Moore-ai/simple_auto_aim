@@ -5,6 +5,9 @@ observation_mode: "pnp" # pnp | reprojection
 pnp:
   enable_lightbar_assist: false
 
+target_geometry_cache:
+  enabled: false
+
 #####-----神经网络参数-----#####
 yolo_name: yolov5
 classify_model: assets/tiny_resnet.onnx

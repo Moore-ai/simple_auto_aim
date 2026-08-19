@@ -2,6 +2,7 @@
 #include <cmath>
 #include <fstream>
 #include <list>
+#include <optional>
 #include <sstream>
 
 #include <yaml-cpp/yaml.h>
@@ -266,6 +267,26 @@ int main()
   auto target = auto_aim::Target(
     armor, std::chrono::steady_clock::now(), 0.2, 4,
     Eigen::VectorXd::Ones(auto_aim::TargetState::dimension));
+  const std::optional<auto_aim::TargetGeometryPrior> geometry_prior =
+    auto_aim::TargetGeometryPrior{0.35, 0.04, 0.02};
+  auto cached_target = auto_aim::Target(
+    armor, std::chrono::steady_clock::now(), 0.2, 4,
+    Eigen::VectorXd::Ones(auto_aim::TargetState::dimension), {}, auto_aim::FilterMethod::EKF,
+    false, {}, geometry_prior);
+  assert(std::abs(cached_target.state().radius() - 0.35) < 1e-12);
+  assert(std::abs(cached_target.state().radius_diff() - 0.04) < 1e-12);
+  assert(std::abs(cached_target.state().height_diff() - 0.02) < 1e-12);
+
+  auto convergence_target = auto_aim::Target(
+    armor, std::chrono::steady_clock::now(), 0.2, 4,
+    Eigen::VectorXd::Ones(auto_aim::TargetState::dimension));
+  for (int i = 0; i < 3; ++i) {
+    convergence_target.update(armor);
+  }
+  assert(!convergence_target.geometry_cache_ready());
+  convergence_target.update(armor);
+  assert(convergence_target.geometry_cache_ready());
+
   auto left = auto_aim::Lightbar();
   left.color = auto_aim::Color::blue;
   left.top = armor_points[0];
@@ -386,5 +407,66 @@ int main()
   const auto after_light_only_targets =
     reprojection_tracker.track(light_only_frame, tracker_time + std::chrono::milliseconds(10));
   assert(after_light_only_targets.empty());
+
+  auto cache_config_text = pnp_config_text;
+  const auto cache_marker = "target_geometry_cache:\n  enabled: false";
+  const auto cache_marker_pos = cache_config_text.find(cache_marker);
+  assert(cache_marker_pos != std::string::npos);
+  cache_config_text.replace(
+    cache_marker_pos, std::string(cache_marker).size(),
+    "target_geometry_cache:\n  enabled: true");
+  const auto cache_lost_pos = cache_config_text.find("max_temp_lost_count: 15");
+  assert(cache_lost_pos != std::string::npos);
+  cache_config_text.replace(cache_lost_pos, std::string("max_temp_lost_count: 15").size(),
+                            "max_temp_lost_count: 0");
+  const auto cache_detect_pos = cache_config_text.find("min_detect_count: 5");
+  assert(cache_detect_pos != std::string::npos);
+  cache_config_text.replace(cache_detect_pos, std::string("min_detect_count: 5").size(),
+                            "min_detect_count: 1");
+  std::ofstream cache_config_output("/tmp/target_geometry_cache.yaml");
+  cache_config_output << cache_config_text;
+  cache_config_output.close();
+
+  auto cache_solver = auto_aim::Solver("/tmp/target_geometry_cache.yaml");
+  auto cache_tracker = auto_aim::Tracker("/tmp/target_geometry_cache.yaml", cache_solver);
+  const auto make_cache_armor = [&](double yaw) {
+    const auto xyz = Eigen::Vector3d{2.0 - 0.35 * std::cos(yaw), -0.35 * std::sin(yaw), 0.0};
+    const auto points = cache_solver.reproject_armor(
+      xyz, yaw, auto_aim::ArmorType::small, auto_aim::ArmorName::sentry);
+    auto result = auto_aim::Armor(0, 0.9F, cv::Rect(700, 480, 100, 100), points);
+    assert(cache_solver.solve(result));
+    return result;
+  };
+  const auto cache_armors = std::vector<auto_aim::Armor>{
+    make_cache_armor(0.0), make_cache_armor(CV_PI / 2), make_cache_armor(CV_PI),
+    make_cache_armor(3 * CV_PI / 2)};
+  auto cache_time = std::chrono::steady_clock::now();
+  auto cache_frame = auto_aim::DetectionResult{{cache_armors[0]}, {}};
+  auto cache_init = cache_tracker.track(cache_frame, cache_time);
+  assert(!cache_init.empty());
+  assert(std::abs(cache_init.front().state().radius() - 0.2) < 1e-12);
+  for (int i = 0; i < 8; ++i) {
+    cache_time += std::chrono::milliseconds(10);
+    auto frame = auto_aim::DetectionResult{{cache_armors[static_cast<std::size_t>(i % 4)]}, {}};
+    auto updated = cache_tracker.track(frame, cache_time);
+    assert(!updated.empty());
+  }
+  cache_time += std::chrono::milliseconds(10);
+  cache_frame = auto_aim::DetectionResult{{cache_armors[0]}, {}};
+  const auto learned_radius = cache_tracker.track(cache_frame, cache_time).front().state().radius();
+  assert(learned_radius > 0.25);
+
+  cache_time += std::chrono::milliseconds(20);
+  cache_frame = auto_aim::DetectionResult{{}, {}};
+  assert(!cache_tracker.track(cache_frame, cache_time).empty());
+  cache_time += std::chrono::milliseconds(20);
+  cache_frame = auto_aim::DetectionResult{{}, {}};
+  assert(cache_tracker.track(cache_frame, cache_time).empty());
+  cache_time += std::chrono::milliseconds(10);
+  cache_frame = auto_aim::DetectionResult{{cache_armors[0]}, {}};
+  const auto cached_reinit = cache_tracker.track(cache_frame, cache_time);
+  assert(!cached_reinit.empty());
+  assert(cached_reinit.front().state().radius() > 0.25);
+
   return 0;
 }

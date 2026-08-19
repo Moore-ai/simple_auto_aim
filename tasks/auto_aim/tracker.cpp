@@ -1,5 +1,6 @@
 #include "tracker.hpp"
 
+#include <cmath>
 #include <tuple>
 
 #include "tools/logger.hpp"
@@ -80,6 +81,15 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
     filter_config_.ekf.yaw_var = tools::read<double>(obs_cfg, "yaw_var");
     filter_config_.ekf.pitch_var = tools::read<double>(obs_cfg, "pitch_var");
     filter_config_.ekf.armor_yaw_base = tools::read<double>(obs_cfg, "armor_yaw_base");
+  }
+
+  const auto geometry_cache_config = yaml["target_geometry_cache"];
+  geometry_cache_enabled_ = geometry_cache_config && geometry_cache_config["enabled"] ?
+    geometry_cache_config["enabled"].as<bool>() : false;
+  if (geometry_cache_enabled_ && filter_method_ != FilterMethod::EKF) {
+    tools::logger()->warn(
+      "[Tracker] target_geometry_cache requires EKF; keeping the geometry cache disabled");
+    geometry_cache_enabled_ = false;
   }
 
   observation_path_.configure(
@@ -330,6 +340,8 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
     return false;
   }
 
+  const auto geometry_prior = geometry_prior_for(armor);
+
   // 根据兵种优化初始化参数
   auto is_balance = (armor.type == ArmorType::big) &&
                     (armor.name == ArmorName::three || armor.name == ArmorName::four ||
@@ -338,19 +350,23 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
   if (is_balance) {
     target_ = Target(
       armor, t, radius_default_, 2, P0_balance_, filter_config_, filter_method_,
-      observation_path_.uses_reprojection(), observation_path_.reprojection_config());
+      observation_path_.uses_reprojection(), observation_path_.reprojection_config(),
+      geometry_prior);
   } else if (armor.name == ArmorName::outpost) {
     target_ = Target(
       armor, t, radius_outpost_, 3, P0_outpost_, filter_config_, filter_method_,
-      observation_path_.uses_reprojection(), observation_path_.reprojection_config());
+      observation_path_.uses_reprojection(), observation_path_.reprojection_config(),
+      geometry_prior);
   } else if (armor.name == ArmorName::base) {
     target_ = Target(
       armor, t, radius_base_, 3, P0_base_, filter_config_, filter_method_,
-      observation_path_.uses_reprojection(), observation_path_.reprojection_config());
+      observation_path_.uses_reprojection(), observation_path_.reprojection_config(),
+      geometry_prior);
   } else {
     target_ = Target(
       armor, t, radius_default_, 4, P0_default_, filter_config_, filter_method_,
-      observation_path_.uses_reprojection(), observation_path_.reprojection_config());
+      observation_path_.uses_reprojection(), observation_path_.reprojection_config(),
+      geometry_prior);
   }
 
   observation_path_.record_initialization();
@@ -359,7 +375,39 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
 
 bool Tracker::update_target(DetectionResult & detections, std::chrono::steady_clock::time_point t)
 {
-  return observation_path_.update(target_, detections, t);
+  const auto found = observation_path_.update(target_, detections, t);
+  if (found) update_geometry_cache();
+  return found;
+}
+
+std::optional<TargetGeometryPrior> Tracker::geometry_prior_for(const Armor & armor) const
+{
+  if (!geometry_cache_enabled_) return std::nullopt;
+
+  const auto it = geometry_cache_.find(armor.name);
+  if (it == geometry_cache_.end()) return std::nullopt;
+  const auto & entry = it->second;
+  if (entry.armor_type != armor.type) return std::nullopt;
+  if (!std::isfinite(entry.geometry.radius) || entry.geometry.radius <= 0.0 ||
+      !std::isfinite(entry.geometry.radius_diff) ||
+      !std::isfinite(entry.geometry.height_diff)) {
+    return std::nullopt;
+  }
+
+  return entry.geometry;
+}
+
+void Tracker::update_geometry_cache()
+{
+  if (!geometry_cache_enabled_ || !target_.geometry_cache_ready()) return;
+
+  const auto state = target_.state();
+  if (!state.all_finite()) return;
+
+  geometry_cache_.insert_or_assign(
+    target_.name,
+    GeometryCacheEntry{
+      target_.armor_type, {state.radius(), state.radius_diff(), state.height_diff()}});
 }
 
 void Tracker::sort_armors(std::list<Armor> & armors) const

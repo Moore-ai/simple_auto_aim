@@ -1,6 +1,5 @@
 #include "target_estimator.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <map>
 #include <string>

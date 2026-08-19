@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <chrono>
+#include <optional>
 #include <vector>
 
 #include "armor.hpp"
@@ -25,6 +26,13 @@ struct ReprojectionArmorMeasurement
 {
   int armor_id = 0;
   Armor armor;
+};
+
+struct TargetGeometryPrior
+{
+  double radius;
+  double radius_diff;
+  double height_diff;
 };
 
 // 过程噪声参数（所有滤波器共用）
@@ -100,7 +108,8 @@ public:
     const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
     Eigen::VectorXd P0_dig, const FilterConfig & filter_config = {},
     FilterMethod filter_method = FilterMethod::EKF, bool reprojection_mode = false,
-    ReprojectionObservationConfig reprojection_config = {});
+    ReprojectionObservationConfig reprojection_config = {},
+    std::optional<TargetGeometryPrior> geometry_prior = std::nullopt);
   Target(double x, double vyaw, double radius, double h);
 
   void predict(std::chrono::steady_clock::time_point t);
@@ -123,6 +132,7 @@ public:
   double last_nis() const;
   const TargetEstimatorDiagnostics & diagnostics() const;
   bool has_bad_nis_convergence(double failure_rate = 0.4) const;
+  bool geometry_cache_ready() const;
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
 
   bool diverged() const;

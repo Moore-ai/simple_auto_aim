@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <chrono>
 #include <list>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -13,7 +14,6 @@
 #include "solver.hpp"
 #include "target.hpp"
 #include "tasks/omniperception/perceptron.hpp"
-#include "tools/thread_safe_queue.hpp"
 
 namespace auto_aim
 {
@@ -68,6 +68,13 @@ private:
   // 滤波器配置（一次性读取，传递给 Target）
   FilterConfig filter_config_;
   FilterMethod filter_method_;
+  bool geometry_cache_enabled_ = false;
+  struct GeometryCacheEntry
+  {
+    ArmorType armor_type;
+    TargetGeometryPrior geometry;
+  };
+  std::unordered_map<ArmorName, GeometryCacheEntry> geometry_cache_;
   // EKF 初始协方差 P0（按兵种）
   Eigen::VectorXd P0_default_, P0_balance_, P0_outpost_, P0_base_;
   // EKF 初始半径（按兵种）
@@ -78,6 +85,9 @@ private:
   bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
 
   bool update_target(DetectionResult & detections, std::chrono::steady_clock::time_point t);
+
+  std::optional<TargetGeometryPrior> geometry_prior_for(const Armor & armor) const;
+  void update_geometry_cache();
 
   void sort_armors(std::list<Armor> & armors) const;
 

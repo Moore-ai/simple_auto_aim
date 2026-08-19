@@ -61,7 +61,8 @@ Target & Target::operator=(const Target & other)
 Target::Target(
   const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
   Eigen::VectorXd P0_dig, const FilterConfig & filter_config, FilterMethod filter_method,
-  bool reprojection_mode, ReprojectionObservationConfig reprojection_config)
+  bool reprojection_mode, ReprojectionObservationConfig reprojection_config,
+  std::optional<TargetGeometryPrior> geometry_prior)
 : name(armor.name),
   armor_type(armor.type),
   jumped(false),
@@ -78,7 +79,10 @@ Target::Target(
   is_converged_(false),
   switch_count_(0)
 {
-  auto r = radius;
+  const auto use_geometry_prior = geometry_prior && std::isfinite(geometry_prior->radius) &&
+    geometry_prior->radius > 0.0 && std::isfinite(geometry_prior->radius_diff) &&
+    std::isfinite(geometry_prior->height_diff);
+  auto r = use_geometry_prior ? geometry_prior->radius : radius;
   priority = armor.priority;
   const Eigen::VectorXd & xyz = armor.xyz_in_world;
   const Eigen::VectorXd & ypr = armor.ypr_in_world;
@@ -94,6 +98,10 @@ Target::Target(
   initial_state.set_center_z(center_z);
   initial_state.set_yaw(ypr[0]);
   initial_state.set_radius(r);
+  if (use_geometry_prior && armor_num_ == 4) {
+    initial_state.set_radius_diff(geometry_prior->radius_diff);
+    initial_state.set_height_diff(geometry_prior->height_diff);
+  }
   estimator_ = TargetEstimator(
     initial_state, P0_dig,
     {filter_method_, config_.ukf.sigma_alpha, config_.ukf.sigma_beta, config_.ukf.sigma_kappa});
@@ -491,6 +499,16 @@ const TargetEstimatorDiagnostics & Target::diagnostics() const
 bool Target::has_bad_nis_convergence(double failure_rate) const
 {
   return estimator_.has_bad_nis_convergence(failure_rate);
+}
+
+bool Target::geometry_cache_ready() const
+{
+  const auto required_updates = name == ArmorName::outpost ? 10 : 3;
+  if (update_count_ <= required_updates) return false;
+  if (diverged() || has_bad_nis_convergence()) return false;
+
+  const auto state = estimator_.state();
+  return state.all_finite();
 }
 
 std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
