@@ -11,6 +11,16 @@ namespace io
 Camera::Camera(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
+  const auto virtual_camera_yaml = yaml["virtual_camera"];
+  const auto virtual_camera_enabled =
+    virtual_camera_yaml && virtual_camera_yaml["enable"] && virtual_camera_yaml["enable"].as<bool>();
+  if (virtual_camera_enabled) {
+    auto video_path = tools::read<std::string>(virtual_camera_yaml, "video_path");
+    virtual_camera_ = std::make_unique<cv::VideoCapture>(video_path);
+    if (!virtual_camera_->isOpened()) throw std::runtime_error("Failed to open video: " + video_path);
+    return;
+  }
+
   auto camera_name = tools::read<std::string>(yaml, "camera_name");
   auto exposure_ms = tools::read<double>(yaml, "exposure_ms");
 
@@ -48,8 +58,17 @@ Camera::Camera(const std::string & config_path)
   }
 }
 
-void Camera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
+bool Camera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
 {
+  if (virtual_camera_) {
+    if (!virtual_camera_->read(img)) {
+      img.release();
+      return false;
+    }
+    timestamp = std::chrono::steady_clock::now();
+    return true;
+  }
+
   camera_->read(img, timestamp);
 
   if (auto_exposure_) {
@@ -57,6 +76,7 @@ void Camera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timesta
       img, camera_->get_exposure_us(), std::chrono::steady_clock::now(),
       [this](double exposure_us) { camera_->set_exposure_us(exposure_us); });
   }
+  return true;
 }
 
 }  // namespace io

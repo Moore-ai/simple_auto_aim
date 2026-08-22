@@ -152,6 +152,10 @@ exposure_ms: 2
 gain: 16
 vid_pid: "2bdf:0001"
 
+virtual_camera:
+  enable: false
+  video_path: assets/demo/demo.avi
+
 auto_exposure:
   enable: false
   target_brightness: 25.0

@@ -23,10 +23,11 @@ class Camera
 {
 public:
   Camera(const std::string & config_path);
-  void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
+  bool read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp);
 
 private:
   std::unique_ptr<CameraBase> camera_;
+  std::unique_ptr<cv::VideoCapture> virtual_camera_;
   std::unique_ptr<AutoExposure> auto_exposure_;
 };
 

@@ -101,7 +101,7 @@ int main(int argc, char * argv[])
       last_mode = mode.load();
     }
 
-    camera.read(img, t);
+    if (!camera.read(img, t)) break;
     auto q = gimbal.q(t);
     auto gs = gimbal.state();
     recorder.record(img, q, t);

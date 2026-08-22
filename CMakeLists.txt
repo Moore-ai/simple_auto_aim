@@ -79,6 +79,7 @@ add_executable(usbcamera_test tests/usbcamera_test.cpp)
 add_executable(handeye_test tests/handeye_test.cpp)
 add_executable(dm_test tests/dm_test.cpp)
 add_executable(minimum_vision_system tests/minimum_vision_system.cpp)
+add_executable(video_camera_test tests/video_camera_test.cpp)
 
 target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 target_link_libraries(auto_buff_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
@@ -95,6 +96,7 @@ target_link_libraries(usbcamera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 target_link_libraries(handeye_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
 target_link_libraries(dm_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 target_link_libraries(minimum_vision_system ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
+target_link_libraries(video_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
 
 add_executable(gimbal_test tests/gimbal_test.cpp)
 target_link_libraries(gimbal_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
@@ -122,6 +124,7 @@ add_executable(reprojection_observation_test tests/reprojection_observation_test
 target_link_libraries(reprojection_observation_test ${OpenCV_LIBS} fmt::fmt tools auto_aim)
 target_compile_options(reprojection_observation_test PRIVATE -UNDEBUG)
 add_test(NAME reprojection_observation_test COMMAND reprojection_observation_test)
+add_test(NAME video_camera_test COMMAND video_camera_test)
 set_tests_properties(reprojection_observation_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # 检查 ROS 环境
