@@ -71,6 +71,8 @@ ObservationPathConfig ObservationPathConfig::from_yaml(
   const auto pnp_config = yaml["pnp"];
   const auto pnp_assist_requested = pnp_config && pnp_config["enable_lightbar_assist"] ?
     pnp_config["enable_lightbar_assist"].as<bool>() : false;
+  const auto pnp_yaw_refinement_requested = pnp_config && pnp_config["enable_yaw_refinement"] ?
+    pnp_config["enable_yaw_refinement"].as<bool>() : false;
 
   if (observation_mode == "reprojection") {
     if (filter_method == FilterMethod::EKF) {
@@ -81,12 +83,13 @@ ObservationPathConfig ObservationPathConfig::from_yaml(
       tools::logger()->warn(
         "[ObservationPath] observation_mode=reprojection requires EKF; falling back to PnP");
     }
-  } else if (observation_mode == "pnp" && pnp_assist_requested) {
-    if (filter_method == FilterMethod::EKF) {
+  } else if (observation_mode == "pnp") {
+    config.yaw_refinement_enabled = pnp_yaw_refinement_requested;
+    if (pnp_assist_requested && filter_method == FilterMethod::EKF) {
       config.lightbar_assist_enabled = true;
       load_reprojection_config(yaml, config.reprojection);
       tools::logger()->info("[ObservationPath] PnP lightbar assist enabled");
-    } else {
+    } else if (pnp_assist_requested) {
       tools::logger()->warn(
         "[ObservationPath] pnp.enable_lightbar_assist requires EKF; keeping original PnP path");
     }
@@ -103,6 +106,7 @@ void ObservationPath::configure(const ObservationPathConfig & config, Color enem
   debug_info_.observation_mode = config_.mode == ObservationMode::REPROJECTION ?
     "reprojection" : "pnp";
   debug_info_.lightbar_assist_enabled = config_.lightbar_assist_enabled;
+  debug_info_.yaw_refinement_enabled = config_.yaw_refinement_enabled;
 }
 
 bool ObservationPath::uses_reprojection() const
@@ -401,6 +405,18 @@ bool ObservationPath::update_pnp(
   for (auto & armor : detections.armors) {
     if (armor.name != target.name || armor.type != target.armor_type) continue;
     if (!solver_.solve(armor)) continue;
+    if (config_.yaw_refinement_enabled) {
+      const auto predicted_armors = target.armor_xyza_list();
+      if (!predicted_armors.empty()) {
+        const auto matched = std::min_element(
+          predicted_armors.begin(), predicted_armors.end(), [&](const auto & lhs, const auto & rhs) {
+            return std::abs(tools::limit_rad(armor.ypr_in_world[0] - lhs[3])) <
+              std::abs(tools::limit_rad(armor.ypr_in_world[0] - rhs[3]));
+          });
+        solver_.refine_yaw_with_prediction(
+          armor, (*matched)[3], static_cast<int>(predicted_armors.size()));
+      }
+    }
     found = true;
     debug_info_.matched_armor_count++;
     target.update(armor);

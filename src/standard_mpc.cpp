@@ -158,6 +158,7 @@ int main(int argc, char * argv[])
           {"state", tracker_state},
           {"observation_mode", tracker_debug.observation_mode},
           {"lightbar_assist_enabled", tracker_debug.lightbar_assist_enabled},
+          {"yaw_refinement_enabled", tracker_debug.yaw_refinement_enabled},
           {"last_update_source", tracker_debug.last_update_source},
           {"matched_armor_count", tracker_debug.matched_armor_count},
           {"matched_light_count", tracker_debug.matched_light_count},

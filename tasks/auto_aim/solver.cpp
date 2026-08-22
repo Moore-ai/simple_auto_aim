@@ -6,7 +6,6 @@
 #include <limits>
 #include <vector>
 
-#include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 
 namespace auto_aim
@@ -173,6 +172,53 @@ bool Solver::solve(Armor & armor) const
 
   optimize_yaw(armor);
   return armor.xyz_in_world.allFinite() && armor.ypr_in_world.allFinite();
+}
+
+bool Solver::refine_yaw_with_prediction(
+  Armor & armor, double predicted_yaw, int armor_num) const
+{
+  if (armor.points.size() != 4 || armor_num < 3 || !armor.xyz_in_world.allFinite()) return false;
+
+  const auto gimbal_yaw = tools::eulers(R_gimbal2world_, 2, 1, 0)[0];
+  const auto angle_between_armors = 2.0 * CV_PI / armor_num;
+  constexpr double must_see_angle = CV_PI / 4.0;
+  constexpr double must_not_see_angle = CV_PI / 2.0;
+  double left = std::max(-must_not_see_angle, must_see_angle - angle_between_armors);
+  double right = std::min(must_not_see_angle, -must_see_angle + angle_between_armors);
+  if (left >= right) return false;
+
+  const auto inclined = tools::limit_rad(predicted_yaw - gimbal_yaw);
+  constexpr int iterations = 12;
+  const double phi = (std::sqrt(5.0) - 1.0) / 2.0;
+  double middle_left = left + (right - left) * (1.0 - phi);
+  double middle_right = left + (right - left) * phi;
+  auto cost = [&](double relative_yaw) {
+    const auto projected = reproject_armor(
+      armor.xyz_in_world, tools::limit_rad(relative_yaw + gimbal_yaw), armor.type, armor.name);
+    return projected.size() == armor.points.size() ? SJTU_cost(projected, armor.points, inclined) :
+                                                     std::numeric_limits<double>::infinity();
+  };
+  double middle_left_cost = cost(middle_left);
+  double middle_right_cost = cost(middle_right);
+  for (int i = 0; i < iterations; ++i) {
+    if (middle_left_cost < middle_right_cost) {
+      right = middle_right;
+      middle_right = middle_left;
+      middle_right_cost = middle_left_cost;
+      middle_left = left + (right - left) * (1.0 - phi);
+      middle_left_cost = cost(middle_left);
+    } else {
+      left = middle_left;
+      middle_left = middle_right;
+      middle_left_cost = middle_right_cost;
+      middle_right = left + (right - left) * phi;
+      middle_right_cost = cost(middle_right);
+    }
+  }
+  const auto refined_yaw = tools::limit_rad((left + right) * 0.5 + gimbal_yaw);
+  if (!std::isfinite(refined_yaw)) return false;
+  armor.ypr_in_world[0] = refined_yaw;
+  return true;
 }
 
 std::optional<double> Solver::armor_lights_depth_diff(const Armor & armor) const

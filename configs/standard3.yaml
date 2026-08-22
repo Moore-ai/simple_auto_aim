@@ -4,6 +4,7 @@ observation_mode: "pnp" # pnp | reprojection
 
 pnp:
   enable_lightbar_assist: false
+  enable_yaw_refinement: false
 
 target_geometry_cache:
   enabled: false

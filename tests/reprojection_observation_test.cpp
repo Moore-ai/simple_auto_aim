@@ -10,7 +10,6 @@
 #include "tasks/auto_aim/armor.hpp"
 #include "tasks/auto_aim/detection_result.hpp"
 #include "tasks/auto_aim/lightbar_detector.hpp"
-#include "tasks/auto_aim/reprojection.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 
@@ -168,6 +167,7 @@ int main()
   auto_aim::Tracker tracker("configs/demo.yaml", solver);
   assert(!tracker.reprojection_enabled());
   assert(!tracker.debug_info().lightbar_assist_enabled);
+  assert(!tracker.debug_info().yaw_refinement_enabled);
 
   std::ifstream config_input("configs/demo.yaml");
   std::stringstream config_buffer;
@@ -186,6 +186,7 @@ int main()
     auto_aim::Tracker("/tmp/reprojection_observation_test.yaml", reprojection_solver);
   assert(reprojection_tracker.reprojection_enabled());
   assert(!reprojection_tracker.debug_info().lightbar_assist_enabled);
+  assert(!reprojection_tracker.debug_info().yaw_refinement_enabled);
 
   auto pnp_without_node = pnp_config_text;
   const auto pnp_node_pos = pnp_without_node.find("\npnp:\n");
@@ -214,6 +215,21 @@ int main()
   auto pnp_assist_tracker =
     auto_aim::Tracker("/tmp/pnp_lightbar_assist.yaml", pnp_assist_solver);
   assert(pnp_assist_tracker.debug_info().lightbar_assist_enabled);
+
+  auto pnp_yaw_refinement_config = pnp_config_text;
+  const auto yaw_refinement_insert_pos = pnp_yaw_refinement_config.find(
+    "enable_lightbar_assist: false");
+  assert(yaw_refinement_insert_pos != std::string::npos);
+  pnp_yaw_refinement_config.insert(
+    yaw_refinement_insert_pos,
+    "enable_yaw_refinement: true\n  ");
+  std::ofstream pnp_yaw_refinement_output("/tmp/pnp_yaw_refinement.yaml");
+  pnp_yaw_refinement_output << pnp_yaw_refinement_config;
+  pnp_yaw_refinement_output.close();
+  auto pnp_yaw_refinement_solver = auto_aim::Solver("/tmp/pnp_yaw_refinement.yaml");
+  auto pnp_yaw_refinement_tracker = auto_aim::Tracker(
+    "/tmp/pnp_yaw_refinement.yaml", pnp_yaw_refinement_solver);
+  assert(pnp_yaw_refinement_tracker.debug_info().yaw_refinement_enabled);
 
   auto pnp_assist_reprojection_config = pnp_assist_config;
   const auto pnp_mode_pos = pnp_assist_reprojection_config.find("observation_mode: \"pnp\"");
@@ -264,6 +280,9 @@ int main()
     armor_center, 0.0, auto_aim::ArmorType::small, auto_aim::ArmorName::sentry);
   auto armor = auto_aim::Armor(0, 0.9F, cv::Rect(700, 480, 100, 100), armor_points);
   reprojection_solver.solve(armor);
+  armor.ypr_in_world[0] = 0.6;
+  assert(reprojection_solver.refine_yaw_with_prediction(armor, 0.0, 4));
+  assert(std::abs(armor.ypr_in_world[0]) < 0.02);
   auto target = auto_aim::Target(
     armor, std::chrono::steady_clock::now(), 0.2, 4,
     Eigen::VectorXd::Ones(auto_aim::TargetState::dimension));

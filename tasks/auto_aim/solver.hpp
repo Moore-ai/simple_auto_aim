@@ -34,6 +34,9 @@ public:
 
   bool solve(Armor & armor) const;
 
+  // Refine a PnP armor yaw from its four image corners using the tracker prediction.
+  bool refine_yaw_with_prediction(Armor & armor, double predicted_yaw, int armor_num) const;
+
   std::vector<cv::Point2f> reproject_armor(
     const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const;
 
