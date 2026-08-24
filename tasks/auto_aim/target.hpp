@@ -3,17 +3,20 @@
 
 #include <Eigen/Dense>
 #include <chrono>
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include "armor.hpp"
 #include "observation_geometry.hpp"
+#include "outpost_state.hpp"
 #include "target_estimator.hpp"
 
 namespace auto_aim
 {
 
 class Solver;
+class OutpostTarget;
 
 struct ReprojectionMeasurement
 {
@@ -41,7 +44,6 @@ struct ProcessNoiseConfig
   double accel_var = 100;
   double angular_accel_var = 400;
   double outpost_accel_var = 10;
-  double outpost_angular_accel_var = 0.1;
 };
 
 // EKF 观测噪声（ypd 空间）
@@ -99,17 +101,21 @@ public:
   bool jumped;
   int last_id;  // debug only
 
-  Target() = default;
+  Target();
+  ~Target();
   Target(const Target & other);
   Target & operator=(const Target & other);
-  Target(Target &&) = default;
-  Target & operator=(Target &&) = default;
+  Target(Target && other) noexcept;
+  Target & operator=(Target && other) noexcept;
   Target(
     const Armor & armor, std::chrono::steady_clock::time_point t, double radius, int armor_num,
     Eigen::VectorXd P0_dig, const FilterConfig & filter_config = {},
     FilterMethod filter_method = FilterMethod::EKF, bool reprojection_mode = false,
     ReprojectionObservationConfig reprojection_config = {},
     std::optional<TargetGeometryPrior> geometry_prior = std::nullopt);
+  static Target make_outpost(
+    const Armor & armor, std::chrono::steady_clock::time_point t, const Eigen::VectorXd & P0_dig,
+    const FilterConfig & filter_config = {});
   Target(double x, double vyaw, double radius, double h);
 
   void predict(std::chrono::steady_clock::time_point t);
@@ -127,6 +133,7 @@ public:
     const ReprojectionObservationConfig & observation_config);
 
   TargetState state() const;
+  std::optional<OutpostState> outpost_state() const;
   Eigen::VectorXd state_vector() const;
   Eigen::VectorXd ekf_x() const;
   double last_nis() const;
@@ -134,6 +141,7 @@ public:
   bool has_bad_nis_convergence(double failure_rate = 0.4) const;
   bool geometry_cache_ready() const;
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
+  std::vector<PredictedArmorPose> armor_pose_list() const;
 
   bool diverged() const;
 
@@ -156,6 +164,7 @@ private:
 
   bool is_switch_, is_converged_;
 
+  std::unique_ptr<OutpostTarget> outpost_target_;
   TargetEstimator estimator_;
   FilterMethod filter_method_;
   bool reprojection_mode_ = false;

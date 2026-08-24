@@ -164,6 +164,7 @@ void ObservationPath::reset_frame_debug_info()
 bool ObservationPath::update(
   Target & target, DetectionResult & detections, std::chrono::steady_clock::time_point t)
 {
+  if (target.name == ArmorName::outpost) return update_pnp(target, detections, t);
   if (uses_reprojection()) return update_reprojection(target, detections, t);
   return update_pnp(target, detections, t);
 }
@@ -423,7 +424,7 @@ bool ObservationPath::update_pnp(
     occupied_ids.push_back(target.last_id);
   }
 
-  if (found && lightbar_assist_enabled()) {
+  if (found && target.name != ArmorName::outpost && lightbar_assist_enabled()) {
     const auto predicted_armors = target.armor_xyza_list();
     std::vector<int> visible_ids(predicted_armors.size());
     std::iota(visible_ids.begin(), visible_ids.end(), 0);

@@ -54,7 +54,11 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   filter_config_.process_noise.accel_var = tools::read<double>(filter_cfg, "accel_var");
   filter_config_.process_noise.angular_accel_var = tools::read<double>(filter_cfg, "angular_accel_var");
   filter_config_.process_noise.outpost_accel_var = tools::read<double>(filter_cfg, "outpost_accel_var");
-  filter_config_.process_noise.outpost_angular_accel_var = tools::read<double>(filter_cfg, "outpost_angular_accel_var");
+
+  auto ekf_obs_cfg = yaml["ekf_obs"];
+  filter_config_.ekf.yaw_var = tools::read<double>(ekf_obs_cfg, "yaw_var");
+  filter_config_.ekf.pitch_var = tools::read<double>(ekf_obs_cfg, "pitch_var");
+  filter_config_.ekf.armor_yaw_base = tools::read<double>(ekf_obs_cfg, "armor_yaw_base");
 
   // 读取滤波器类型和特有参数
   auto filter_method_str = yaml["filter_method"] ? yaml["filter_method"].as<std::string>() : "ekf";
@@ -77,10 +81,6 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
     filter_config_.ukf.sigma_kappa = tools::read<double>(obs_cfg, "sigma_kappa");
   } else {
     filter_method_ = FilterMethod::EKF;
-    auto obs_cfg = yaml["ekf_obs"];
-    filter_config_.ekf.yaw_var = tools::read<double>(obs_cfg, "yaw_var");
-    filter_config_.ekf.pitch_var = tools::read<double>(obs_cfg, "pitch_var");
-    filter_config_.ekf.armor_yaw_base = tools::read<double>(obs_cfg, "armor_yaw_base");
   }
 
   const auto geometry_cache_config = yaml["target_geometry_cache"];
@@ -120,7 +120,6 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   P0_base_ = read_P0("base");
 
   radius_default_ = tools::read<double>(radius_cfg, "default");
-  radius_outpost_ = tools::read<double>(radius_cfg, "outpost");
   radius_base_ = tools::read<double>(radius_cfg, "base");
 }
 
@@ -154,7 +153,7 @@ std::list<Target> Tracker::track(
   // armors.remove_if([this](const auto_aim::Armor & a) {
   //   return a.name == ArmorName::outpost &&
   //          solver_.oupost_reprojection_error(a, 27.5 * CV_PI / 180.0) <
-  //            solver_.oupost_reprojection_error(a, -15 * CV_PI / 180.0);
+  //            solver_.oupost_reprojection_error(a, OUTPOST_MOUNT_PITCH);
   // });
 
   // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
@@ -353,10 +352,7 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
       observation_path_.uses_reprojection(), observation_path_.reprojection_config(),
       geometry_prior);
   } else if (armor.name == ArmorName::outpost) {
-    target_ = Target(
-      armor, t, radius_outpost_, 3, P0_outpost_, filter_config_, filter_method_,
-      observation_path_.uses_reprojection(), observation_path_.reprojection_config(),
-      geometry_prior);
+    target_ = Target::make_outpost(armor, t, P0_outpost_, filter_config_);
   } else if (armor.name == ArmorName::base) {
     target_ = Target(
       armor, t, radius_base_, 3, P0_base_, filter_config_, filter_method_,

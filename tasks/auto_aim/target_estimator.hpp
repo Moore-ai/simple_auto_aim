@@ -47,6 +47,9 @@ public:
   TargetEstimator(
     const TargetState & initial_state, const Eigen::VectorXd & covariance_diagonal,
     const TargetEstimatorConfig & config);
+  TargetEstimator(
+    const Eigen::VectorXd & initial_state, const Eigen::VectorXd & covariance_diagonal,
+    const TargetEstimatorConfig & config);
   ~TargetEstimator();
 
   TargetEstimator(const TargetEstimator & other);
@@ -57,6 +60,8 @@ public:
   TargetState state() const;
   Eigen::VectorXd state_vector() const;
   void set_state(const TargetState & state);
+  void set_state_vector(const Eigen::VectorXd & state);
+  void transform_state(const Eigen::MatrixXd & transform);
 
   void predict(
     const Eigen::MatrixXd & transition_matrix, const Eigen::MatrixXd & process_noise,
@@ -64,6 +69,14 @@ public:
   bool update(
     const Eigen::VectorXd & observation, const Eigen::MatrixXd & jacobian,
     const Eigen::MatrixXd & observation_noise, const MeasurementModel & model,
+    const ResidualFunction & residual);
+  void predict_vector(
+    const Eigen::MatrixXd & transition_matrix, const Eigen::MatrixXd & process_noise,
+    const std::function<Eigen::VectorXd(const Eigen::VectorXd &)> & transition);
+  bool update_vector(
+    const Eigen::VectorXd & observation, const Eigen::MatrixXd & jacobian,
+    const Eigen::MatrixXd & observation_noise,
+    const std::function<Eigen::VectorXd(const Eigen::VectorXd &)> & model,
     const ResidualFunction & residual);
 
   double last_nis() const;

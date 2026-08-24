@@ -53,6 +53,26 @@ TargetEstimator::TargetEstimator(
   refresh_diagnostics();
 }
 
+TargetEstimator::TargetEstimator(
+  const Eigen::VectorXd & initial_state, const Eigen::VectorXd & covariance_diagonal,
+  const TargetEstimatorConfig & config)
+: impl_{std::make_unique<Impl>()}
+{
+  const auto & x0 = initial_state;
+  const auto P0 = covariance_diagonal.asDiagonal();
+  auto x_add = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) { return a + b; };
+
+  if (config.method == FilterMethod::INEKF) {
+    impl_->filter = std::make_unique<tools::InvariantPoseFilter>(x0, P0, x_add);
+  } else if (config.method == FilterMethod::UKF) {
+    impl_->filter = std::make_unique<tools::UnscentedKalmanFilter>(
+      x0, P0, x_add, config.sigma_alpha, config.sigma_beta, config.sigma_kappa);
+  } else {
+    impl_->filter = std::make_unique<tools::ExtendedKalmanFilter>(x0, P0, x_add);
+  }
+  refresh_diagnostics();
+}
+
 TargetEstimator::~TargetEstimator() = default;
 
 TargetEstimator::TargetEstimator(const TargetEstimator & other)
@@ -87,12 +107,24 @@ TargetState TargetEstimator::state() const
 
 Eigen::VectorXd TargetEstimator::state_vector() const
 {
-  return state().vector();
+  return impl_ && impl_->filter ? impl_->filter->x : Eigen::VectorXd{};
 }
 
 void TargetEstimator::set_state(const TargetState & state)
 {
   if (impl_ && impl_->filter) impl_->filter->x = state.vector();
+}
+
+void TargetEstimator::set_state_vector(const Eigen::VectorXd & state)
+{
+  if (impl_ && impl_->filter) impl_->filter->x = state;
+}
+
+void TargetEstimator::transform_state(const Eigen::MatrixXd & transform)
+{
+  if (!impl_ || !impl_->filter) return;
+  impl_->filter->x = transform * impl_->filter->x;
+  impl_->filter->P = transform * impl_->filter->P * transform.transpose();
 }
 
 void TargetEstimator::predict(
@@ -120,6 +152,36 @@ bool TargetEstimator::update(
     [&](const Eigen::VectorXd & state_vector) {
       return model(TargetState(state_vector));
     }, residual);
+  refresh_diagnostics();
+  if (!impl_->filter->x.allFinite() || !impl_->filter->P.allFinite() ||
+      !std::isfinite(impl_->filter->last_nis)) {
+    impl_->filter->x = state_before_update;
+    impl_->filter->P = covariance_before_update;
+    refresh_diagnostics();
+    return false;
+  }
+  return true;
+}
+
+void TargetEstimator::predict_vector(
+  const Eigen::MatrixXd & transition_matrix, const Eigen::MatrixXd & process_noise,
+  const std::function<Eigen::VectorXd(const Eigen::VectorXd &)> & transition)
+{
+  if (!impl_ || !impl_->filter) return;
+  impl_->filter->predict(transition_matrix, process_noise, transition);
+}
+
+bool TargetEstimator::update_vector(
+  const Eigen::VectorXd & observation, const Eigen::MatrixXd & jacobian,
+  const Eigen::MatrixXd & observation_noise,
+  const std::function<Eigen::VectorXd(const Eigen::VectorXd &)> & model,
+  const ResidualFunction & residual)
+{
+  if (!impl_ || !impl_->filter) return false;
+
+  const auto state_before_update = impl_->filter->x;
+  const auto covariance_before_update = impl_->filter->P;
+  impl_->filter->update(observation, jacobian, observation_noise, model, residual);
   refresh_diagnostics();
   if (!impl_->filter->x.allFinite() || !impl_->filter->P.allFinite() ||
       !std::isfinite(impl_->filter->last_nis)) {

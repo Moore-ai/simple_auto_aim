@@ -7,10 +7,13 @@
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "observation_geometry.hpp"
+#include "outpost_target.hpp"
 #include "solver.hpp"
 
 namespace auto_aim
 {
+Target::Target() = default;
+
 Target::Target(const Target & other)
 : name(other.name),
   armor_type(other.armor_type),
@@ -23,15 +26,23 @@ Target::Target(const Target & other)
   update_count_(other.update_count_),
   seen_armor_ids_(other.seen_armor_ids_),
   config_(other.config_),
-  filter_method_(other.filter_method_),
-  estimator_(other.estimator_),
-  reprojection_mode_(other.reprojection_mode_),
-  reprojection_config_(other.reprojection_config_),
   is_switch_(other.is_switch_),
   is_converged_(other.is_converged_),
+  outpost_target_(other.outpost_target_ ? std::make_unique<OutpostTarget>(*other.outpost_target_) :
+                                         nullptr),
+  estimator_(other.estimator_),
+  filter_method_(other.filter_method_),
+  reprojection_mode_(other.reprojection_mode_),
+  reprojection_config_(other.reprojection_config_),
   t_(other.t_)
 {
 }
+
+Target::~Target() = default;
+
+Target::Target(Target && other) noexcept = default;
+
+Target & Target::operator=(Target && other) noexcept = default;
 
 Target & Target::operator=(const Target & other)
 {
@@ -47,6 +58,8 @@ Target & Target::operator=(const Target & other)
     update_count_ = other.update_count_;
     seen_armor_ids_ = other.seen_armor_ids_;
     config_ = other.config_;
+    outpost_target_ = other.outpost_target_ ?
+      std::make_unique<OutpostTarget>(*other.outpost_target_) : nullptr;
     filter_method_ = other.filter_method_;
     estimator_ = other.estimator_;
     reprojection_mode_ = other.reprojection_mode_;
@@ -67,23 +80,36 @@ Target::Target(
   armor_type(armor.type),
   jumped(false),
   last_id(0),
+  armor_num_(armor.name == ArmorName::outpost ? OUTPOST_ARMOR_COUNT : armor_num),
+  switch_count_(0),
   update_count_(0),
-  armor_num_(armor_num),
-  seen_armor_ids_(static_cast<std::size_t>(std::max(armor_num, 0)), false),
+  seen_armor_ids_(
+    static_cast<std::size_t>(
+      std::max(armor.name == ArmorName::outpost ? OUTPOST_ARMOR_COUNT : armor_num, 0)),
+    false),
   config_(filter_config),
-  filter_method_(filter_method),
-  reprojection_mode_(reprojection_mode),
-  reprojection_config_(std::move(reprojection_config)),
-  t_(t),
   is_switch_(false),
   is_converged_(false),
-  switch_count_(0)
+  filter_method_(armor.name == ArmorName::outpost ? FilterMethod::EKF : filter_method),
+  reprojection_mode_(armor.name == ArmorName::outpost ? false : reprojection_mode),
+  reprojection_config_(std::move(reprojection_config)),
+  t_(t)
 {
+  priority = armor.priority;
+  if (name == ArmorName::outpost) {
+    outpost_target_ = std::make_unique<OutpostTarget>(
+      armor, P0_dig,
+      OutpostFilterConfig{
+        config_.process_noise.outpost_accel_var, config_.ekf.yaw_var, config_.ekf.pitch_var,
+        config_.ekf.armor_yaw_base, config_.vel_clamp.enable,
+        config_.vel_clamp.max_linear_speed});
+    return;
+  }
+
   const auto use_geometry_prior = geometry_prior && std::isfinite(geometry_prior->radius) &&
     geometry_prior->radius > 0.0 && std::isfinite(geometry_prior->radius_diff) &&
     std::isfinite(geometry_prior->height_diff);
-  auto r = use_geometry_prior ? geometry_prior->radius : radius;
-  priority = armor.priority;
+  const auto r = use_geometry_prior ? geometry_prior->radius : radius;
   const Eigen::VectorXd & xyz = armor.xyz_in_world;
   const Eigen::VectorXd & ypr = armor.ypr_in_world;
 
@@ -107,6 +133,15 @@ Target::Target(
     {filter_method_, config_.ukf.sigma_alpha, config_.ukf.sigma_beta, config_.ukf.sigma_kappa});
 }
 
+Target Target::make_outpost(
+  const Armor & armor, std::chrono::steady_clock::time_point t, const Eigen::VectorXd & P0_dig,
+  const FilterConfig & filter_config)
+{
+  return Target(
+    armor, t, OUTPOST_RADIUS, OUTPOST_ARMOR_COUNT, P0_dig, filter_config, FilterMethod::EKF,
+    false);
+}
+
 Target::Target(double x, double vyaw, double radius, double h)
 : armor_num_(4), filter_method_(FilterMethod::EKF)
 {
@@ -121,6 +156,7 @@ Target::Target(double x, double vyaw, double radius, double h)
 
 void Target::predict(std::chrono::steady_clock::time_point t)
 {
+  if (outpost_target_ && t != t_) outpost_target_->begin_frame();
   auto dt = tools::delta_time(t, t_);
   predict(dt);
   t_ = t;
@@ -128,6 +164,11 @@ void Target::predict(std::chrono::steady_clock::time_point t)
 
 void Target::predict(double dt)
 {
+  if (outpost_target_) {
+    outpost_target_->predict(dt);
+    return;
+  }
+
   // 状态转移矩阵
   // clang-format off
   Eigen::MatrixXd F{
@@ -147,14 +188,8 @@ void Target::predict(double dt)
 
   // Piecewise White Noise Model
   // https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python/blob/master/07-Kalman-Filter-Math.ipynb
-  double v1, v2;
-  if (name == ArmorName::outpost) {
-    v1 = config_.process_noise.outpost_accel_var;
-    v2 = config_.process_noise.outpost_angular_accel_var;
-  } else {
-    v1 = config_.process_noise.accel_var;
-    v2 = config_.process_noise.angular_accel_var;
-  }
+  const auto v1 = config_.process_noise.accel_var;
+  const auto v2 = config_.process_noise.angular_accel_var;
   auto a = dt * dt * dt * dt / 4;
   auto b = dt * dt * dt / 2;
   auto c = dt * dt;
@@ -181,13 +216,6 @@ void Target::predict(double dt)
     predicted.set_yaw(tools::limit_rad(predicted.yaw()));
     return predicted;
   };
-
-  // 前哨站转速特判
-  auto state = estimator_.state();
-  if (this->convergened() && this->name == ArmorName::outpost && std::abs(state.yaw_rate()) > 2) {
-    state.set_yaw_rate(state.yaw_rate() > 0 ? 2.51 : -2.51);
-    estimator_.set_state(state);
-  }
 
   estimator_.predict(F, Q, transition);
   if (reprojection_mode_) constrain_reprojection_state();
@@ -240,7 +268,10 @@ void Target::update(const Armor & armor)
   mark_armor_id(id);
   update_count_++;
 
-  update_filter(armor, id);
+  if (outpost_target_)
+    outpost_target_->update(armor, id);
+  else
+    update_filter(armor, id);
   if (reprojection_mode_) constrain_reprojection_state();
 }
 
@@ -272,7 +303,9 @@ bool Target::update_reprojection_impl(
   const std::vector<ReprojectionArmorMeasurement> & armor_measurements, const Solver & solver,
   const ReprojectionObservationConfig & observation_config, bool auxiliary_only)
 {
-  if (measurements.empty() || filter_method_ != FilterMethod::EKF) return false;
+  if (name == ArmorName::outpost || measurements.empty() || filter_method_ != FilterMethod::EKF) {
+    return false;
+  }
 
   ObservationGeometry geometry(solver);
   std::vector<Eigen::Vector4d> observations;
@@ -483,28 +516,43 @@ void Target::update_filter(const Armor & armor, int id)
   constrain_velocity();
 }
 
-TargetState Target::state() const { return estimator_.state(); }
+TargetState Target::state() const
+{
+  return outpost_target_ ? outpost_target_->compatibility_state() : estimator_.state();
+}
 
-Eigen::VectorXd Target::state_vector() const { return estimator_.state_vector(); }
+std::optional<OutpostState> Target::outpost_state() const
+{
+  return outpost_target_ ? std::optional<OutpostState>(outpost_target_->state()) : std::nullopt;
+}
+
+Eigen::VectorXd Target::state_vector() const
+{
+  return outpost_target_ ? outpost_target_->state_vector() : estimator_.state_vector();
+}
 
 Eigen::VectorXd Target::ekf_x() const { return state_vector(); }
 
-double Target::last_nis() const { return estimator_.last_nis(); }
+double Target::last_nis() const
+{
+  return outpost_target_ ? outpost_target_->last_nis() : estimator_.last_nis();
+}
 
 const TargetEstimatorDiagnostics & Target::diagnostics() const
 {
-  return estimator_.diagnostics();
+  return outpost_target_ ? outpost_target_->diagnostics() : estimator_.diagnostics();
 }
 
 bool Target::has_bad_nis_convergence(double failure_rate) const
 {
-  return estimator_.has_bad_nis_convergence(failure_rate);
+  return outpost_target_ ? outpost_target_->has_bad_nis_convergence(failure_rate) :
+                           estimator_.has_bad_nis_convergence(failure_rate);
 }
 
 bool Target::geometry_cache_ready() const
 {
-  const auto required_updates = name == ArmorName::outpost ? 10 : 3;
-  if (update_count_ <= required_updates) return false;
+  if (name == ArmorName::outpost) return false;
+  if (update_count_ <= 3) return false;
   if (diverged() || has_bad_nis_convergence()) return false;
 
   const auto state = estimator_.state();
@@ -513,6 +561,14 @@ bool Target::geometry_cache_ready() const
 
 std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 {
+  if (outpost_target_) {
+    std::vector<Eigen::Vector4d> result;
+    for (const auto & pose : outpost_target_->armor_pose_list()) {
+      result.push_back({pose.center.x(), pose.center.y(), pose.center.z(), pose.yaw});
+    }
+    return result;
+  }
+
   std::vector<Eigen::Vector4d> _armor_xyza_list;
   const auto state = estimator_.state();
 
@@ -524,8 +580,22 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
   return _armor_xyza_list;
 }
 
+std::vector<PredictedArmorPose> Target::armor_pose_list() const
+{
+  if (outpost_target_) return outpost_target_->armor_pose_list();
+  std::vector<PredictedArmorPose> poses;
+  const auto xyza_list = armor_xyza_list();
+  poses.reserve(xyza_list.size());
+  const auto pitch = armor_mount_pitch(name);
+  for (const auto & xyza : xyza_list) {
+    poses.push_back({xyza.head<3>(), xyza[3], pitch});
+  }
+  return poses;
+}
+
 bool Target::diverged() const
 {
+  if (outpost_target_) return !outpost_target_->all_finite();
   const auto min_radius = reprojection_mode_ ? reprojection_config_.radius_min : 0.05;
   const auto max_radius = reprojection_mode_ ? reprojection_config_.radius_max : 0.5;
   const auto state = estimator_.state();
@@ -563,7 +633,9 @@ bool Target::convergened()
   }
 
   //前哨站特殊判断
-  if (this->name == ArmorName::outpost && update_count_ > 10 && !this->diverged()) {
+  if (
+    outpost_target_ && outpost_target_->direction_locked() && update_count_ > 10 &&
+    !this->diverged()) {
     is_converged_ = true;
   }
 
@@ -609,7 +681,7 @@ Eigen::Matrix<double, 3, TargetState::dimension> Target::h_armor_xyz_jacobian(
 
 void Target::constrain_reprojection_state()
 {
-  if (!reprojection_mode_) return;
+  if (!reprojection_mode_ || name == ArmorName::outpost) return;
   const auto min_radius = std::max(reprojection_config_.radius_min, 1e-3);
   const auto max_radius = std::max(reprojection_config_.radius_max, min_radius);
   auto state = estimator_.state();

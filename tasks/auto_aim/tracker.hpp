@@ -78,7 +78,7 @@ private:
   // EKF 初始协方差 P0（按兵种）
   Eigen::VectorXd P0_default_, P0_balance_, P0_outpost_, P0_base_;
   // EKF 初始半径（按兵种）
-  double radius_default_, radius_outpost_, radius_base_;
+  double radius_default_, radius_base_;
 
   void state_machine(bool found);
 
