@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "tools/math_tools.hpp"
 
@@ -26,6 +27,11 @@ OutpostTarget::OutpostTarget(
   estimator_ = TargetEstimator(initial, covariance_diagonal, {FilterMethod::EKF});
   current_yaws_[0] = armor.ypr_in_world[0];
   enforce_yaw_rate();
+}
+
+std::unique_ptr<OutpostModel> OutpostTarget::clone() const
+{
+  return std::make_unique<OutpostTarget>(*this);
 }
 
 void OutpostTarget::begin_frame()
@@ -59,6 +65,19 @@ void OutpostTarget::predict(double dt)
     predicted[6] = tools::limit_rad(predicted[6]);
     return predicted;
   });
+}
+
+OutpostUpdateResult OutpostTarget::update(const std::vector<Armor> & armors)
+{
+  OutpostUpdateResult result;
+  for (const auto & armor : armors) {
+    const auto id = match_armor(armor);
+    update(armor, id);
+    result.updated = true;
+    result.armor_id = id;
+    result.armor_ids.push_back(id);
+  }
+  return result;
 }
 
 void OutpostTarget::update(const Armor & armor, int id)
@@ -96,6 +115,8 @@ void OutpostTarget::update(const Armor & armor, int id)
 }
 
 OutpostState OutpostTarget::state() const { return OutpostState(estimator_.state_vector()); }
+
+std::optional<OutpostState> OutpostTarget::outpost_state() const { return state(); }
 
 TargetState OutpostTarget::compatibility_state() const
 {
@@ -145,6 +166,23 @@ bool OutpostTarget::has_bad_nis_convergence(double failure_rate) const
 bool OutpostTarget::direction_locked() const { return direction_ != 0; }
 
 bool OutpostTarget::all_finite() const { return estimator_.state_vector().allFinite(); }
+
+int OutpostTarget::match_armor(const Armor & armor) const
+{
+  const auto poses = armor_pose_list();
+  auto best_id = 0;
+  auto min_error = std::numeric_limits<double>::infinity();
+  for (int id = 0; id < static_cast<int>(poses.size()); ++id) {
+    const auto ypd = tools::xyz2ypd(poses[id].center);
+    const auto error = std::abs(tools::limit_rad(armor.ypr_in_world[0] - poses[id].yaw)) +
+      std::abs(tools::limit_rad(armor.ypd_in_world[0] - ypd[0]));
+    if (error < min_error) {
+      min_error = error;
+      best_id = id;
+    }
+  }
+  return best_id;
+}
 
 Eigen::Vector3d OutpostTarget::armor_center(const OutpostState & state, int id) const
 {

@@ -403,6 +403,7 @@ bool ObservationPath::update_pnp(
   reset_frame_debug_info();
   bool found = false;
   std::vector<int> occupied_ids;
+  std::vector<Armor> outpost_armors;
   for (auto & armor : detections.armors) {
     if (armor.name != target.name || armor.type != target.armor_type) continue;
     if (!solver_.solve(armor)) continue;
@@ -418,10 +419,19 @@ bool ObservationPath::update_pnp(
           armor, (*matched)[3], static_cast<int>(predicted_armors.size()));
       }
     }
-    found = true;
     debug_info_.matched_armor_count++;
-    target.update(armor);
-    occupied_ids.push_back(target.last_id);
+    if (target.name == ArmorName::outpost) {
+      outpost_armors.push_back(armor);
+    } else {
+      found = true;
+      target.update(armor);
+      occupied_ids.push_back(target.last_id);
+    }
+  }
+
+  if (target.name == ArmorName::outpost && !outpost_armors.empty()) {
+    found = target.update_outpost(outpost_armors);
+    if (found) occupied_ids.push_back(target.last_id);
   }
 
   if (found && target.name != ArmorName::outpost && lightbar_assist_enabled()) {

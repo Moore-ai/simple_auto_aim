@@ -2,10 +2,15 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <fstream>
+#include <sstream>
 
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/observation_path.hpp"
 #include "tasks/auto_aim/target.hpp"
+#include "tasks/auto_aim/outpost_target_v2.hpp"
+#include "tasks/auto_aim/outpost_state_v2.hpp"
+#include "tasks/auto_aim/tracker.hpp"
 #include "tools/math_tools.hpp"
 
 namespace
@@ -278,4 +283,86 @@ int main()
     unlocked_target.update(measurement);
   }
   assert(!unlocked_target.convergened());
+
+  // A V2 model keeps the RPS-style phase geometry and its two height offsets.
+  auto_aim::OutpostTargetV2Config v2_config;
+  auto_aim::OutpostTargetV2 v2_target(
+    std::vector<auto_aim::Armor>{make_outpost_measurement(armor, {2.0, 0.0, 0.3}, 0.0)},
+    Eigen::VectorXd::Ones(10), v2_config);
+  const auto v2_state = v2_target.state_vector();
+  assert(v2_state.size() == 10);
+  const auto v2_predictions = v2_target.armor_pose_list();
+  assert(v2_predictions.size() == 3);
+  assert(std::abs(v2_predictions[0].center.z() - 0.3) < 1e-12);
+  assert(std::abs(v2_predictions[1].center.z() - 0.3) < 1e-12);
+  assert(std::abs(v2_predictions[2].center.z() - 0.3) < 1e-12);
+
+  // V2 estimates height offsets in phase order instead of using the current model's fixed IDs.
+  v2_config.frontal_angle_gate = CV_PI;
+  v2_config.position_match_gate = 0.5;
+  auto_aim::OutpostTargetV2 height_v2_target(
+    std::vector<auto_aim::Armor>{make_outpost_measurement(armor, {2.0, 0.0, 0.3}, 0.0)},
+    Eigen::VectorXd::Ones(10), v2_config);
+  for (int repeat = 0; repeat < 20; ++repeat) {
+    for (int id = 0; id < 3; ++id) {
+      const double yaw = id * 2.0 * CV_PI / 3.0;
+      const double height = id == 1 ? 0.08 : (id == 2 ? -0.06 : 0.0);
+      assert(height_v2_target.update(
+        {make_outpost_measurement(armor, {2.0, 0.0, 0.3}, yaw, height)}).updated);
+    }
+  }
+  const auto height_v2_predictions = height_v2_target.armor_pose_list();
+  assert(std::abs(height_v2_predictions[1].center.z() - 0.38) < 0.02);
+  assert(std::abs(height_v2_predictions[2].center.z() - 0.24) < 0.02);
+
+  // The V2 direction detector locks the known positive yaw rate after its configured samples.
+  v2_config.direction_sample_count = 3;
+  v2_config.direction_compare_interval = 1;
+  v2_config.frontal_angle_gate = CV_PI;
+  auto_aim::OutpostTargetV2 direction_v2_target(
+    std::vector<auto_aim::Armor>{make_outpost_measurement(armor, {2.0, 0.0, 0.3}, 0.0)},
+    Eigen::VectorXd::Ones(10), v2_config);
+  for (int frame = 1; frame <= 3; ++frame) {
+    const auto yaw = 0.02 * frame;
+    assert(direction_v2_target.update(
+      {make_outpost_measurement(armor, {2.0, 0.0, 0.3}, yaw)}).updated);
+  }
+  assert(std::abs(
+    direction_v2_target.state_vector()[7] - v2_config.yaw_rate_magnitude) < 1e-12);
+
+  Eigen::VectorXd named_state_values(10);
+  named_state_values << 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 0.7, 0.8, 0.09, -0.06;
+  const auto named_state = auto_aim::OutpostStateV2(named_state_values);
+  assert(named_state.center_x() == 1.0);
+  assert(named_state.velocity_x() == 2.0);
+  assert(named_state.center_y() == 3.0);
+  assert(named_state.velocity_y() == 4.0);
+  assert(named_state.center_z() == 5.0);
+  assert(named_state.velocity_z() == 6.0);
+  assert(named_state.yaw() == 0.7);
+  assert(named_state.yaw_rate() == 0.8);
+  assert(named_state.height_offset_1() == 0.09);
+  assert(named_state.height_offset_2() == -0.06);
+
+  // YAML selection constructs V2 through the real Tracker path.
+  std::ifstream demo_input("configs/demo.yaml");
+  std::stringstream demo_text;
+  demo_text << demo_input.rdbuf();
+  auto v2_yaml = demo_text.str();
+  const auto model_position = v2_yaml.find("outpost_model: current");
+  assert(model_position != std::string::npos);
+  v2_yaml.replace(model_position, std::string("outpost_model: current").size(), "outpost_model: v2");
+  const auto color_position = v2_yaml.find("enemy_color: \"blue\"");
+  assert(color_position != std::string::npos);
+  v2_yaml.replace(color_position, std::string("enemy_color: \"blue\"").size(), "enemy_color: \"red\"");
+  std::ofstream v2_output("/tmp/outpost_v2_test.yaml");
+  v2_output << v2_yaml;
+  v2_output.close();
+  auto_aim::Solver v2_solver("/tmp/outpost_v2_test.yaml");
+  auto_aim::Tracker v2_tracker("/tmp/outpost_v2_test.yaml", v2_solver);
+  auto v2_detections = auto_aim::DetectionResult{{armor}, {}};
+  const auto v2_targets = v2_tracker.track(v2_detections, t0 + std::chrono::milliseconds(10));
+  assert(!v2_targets.empty());
+  assert(v2_targets.front().state_vector().size() == 10);
+  assert(!v2_targets.front().outpost_state().has_value());
 }

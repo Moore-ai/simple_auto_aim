@@ -8,6 +8,7 @@
 #include "tools/math_tools.hpp"
 #include "observation_geometry.hpp"
 #include "outpost_target.hpp"
+#include "outpost_target_v2.hpp"
 #include "solver.hpp"
 
 namespace auto_aim
@@ -28,8 +29,7 @@ Target::Target(const Target & other)
   config_(other.config_),
   is_switch_(other.is_switch_),
   is_converged_(other.is_converged_),
-  outpost_target_(other.outpost_target_ ? std::make_unique<OutpostTarget>(*other.outpost_target_) :
-                                         nullptr),
+  outpost_model_(other.outpost_model_ ? other.outpost_model_->clone() : nullptr),
   estimator_(other.estimator_),
   filter_method_(other.filter_method_),
   reprojection_mode_(other.reprojection_mode_),
@@ -58,8 +58,7 @@ Target & Target::operator=(const Target & other)
     update_count_ = other.update_count_;
     seen_armor_ids_ = other.seen_armor_ids_;
     config_ = other.config_;
-    outpost_target_ = other.outpost_target_ ?
-      std::make_unique<OutpostTarget>(*other.outpost_target_) : nullptr;
+    outpost_model_ = other.outpost_model_ ? other.outpost_model_->clone() : nullptr;
     filter_method_ = other.filter_method_;
     estimator_ = other.estimator_;
     reprojection_mode_ = other.reprojection_mode_;
@@ -97,7 +96,7 @@ Target::Target(
 {
   priority = armor.priority;
   if (name == ArmorName::outpost) {
-    outpost_target_ = std::make_unique<OutpostTarget>(
+    outpost_model_ = std::make_unique<OutpostTarget>(
       armor, P0_dig,
       OutpostFilterConfig{
         config_.process_noise.outpost_accel_var, config_.ekf.yaw_var, config_.ekf.pitch_var,
@@ -135,11 +134,51 @@ Target::Target(
 
 Target Target::make_outpost(
   const Armor & armor, std::chrono::steady_clock::time_point t, const Eigen::VectorXd & P0_dig,
-  const FilterConfig & filter_config)
+  const OutpostFilterConfig & config)
 {
-  return Target(
-    armor, t, OUTPOST_RADIUS, OUTPOST_ARMOR_COUNT, P0_dig, filter_config, FilterMethod::EKF,
-    false);
+  Target result;
+  result.name = ArmorName::outpost;
+  result.armor_type = armor.type;
+  result.priority = armor.priority;
+  result.jumped = false;
+  result.last_id = 0;
+  result.isinit = false;
+  result.armor_num_ = OUTPOST_ARMOR_COUNT;
+  result.switch_count_ = 0;
+  result.update_count_ = 0;
+  result.seen_armor_ids_.assign(OUTPOST_ARMOR_COUNT, false);
+  result.is_switch_ = false;
+  result.is_converged_ = false;
+  result.filter_method_ = FilterMethod::EKF;
+  result.reprojection_mode_ = false;
+  result.t_ = t;
+  result.outpost_model_ = std::make_unique<OutpostTarget>(armor, P0_dig, config);
+  return result;
+}
+
+Target Target::make_outpost_v2(
+  const std::vector<Armor> & armors, std::chrono::steady_clock::time_point t,
+  const Eigen::VectorXd & P0_dig, const OutpostTargetV2Config & config)
+{
+  Target result;
+  if (armors.empty()) return result;
+  result.name = ArmorName::outpost;
+  result.armor_type = armors.front().type;
+  result.priority = armors.front().priority;
+  result.jumped = false;
+  result.last_id = 0;
+  result.isinit = false;
+  result.armor_num_ = OUTPOST_ARMOR_COUNT;
+  result.switch_count_ = 0;
+  result.update_count_ = 0;
+  result.seen_armor_ids_.assign(OUTPOST_ARMOR_COUNT, false);
+  result.is_switch_ = false;
+  result.is_converged_ = false;
+  result.filter_method_ = FilterMethod::EKF;
+  result.reprojection_mode_ = false;
+  result.t_ = t;
+  result.outpost_model_ = std::make_unique<OutpostTargetV2>(armors, P0_dig, config);
+  return result;
 }
 
 Target::Target(double x, double vyaw, double radius, double h)
@@ -156,7 +195,7 @@ Target::Target(double x, double vyaw, double radius, double h)
 
 void Target::predict(std::chrono::steady_clock::time_point t)
 {
-  if (outpost_target_ && t != t_) outpost_target_->begin_frame();
+  if (outpost_model_ && t != t_) outpost_model_->begin_frame();
   auto dt = tools::delta_time(t, t_);
   predict(dt);
   t_ = t;
@@ -164,8 +203,8 @@ void Target::predict(std::chrono::steady_clock::time_point t)
 
 void Target::predict(double dt)
 {
-  if (outpost_target_) {
-    outpost_target_->predict(dt);
+  if (outpost_model_) {
+    outpost_model_->predict(dt);
     return;
   }
 
@@ -223,6 +262,11 @@ void Target::predict(double dt)
 
 void Target::update(const Armor & armor)
 {
+  if (outpost_model_) {
+    update_outpost({armor});
+    return;
+  }
+
   // 装甲板匹配
   int id;
   auto min_angle_error = 1e10;
@@ -268,11 +312,26 @@ void Target::update(const Armor & armor)
   mark_armor_id(id);
   update_count_++;
 
-  if (outpost_target_)
-    outpost_target_->update(armor, id);
-  else
-    update_filter(armor, id);
+  update_filter(armor, id);
   if (reprojection_mode_) constrain_reprojection_state();
+}
+
+bool Target::update_outpost(const std::vector<Armor> & armors)
+{
+  if (!outpost_model_) return false;
+  const auto result = outpost_model_->update(armors);
+  if (!result.updated) return false;
+  const auto & ids = result.armor_ids.empty() ? std::vector<int>{result.armor_id} :
+                                                result.armor_ids;
+  for (const auto id : ids) {
+    jumped = jumped || id != 0;
+    is_switch_ = id != last_id;
+    if (is_switch_) ++switch_count_;
+    last_id = id;
+    mark_armor_id(id);
+    ++update_count_;
+  }
+  return true;
 }
 
 bool Target::update_reprojection(
@@ -518,34 +577,34 @@ void Target::update_filter(const Armor & armor, int id)
 
 TargetState Target::state() const
 {
-  return outpost_target_ ? outpost_target_->compatibility_state() : estimator_.state();
+  return outpost_model_ ? outpost_model_->compatibility_state() : estimator_.state();
 }
 
 std::optional<OutpostState> Target::outpost_state() const
 {
-  return outpost_target_ ? std::optional<OutpostState>(outpost_target_->state()) : std::nullopt;
+  return outpost_model_ ? outpost_model_->outpost_state() : std::nullopt;
 }
 
 Eigen::VectorXd Target::state_vector() const
 {
-  return outpost_target_ ? outpost_target_->state_vector() : estimator_.state_vector();
+  return outpost_model_ ? outpost_model_->state_vector() : estimator_.state_vector();
 }
 
 Eigen::VectorXd Target::ekf_x() const { return state_vector(); }
 
 double Target::last_nis() const
 {
-  return outpost_target_ ? outpost_target_->last_nis() : estimator_.last_nis();
+  return outpost_model_ ? outpost_model_->last_nis() : estimator_.last_nis();
 }
 
 const TargetEstimatorDiagnostics & Target::diagnostics() const
 {
-  return outpost_target_ ? outpost_target_->diagnostics() : estimator_.diagnostics();
+  return outpost_model_ ? outpost_model_->diagnostics() : estimator_.diagnostics();
 }
 
 bool Target::has_bad_nis_convergence(double failure_rate) const
 {
-  return outpost_target_ ? outpost_target_->has_bad_nis_convergence(failure_rate) :
+  return outpost_model_ ? outpost_model_->has_bad_nis_convergence(failure_rate) :
                            estimator_.has_bad_nis_convergence(failure_rate);
 }
 
@@ -561,9 +620,9 @@ bool Target::geometry_cache_ready() const
 
 std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 {
-  if (outpost_target_) {
+  if (outpost_model_) {
     std::vector<Eigen::Vector4d> result;
-    for (const auto & pose : outpost_target_->armor_pose_list()) {
+    for (const auto & pose : outpost_model_->armor_pose_list()) {
       result.push_back({pose.center.x(), pose.center.y(), pose.center.z(), pose.yaw});
     }
     return result;
@@ -582,7 +641,7 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 
 std::vector<PredictedArmorPose> Target::armor_pose_list() const
 {
-  if (outpost_target_) return outpost_target_->armor_pose_list();
+  if (outpost_model_) return outpost_model_->armor_pose_list();
   std::vector<PredictedArmorPose> poses;
   const auto xyza_list = armor_xyza_list();
   poses.reserve(xyza_list.size());
@@ -595,7 +654,7 @@ std::vector<PredictedArmorPose> Target::armor_pose_list() const
 
 bool Target::diverged() const
 {
-  if (outpost_target_) return !outpost_target_->all_finite();
+  if (outpost_model_) return !outpost_model_->all_finite();
   const auto min_radius = reprojection_mode_ ? reprojection_config_.radius_min : 0.05;
   const auto max_radius = reprojection_mode_ ? reprojection_config_.radius_max : 0.5;
   const auto state = estimator_.state();
@@ -634,7 +693,7 @@ bool Target::convergened()
 
   //前哨站特殊判断
   if (
-    outpost_target_ && outpost_target_->direction_locked() && update_count_ > 10 &&
+    outpost_model_ && outpost_model_->direction_locked() && update_count_ > 10 &&
     !this->diverged()) {
     is_converged_ = true;
   }

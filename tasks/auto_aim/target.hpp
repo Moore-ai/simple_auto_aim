@@ -9,7 +9,10 @@
 
 #include "armor.hpp"
 #include "observation_geometry.hpp"
+#include "outpost_model.hpp"
 #include "outpost_state.hpp"
+#include "outpost_target.hpp"
+#include "outpost_target_v2.hpp"
 #include "target_estimator.hpp"
 
 namespace auto_aim
@@ -115,12 +118,16 @@ public:
     std::optional<TargetGeometryPrior> geometry_prior = std::nullopt);
   static Target make_outpost(
     const Armor & armor, std::chrono::steady_clock::time_point t, const Eigen::VectorXd & P0_dig,
-    const FilterConfig & filter_config = {});
+    const OutpostFilterConfig & config = {});
+  static Target make_outpost_v2(
+    const std::vector<Armor> & armors, std::chrono::steady_clock::time_point t,
+    const Eigen::VectorXd & P0_dig, const OutpostTargetV2Config & config = {});
   Target(double x, double vyaw, double radius, double h);
 
   void predict(std::chrono::steady_clock::time_point t);
   void predict(double dt);
   void update(const Armor & armor);
+  bool update_outpost(const std::vector<Armor> & armors);
   bool update_reprojection(
     const std::vector<ReprojectionMeasurement> & measurements, const Solver & solver,
     const ReprojectionObservationConfig & observation_config);
@@ -164,7 +171,7 @@ private:
 
   bool is_switch_, is_converged_;
 
-  std::unique_ptr<OutpostTarget> outpost_target_;
+  std::unique_ptr<OutpostModel> outpost_model_;
   TargetEstimator estimator_;
   FilterMethod filter_method_;
   bool reprojection_mode_ = false;

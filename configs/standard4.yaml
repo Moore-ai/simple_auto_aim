@@ -1,4 +1,35 @@
 enemy_color: "red"
+outpost_model: current  # current | v2
+outpost_current:
+  P0: [1, 64, 1, 64, 1, 81, 0.4, 0]
+  accel_var: 10
+  yaw_var: 4e-3
+  pitch_var: 4e-3
+  armor_yaw_base: 9e-2
+  velocity_clamp_enabled: false
+  max_linear_speed: 5.0
+outpost_v2:
+  P0: [0.04, 0.01, 0.04, 0.01, 0.04, 0.01, 0.25, 6.25, 0.1, 0.1]
+  radius: 0.2765
+  yaw_rate_magnitude: 2.5132741229
+  is_fit_yaw_rate: false
+  q_xy: 10.0
+  q_z: 10.0
+  q_yaw: 10.0
+  q_yaw_rate: 10.0
+  q_dz: 10.0
+  r_yaw: 0.001
+  r_pitch: 0.001
+  r_distance: 0.001
+  r_armor_yaw: 0.001
+  frontal_angle_gate: 0.6108652382
+  yaw_match_gate: 1.5
+  position_match_gate: 0.05
+  mismatch_reset_count: 5
+  direction_sample_count: 30
+  direction_compare_interval: 3
+  direction_stable_threshold: 0.005
+  direction_jump_threshold: 0.4
 # enemy_color: "blue"
 observation_mode: "pnp" # pnp | reprojection
 
@@ -86,13 +117,11 @@ filter:
   # 过程噪声（Piecewise White Noise Model）
   accel_var: 100                  # 加速度方差 v1（前哨站除外）
   angular_accel_var: 400          # 角加速度方差 v2（前哨站除外）
-  outpost_accel_var: 10           # 前哨站加速度方差
 
   # 初始协方差 P0 对角线（按兵种分）
   P0:
     default: [1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1]
     balance: [1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1]
-    outpost: [1, 64, 1, 64, 1, 81, 0.4, 0]
     base: [1, 64, 1, 64, 1, 64, 0.4, 100, 1e-4, 0, 0]
 
   # 初始半径
