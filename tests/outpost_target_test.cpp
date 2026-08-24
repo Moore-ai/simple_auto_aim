@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -365,4 +364,7 @@ int main()
   assert(!v2_targets.empty());
   assert(v2_targets.front().state_vector().size() == 10);
   assert(!v2_targets.front().outpost_state().has_value());
+  const auto v2_target_state = v2_targets.front().outpost_state_v2();
+  assert(v2_target_state.has_value());
+  assert(std::abs(v2_target_state->center_x() - v2_targets.front().state_vector()[0]) < 1e-12);
 }

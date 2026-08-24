@@ -118,6 +118,8 @@ OutpostState OutpostTarget::state() const { return OutpostState(estimator_.state
 
 std::optional<OutpostState> OutpostTarget::outpost_state() const { return state(); }
 
+std::optional<OutpostStateV2> OutpostTarget::outpost_state_v2() const { return std::nullopt; }
+
 TargetState OutpostTarget::compatibility_state() const
 {
   TargetState result;

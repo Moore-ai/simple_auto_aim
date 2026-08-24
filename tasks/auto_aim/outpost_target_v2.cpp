@@ -152,6 +152,7 @@ TargetState OutpostTargetV2::compatibility_state() const
 }
 
 std::optional<OutpostState> OutpostTargetV2::outpost_state() const { return std::nullopt; }
+std::optional<OutpostStateV2> OutpostTargetV2::outpost_state_v2() const { return state(); }
 OutpostStateV2 OutpostTargetV2::state() const { return OutpostStateV2(estimator_.state_vector()); }
 Eigen::VectorXd OutpostTargetV2::state_vector() const { return estimator_.state_vector(); }
 

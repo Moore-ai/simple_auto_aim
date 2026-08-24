@@ -1,6 +1,5 @@
 #include "target_state.hpp"
 
-#include <algorithm>
 #include <stdexcept>
 
 namespace auto_aim

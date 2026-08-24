@@ -141,6 +141,7 @@ public:
 
   TargetState state() const;
   std::optional<OutpostState> outpost_state() const;
+  std::optional<OutpostStateV2> outpost_state_v2() const;
   Eigen::VectorXd state_vector() const;
   Eigen::VectorXd ekf_x() const;
   double last_nis() const;

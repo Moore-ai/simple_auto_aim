@@ -585,6 +585,11 @@ std::optional<OutpostState> Target::outpost_state() const
   return outpost_model_ ? outpost_model_->outpost_state() : std::nullopt;
 }
 
+std::optional<OutpostStateV2> Target::outpost_state_v2() const
+{
+  return outpost_model_ ? outpost_model_->outpost_state_v2() : std::nullopt;
+}
+
 Eigen::VectorXd Target::state_vector() const
 {
   return outpost_model_ ? outpost_model_->state_vector() : estimator_.state_vector();

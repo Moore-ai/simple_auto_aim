@@ -9,6 +9,7 @@
 
 #include "armor.hpp"
 #include "outpost_state.hpp"
+#include "outpost_state_v2.hpp"
 #include "target_estimator.hpp"
 
 namespace auto_aim
@@ -33,6 +34,7 @@ public:
 
   virtual TargetState compatibility_state() const = 0;
   virtual std::optional<OutpostState> outpost_state() const = 0;
+  virtual std::optional<OutpostStateV2> outpost_state_v2() const = 0;
   virtual Eigen::VectorXd state_vector() const = 0;
   virtual std::vector<PredictedArmorPose> armor_pose_list() const = 0;
   virtual double last_nis() const = 0;
