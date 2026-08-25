@@ -45,6 +45,21 @@ struct GimbalState
   float pitch_vel = 0;
   float bullet_speed = 0;
   uint16_t bullet_count = 0;
+  float roll = 0;
+};
+
+struct GimbalCommand
+{
+  bool control = false;
+  bool fire = false;
+  // yaw/pitch 为 SP 内部坐标系中的绝对命令角；pitch 向上为负。
+  float yaw = 0;
+  float yaw_vel = 0;
+  float yaw_acc = 0;
+  float pitch = 0;
+  float pitch_vel = 0;
+  float pitch_acc = 0;
+  float distance = -1;
 };
 
 class Gimbal
@@ -56,6 +71,7 @@ public:
 
   GimbalMode mode() const;
   GimbalState state() const;
+  GimbalCommand command() const;
   std::string str(GimbalMode mode) const;
   Eigen::Quaterniond q(std::chrono::steady_clock::time_point t);
 
@@ -75,6 +91,7 @@ private:
 
   GimbalMode mode_ = GimbalMode::IDLE;
   GimbalState state_;
+  GimbalCommand command_;
   tools::ThreadSafeQueue<std::tuple<Eigen::Quaterniond, std::chrono::steady_clock::time_point>>
     queue_{1000};
 

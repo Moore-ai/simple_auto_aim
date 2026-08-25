@@ -50,6 +50,21 @@ const char * mode_string(io::GimbalMode mode)
   return "UNKNOWN";
 }
 
+uint8_t mode_value(io::GimbalMode mode)
+{
+  switch (mode) {
+    case io::GimbalMode::IDLE:
+      return 0;
+    case io::GimbalMode::AUTO_AIM:
+      return 1;
+    case io::GimbalMode::SMALL_BUFF:
+      return 2;
+    case io::GimbalMode::BIG_BUFF:
+      return 3;
+  }
+  return 0;
+}
+
 const char * color_string(auto_aim::Color color)
 {
   switch (color) {
@@ -133,12 +148,42 @@ nlohmann::json lightbar_json(const auto_aim::Lightbar & lightbar)
 nlohmann::json gimbal_json(const io::GimbalState & gimbal)
 {
   return {
+    {"roll", gimbal.roll},
     {"yaw", gimbal.yaw},
     {"yaw_vel", gimbal.yaw_vel},
     {"pitch", gimbal.pitch},
     {"pitch_vel", gimbal.pitch_vel},
     {"bullet_speed", gimbal.bullet_speed},
     {"bullet_count", gimbal.bullet_count},
+  };
+}
+
+nlohmann::json serial_tx_json(const io::GimbalCommand & command)
+{
+  return {
+    {"control", command.control},
+    {"fire", command.fire},
+    {"status", command.control && command.fire ? 1 : 0},
+    // 串口使用下位机坐标系，pitch 向上为正。
+    {"pitch", -command.pitch},
+    {"yaw", command.yaw},
+    {"distance", command.distance},
+    {"pitch_vel", -command.pitch_vel},
+    {"yaw_vel", command.yaw_vel},
+    {"pitch_acc", -command.pitch_acc},
+    {"yaw_acc", command.yaw_acc},
+  };
+}
+
+nlohmann::json serial_rx_json(const io::GimbalState & gimbal, io::GimbalMode mode)
+{
+  return {
+    {"mode", mode_value(mode)},
+    {"mode_name", mode_string(mode)},
+    {"roll", gimbal.roll},
+    // state 中为 SP 坐标系，串口原始反馈 pitch 向上为正。
+    {"pitch", -gimbal.pitch},
+    {"yaw", gimbal.yaw},
   };
 }
 
@@ -189,6 +234,20 @@ WebDebug::WebDebug(WebDebugPaths paths)
     {"target_pitch", nlohmann::json::array()},
     {"gimbal_yaw", nlohmann::json::array()},
     {"gimbal_pitch", nlohmann::json::array()},
+    {"serial_tx_control", nlohmann::json::array()},
+    {"serial_tx_fire", nlohmann::json::array()},
+    {"serial_tx_status", nlohmann::json::array()},
+    {"serial_tx_yaw", nlohmann::json::array()},
+    {"serial_tx_pitch", nlohmann::json::array()},
+    {"serial_tx_distance", nlohmann::json::array()},
+    {"serial_tx_yaw_vel", nlohmann::json::array()},
+    {"serial_tx_pitch_vel", nlohmann::json::array()},
+    {"serial_tx_yaw_acc", nlohmann::json::array()},
+    {"serial_tx_pitch_acc", nlohmann::json::array()},
+    {"serial_rx_roll", nlohmann::json::array()},
+    {"serial_rx_mode", nlohmann::json::array()},
+    {"serial_rx_pitch", nlohmann::json::array()},
+    {"serial_rx_yaw", nlohmann::json::array()},
     {"control_v_yaw", nlohmann::json::array()},
     {"control_v_pitch", nlohmann::json::array()},
     {"control_a_yaw", nlohmann::json::array()},
@@ -221,6 +280,8 @@ nlohmann::json WebDebug::make_log_json(const WebDebugContext & context)
     {"latency_ms", context.latency_ms},
     {"mode", mode_string(context.mode)},
     {"gimbal", gimbal_json(context.gimbal)},
+    {"serial", {{"tx", serial_tx_json(context.serial_tx)},
+                {"rx", serial_rx_json(context.gimbal, context.mode)}}},
     {"detector", {
       {"count", context.armors.size()},
       {"lightbar_count", context.lightbars.size()},
@@ -302,6 +363,20 @@ void WebDebug::append_data(const WebDebugContext & context)
     {"target_pitch", context.plan.target_pitch},
     {"gimbal_yaw", context.gimbal.yaw},
     {"gimbal_pitch", context.gimbal.pitch},
+    {"serial_tx_control", context.serial_tx.control ? 1.0 : 0.0},
+    {"serial_tx_fire", context.serial_tx.fire ? 1.0 : 0.0},
+    {"serial_tx_status", context.serial_tx.control && context.serial_tx.fire ? 1.0 : 0.0},
+    {"serial_tx_yaw", context.serial_tx.yaw},
+    {"serial_tx_pitch", -context.serial_tx.pitch},
+    {"serial_tx_distance", context.serial_tx.distance},
+    {"serial_tx_yaw_vel", context.serial_tx.yaw_vel},
+    {"serial_tx_pitch_vel", -context.serial_tx.pitch_vel},
+    {"serial_tx_yaw_acc", context.serial_tx.yaw_acc},
+    {"serial_tx_pitch_acc", -context.serial_tx.pitch_acc},
+    {"serial_rx_roll", context.gimbal.roll},
+    {"serial_rx_mode", static_cast<double>(mode_value(context.mode))},
+    {"serial_rx_pitch", -context.gimbal.pitch},
+    {"serial_rx_yaw", context.gimbal.yaw},
     {"control_v_yaw", context.plan.yaw_vel},
     {"control_v_pitch", context.plan.pitch_vel},
     {"control_a_yaw", context.plan.yaw_acc},

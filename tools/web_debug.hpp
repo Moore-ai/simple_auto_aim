@@ -32,6 +32,7 @@ struct WebDebugContext
   double latency_ms{0.0};
   io::GimbalMode mode{io::GimbalMode::IDLE};
   io::GimbalState gimbal{};
+  io::GimbalCommand serial_tx{};
   std::vector<auto_aim::Armor> armors;
   std::vector<auto_aim::Lightbar> lightbars;
   std::optional<auto_aim::Target> target;

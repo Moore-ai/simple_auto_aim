@@ -133,6 +133,7 @@ int main(int argc, char * argv[])
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count();
       context.mode = mode.load();
       context.gimbal = gimbal.state();
+      context.serial_tx = gimbal.command();
       context.armors = {detections.armors.begin(), detections.armors.end()};
       context.lightbars = {detections.lightbars.begin(), detections.lightbars.end()};
       context.plan = plan;

@@ -60,6 +60,12 @@ GimbalState Gimbal::state() const
   return state_;
 }
 
+GimbalCommand Gimbal::command() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return command_;
+}
+
 std::string Gimbal::str(GimbalMode mode) const
 {
   switch (mode) {
@@ -118,6 +124,12 @@ void Gimbal::send(
   const auto packet = make_infantry_command_packet(
     control, fire, pitch, yaw, distance, pitch_vel, yaw_vel, pitch_acc, yaw_acc);
 
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    command_ = {control, control && fire, yaw, yaw_vel, yaw_acc, pitch, pitch_vel, pitch_acc,
+                distance};
+  }
+
   try {
     serial_.write(packet.data(), packet.size());
   } catch (const std::exception & e) {
@@ -161,6 +173,7 @@ void Gimbal::read_thread()
       state_.yaw_vel = 0;
       state_.pitch = infantry_feedback_pitch_to_sp(feedback.pitch);
       state_.pitch_vel = 0;
+      state_.roll = feedback.roll;
       state_.bullet_speed = 0;
       state_.bullet_count = 0;
 
