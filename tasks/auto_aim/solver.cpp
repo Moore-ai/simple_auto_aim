@@ -27,9 +27,8 @@ const std::vector<cv::Point3f> SMALL_ARMOR_POINTS{
 
 namespace
 {
-Eigen::Matrix3d armor_rotation(double yaw, ArmorName name)
+Eigen::Matrix3d armor_rotation(double yaw, double pitch)
 {
-  const auto pitch = (name == ArmorName::outpost) ? -15.0 * CV_PI / 180.0 : 15.0 * CV_PI / 180.0;
   const auto sin_yaw = std::sin(yaw);
   const auto cos_yaw = std::cos(yaw);
   const auto sin_pitch = std::sin(pitch);
@@ -41,9 +40,8 @@ Eigen::Matrix3d armor_rotation(double yaw, ArmorName name)
   return result;
 }
 
-Eigen::Matrix3d armor_rotation_derivative(double yaw, ArmorName name)
+Eigen::Matrix3d armor_rotation_derivative(double yaw, double pitch)
 {
-  const auto pitch = (name == ArmorName::outpost) ? -15.0 * CV_PI / 180.0 : 15.0 * CV_PI / 180.0;
   const auto sin_yaw = std::sin(yaw);
   const auto cos_yaw = std::cos(yaw);
   const auto sin_pitch = std::sin(pitch);
@@ -250,16 +248,28 @@ std::optional<double> Solver::armor_lights_depth_diff(const Armor & armor) const
 double Solver::armor_visibility_score(
   const Eigen::Vector3d & xyz_in_world, double yaw, ArmorName name) const
 {
-  const auto R_armor2camera = R_camera2gimbal_.transpose() * R_gimbal2world_.transpose() *
-    armor_rotation(yaw, name);
-  const auto t_armor2camera = R_camera2gimbal_.transpose() *
+  return armor_visibility_score(xyz_in_world, yaw, armor_mount_pitch(name));
+}
+
+double Solver::armor_visibility_score(
+  const Eigen::Vector3d & xyz_in_world, double yaw, double pitch) const
+{
+  const Eigen::Matrix3d R_armor2camera = R_camera2gimbal_.transpose() * R_gimbal2world_.transpose() *
+    armor_rotation(yaw, pitch);
+  const Eigen::Vector3d t_armor2camera = R_camera2gimbal_.transpose() *
     (R_gimbal2world_.transpose() * xyz_in_world - t_camera2gimbal_);
-  const auto front_normal = -R_armor2camera.col(0);
+  const Eigen::Vector3d front_normal = -R_armor2camera.col(0);
   return front_normal.dot(-t_armor2camera);
 }
 
 ArmorProjection Solver::project_armor_with_jacobian(
   const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const
+{
+  return project_armor_with_jacobian(xyz_in_world, yaw, armor_mount_pitch(name), type);
+}
+
+ArmorProjection Solver::project_armor_with_jacobian(
+  const Eigen::Vector3d & xyz_in_world, double yaw, double pitch, ArmorType type) const
 {
   ArmorProjection result;
   const auto & points = armor_points(type);
@@ -268,8 +278,8 @@ ArmorProjection Solver::project_armor_with_jacobian(
 
   const auto R_world2camera = R_camera2gimbal_.transpose() * R_gimbal2world_.transpose();
   const auto t_world2camera = -R_camera2gimbal_.transpose() * t_camera2gimbal_;
-  const auto R_armor2world = armor_rotation(yaw, name);
-  const auto dR_armor2world = armor_rotation_derivative(yaw, name);
+  const auto R_armor2world = armor_rotation(yaw, pitch);
+  const auto dR_armor2world = armor_rotation_derivative(yaw, pitch);
 
   std::vector<Eigen::Vector3d> camera_points;
   std::vector<Eigen::Matrix<double, 3, 4>> camera_jacobians;
@@ -310,6 +320,12 @@ std::vector<cv::Point2f> Solver::reproject_armor(
   const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const
 {
   return project_armor_with_jacobian(xyz_in_world, yaw, type, name).points;
+}
+
+std::vector<cv::Point2f> Solver::reproject_armor(
+  const Eigen::Vector3d & xyz_in_world, double yaw, double pitch, ArmorType type) const
+{
+  return project_armor_with_jacobian(xyz_in_world, yaw, pitch, type).points;
 }
 
 double Solver::oupost_reprojection_error(Armor armor, const double & pitch)

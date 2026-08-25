@@ -11,6 +11,8 @@
 
 #include "armor.hpp"
 #include "observation_path.hpp"
+#include "outpost_target.hpp"
+#include "outpost_target_v2.hpp"
 #include "solver.hpp"
 #include "target.hpp"
 #include "tasks/omniperception/perceptron.hpp"
@@ -76,9 +78,12 @@ private:
   };
   std::unordered_map<ArmorName, GeometryCacheEntry> geometry_cache_;
   // EKF 初始协方差 P0（按兵种）
-  Eigen::VectorXd P0_default_, P0_balance_, P0_outpost_, P0_base_;
+  Eigen::VectorXd P0_default_, P0_balance_, P0_outpost_current_, P0_outpost_v2_, P0_base_;
+  std::string outpost_model_ = "current";
+  OutpostFilterConfig outpost_current_config_;
+  OutpostTargetV2Config outpost_v2_config_;
   // EKF 初始半径（按兵种）
-  double radius_default_, radius_outpost_, radius_base_;
+  double radius_default_, radius_base_;
 
   void state_machine(bool found);
 

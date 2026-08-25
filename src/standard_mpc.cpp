@@ -137,9 +137,9 @@ int main(int argc, char * argv[])
       if (!targets.empty()) {
         const auto & target = targets.front();
         context.target = target;
-        for (const auto & xyza : target.armor_xyza_list()) {
+        for (const auto & pose : target.armor_pose_list()) {
           context.projected_target_armors.push_back(solver.reproject_armor(
-            xyza.head<3>(), xyza[3], target.armor_type, target.name));
+            pose.center, pose.yaw, pose.pitch, target.armor_type));
         }
 
         if (plan.debug_valid) {
@@ -148,7 +148,7 @@ int main(int argc, char * argv[])
         }
 
         const auto target_state = target.state();
-        const auto state = target_state.vector();
+        const auto state = target.state_vector();
         nlohmann::json tracker_state = nlohmann::json::array();
         for (Eigen::Index i = 0; i < state.size(); ++i) tracker_state.push_back(state[i]);
         const auto & tracker_debug = tracker.debug_info();

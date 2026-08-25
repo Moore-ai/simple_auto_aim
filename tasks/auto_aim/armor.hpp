@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <opencv2/opencv.hpp>
+#include <cmath>
 #include <list>
 #include <string>
 #include <vector>
@@ -39,6 +40,17 @@ enum ArmorName
 };
 const std::vector<std::string> ARMOR_NAMES = {"one",    "two",     "three", "four",     "five",
                                               "sentry", "outpost", "base",  "not_armor"};
+
+inline constexpr int OUTPOST_ARMOR_COUNT = 3;
+inline constexpr double OUTPOST_RADIUS = 0.275;
+inline constexpr double OUTPOST_MOUNT_PITCH = -0.2617993877991494;
+inline constexpr double OUTPOST_ANGULAR_SPEED = 2.51;
+inline constexpr double DEFAULT_ARMOR_MOUNT_PITCH = 0.2617993877991494;
+
+constexpr double armor_mount_pitch(ArmorName name)
+{
+  return name == ArmorName::outpost ? OUTPOST_MOUNT_PITCH : DEFAULT_ARMOR_MOUNT_PITCH;
+}
 
 enum ArmorPriority
 {
@@ -119,6 +131,26 @@ struct Armor
   Armor(
     int color_id, int num_id, float confidence, const cv::Rect & box,
     std::vector<cv::Point2f> armor_keypoints, cv::Point2f offset);
+};
+
+struct PredictedArmorPose
+{
+  Eigen::Vector3d center;
+  double yaw;
+  double pitch;
+
+  Eigen::Matrix3d rotation() const
+  {
+    const auto sin_yaw = std::sin(yaw);
+    const auto cos_yaw = std::cos(yaw);
+    const auto sin_pitch = std::sin(pitch);
+    const auto cos_pitch = std::cos(pitch);
+    Eigen::Matrix3d result;
+    result << cos_yaw * cos_pitch, -sin_yaw, cos_yaw * sin_pitch,
+      sin_yaw * cos_pitch, cos_yaw, sin_yaw * sin_pitch,
+      -sin_pitch, 0.0, cos_pitch;
+    return result;
+  }
 };
 
 // Unified output used by the reprojection tracker. Legacy callers can still

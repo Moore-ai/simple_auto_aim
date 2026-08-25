@@ -26,6 +26,46 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   outpost_max_temp_lost_count_ = tools::read<int>(yaml, "outpost_max_temp_lost_count");
   normal_temp_lost_count_ = max_temp_lost_count_;
 
+  outpost_model_ = yaml["outpost_model"] ? yaml["outpost_model"].as<std::string>() : "current";
+  if (outpost_model_ != "current" && outpost_model_ != "v2") {
+    tools::logger()->warn("[Tracker] Unknown outpost_model '{}', using current", outpost_model_);
+    outpost_model_ = "current";
+  }
+  const auto outpost_current = yaml["outpost_current"];
+  outpost_current_config_.accel_var = tools::read<double>(outpost_current, "accel_var");
+  outpost_current_config_.observation_yaw_var = tools::read<double>(outpost_current, "yaw_var");
+  outpost_current_config_.observation_pitch_var = tools::read<double>(outpost_current, "pitch_var");
+  outpost_current_config_.observation_armor_yaw_base =
+    tools::read<double>(outpost_current, "armor_yaw_base");
+  outpost_current_config_.velocity_clamp_enabled =
+    tools::read<bool>(outpost_current, "velocity_clamp_enabled");
+  outpost_current_config_.max_linear_speed =
+    tools::read<double>(outpost_current, "max_linear_speed");
+  const auto outpost_v2 = yaml["outpost_v2"];
+  outpost_v2_config_.radius = tools::read<double>(outpost_v2, "radius");
+  outpost_v2_config_.yaw_rate_magnitude = tools::read<double>(outpost_v2, "yaw_rate_magnitude");
+  outpost_v2_config_.is_fit_yaw_rate = tools::read<bool>(outpost_v2, "is_fit_yaw_rate");
+  outpost_v2_config_.q_xy = tools::read<double>(outpost_v2, "q_xy");
+  outpost_v2_config_.q_z = tools::read<double>(outpost_v2, "q_z");
+  outpost_v2_config_.q_yaw = tools::read<double>(outpost_v2, "q_yaw");
+  outpost_v2_config_.q_yaw_rate = tools::read<double>(outpost_v2, "q_yaw_rate");
+  outpost_v2_config_.q_dz = tools::read<double>(outpost_v2, "q_dz");
+  outpost_v2_config_.r_yaw = tools::read<double>(outpost_v2, "r_yaw");
+  outpost_v2_config_.r_pitch = tools::read<double>(outpost_v2, "r_pitch");
+  outpost_v2_config_.r_distance = tools::read<double>(outpost_v2, "r_distance");
+  outpost_v2_config_.r_armor_yaw = tools::read<double>(outpost_v2, "r_armor_yaw");
+  outpost_v2_config_.frontal_angle_gate = tools::read<double>(outpost_v2, "frontal_angle_gate");
+  outpost_v2_config_.yaw_match_gate = tools::read<double>(outpost_v2, "yaw_match_gate");
+  outpost_v2_config_.position_match_gate = tools::read<double>(outpost_v2, "position_match_gate");
+  outpost_v2_config_.mismatch_reset_count = tools::read<int>(outpost_v2, "mismatch_reset_count");
+  outpost_v2_config_.direction_sample_count = tools::read<int>(outpost_v2, "direction_sample_count");
+  outpost_v2_config_.direction_compare_interval =
+    tools::read<int>(outpost_v2, "direction_compare_interval");
+  outpost_v2_config_.direction_stable_threshold =
+    tools::read<double>(outpost_v2, "direction_stable_threshold");
+  outpost_v2_config_.direction_jump_threshold =
+    tools::read<double>(outpost_v2, "direction_jump_threshold");
+
   // 读取优先级配置
   use_priority_ = yaml["use_priority"] ? yaml["use_priority"].as<bool>() : false;
   if (use_priority_ && yaml["priority_list"]) {
@@ -53,8 +93,11 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   auto filter_cfg = yaml["filter"];
   filter_config_.process_noise.accel_var = tools::read<double>(filter_cfg, "accel_var");
   filter_config_.process_noise.angular_accel_var = tools::read<double>(filter_cfg, "angular_accel_var");
-  filter_config_.process_noise.outpost_accel_var = tools::read<double>(filter_cfg, "outpost_accel_var");
-  filter_config_.process_noise.outpost_angular_accel_var = tools::read<double>(filter_cfg, "outpost_angular_accel_var");
+
+  auto ekf_obs_cfg = yaml["ekf_obs"];
+  filter_config_.ekf.yaw_var = tools::read<double>(ekf_obs_cfg, "yaw_var");
+  filter_config_.ekf.pitch_var = tools::read<double>(ekf_obs_cfg, "pitch_var");
+  filter_config_.ekf.armor_yaw_base = tools::read<double>(ekf_obs_cfg, "armor_yaw_base");
 
   // 读取滤波器类型和特有参数
   auto filter_method_str = yaml["filter_method"] ? yaml["filter_method"].as<std::string>() : "ekf";
@@ -77,10 +120,6 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
     filter_config_.ukf.sigma_kappa = tools::read<double>(obs_cfg, "sigma_kappa");
   } else {
     filter_method_ = FilterMethod::EKF;
-    auto obs_cfg = yaml["ekf_obs"];
-    filter_config_.ekf.yaw_var = tools::read<double>(obs_cfg, "yaw_var");
-    filter_config_.ekf.pitch_var = tools::read<double>(obs_cfg, "pitch_var");
-    filter_config_.ekf.armor_yaw_base = tools::read<double>(obs_cfg, "armor_yaw_base");
   }
 
   const auto geometry_cache_config = yaml["target_geometry_cache"];
@@ -116,11 +155,15 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
 
   P0_default_ = read_P0("default");
   P0_balance_ = read_P0("balance");
-  P0_outpost_ = read_P0("outpost");
+  auto read_outpost_P0 = [](const YAML::Node & config) -> Eigen::VectorXd {
+    auto vec = config["P0"].as<std::vector<double>>();
+    return Eigen::Map<Eigen::VectorXd>(vec.data(), vec.size());
+  };
+  P0_outpost_current_ = read_outpost_P0(outpost_current);
+  P0_outpost_v2_ = read_outpost_P0(outpost_v2);
   P0_base_ = read_P0("base");
 
   radius_default_ = tools::read<double>(radius_cfg, "default");
-  radius_outpost_ = tools::read<double>(radius_cfg, "outpost");
   radius_base_ = tools::read<double>(radius_cfg, "base");
 }
 
@@ -154,7 +197,7 @@ std::list<Target> Tracker::track(
   // armors.remove_if([this](const auto_aim::Armor & a) {
   //   return a.name == ArmorName::outpost &&
   //          solver_.oupost_reprojection_error(a, 27.5 * CV_PI / 180.0) <
-  //            solver_.oupost_reprojection_error(a, -15 * CV_PI / 180.0);
+  //            solver_.oupost_reprojection_error(a, OUTPOST_MOUNT_PITCH);
   // });
 
   // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
@@ -353,10 +396,16 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
       observation_path_.uses_reprojection(), observation_path_.reprojection_config(),
       geometry_prior);
   } else if (armor.name == ArmorName::outpost) {
-    target_ = Target(
-      armor, t, radius_outpost_, 3, P0_outpost_, filter_config_, filter_method_,
-      observation_path_.uses_reprojection(), observation_path_.reprojection_config(),
-      geometry_prior);
+    if (outpost_model_ == "v2") {
+      std::vector<Armor> outpost_armors;
+      for (auto & candidate : armors) {
+        if (candidate.name != ArmorName::outpost || candidate.type != armor.type) continue;
+        if (solver_.solve(candidate)) outpost_armors.push_back(candidate);
+      }
+      target_ = Target::make_outpost_v2(outpost_armors, t, P0_outpost_v2_, outpost_v2_config_);
+    } else {
+      target_ = Target::make_outpost(armor, t, P0_outpost_current_, outpost_current_config_);
+    }
   } else if (armor.name == ArmorName::base) {
     target_ = Target(
       armor, t, radius_base_, 3, P0_base_, filter_config_, filter_method_,

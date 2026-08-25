@@ -1,5 +1,36 @@
 # enemy_color: "red"
 enemy_color: "blue"
+outpost_model: current # 模型选择：current=固定低/中/高板高度模型，v2=相位编号与高度差在线估计模型
+outpost_current: # current 模型专用配置；id=0/1/2 固定对应低/中/高装甲板
+  P0: [1, 64, 1, 64, 1, 81, 0.4, 0] # 初始协方差对角线，状态顺序为[x,vx,y,vy,z,vz,yaw,yaw_rate]
+  accel_var: 10 # 平移加速度过程噪声方差，单位 m²/s⁴
+  yaw_var: 4e-3 # 装甲板观测方位角 yaw 方差，单位 rad²
+  pitch_var: 4e-3 # 装甲板观测俯仰角 pitch 方差，单位 rad²
+  armor_yaw_base: 9e-2 # 装甲板自身朝向 yaw 的基础观测方差，单位 rad²
+  velocity_clamp_enabled: false # 是否限制 x/y/z 三轴线速度
+  max_linear_speed: 5.0 # current 模型线速度限幅，单位 m/s
+outpost_v2: # v2 模型专用配置；id=0/1/2 表示初始化相位及其后两个 120° 相位
+  P0: [0.04, 0.01, 0.04, 0.01, 0.04, 0.01, 0.25, 6.25, 0.1, 0.1] # 初始协方差对角线，状态顺序为[x,vx,y,vy,z0,vz,yaw,yaw_rate,dz1,dz2]
+  radius: 0.2765 # 前哨站旋转半径，单位 m
+  yaw_rate_magnitude: 2.5132741229 # 已知角速度幅值 0.8π，单位 rad/s
+  is_fit_yaw_rate: false # true=由 EKF 估计角速度，false=方向确定后使用固定 ±yaw_rate_magnitude
+  q_xy: 10.0 # x/y 平移过程噪声强度
+  q_z: 10.0 # z 平移过程噪声强度
+  q_yaw: 10.0 # yaw 过程噪声强度
+  q_yaw_rate: 10.0 # yaw_rate 过程噪声强度
+  q_dz: 10.0 # dz1/dz2 高度差过程噪声强度
+  r_yaw: 0.001 # 相机方位角 yaw 观测噪声方差，单位 rad²
+  r_pitch: 0.001 # 相机俯仰角 pitch 观测噪声方差，单位 rad²
+  r_distance: 0.001 # 距离观测噪声基数，实际随距离和夹角自适应
+  r_armor_yaw: 0.001 # 装甲板自身朝向 yaw 观测噪声方差，单位 rad²
+  frontal_angle_gate: 0.6108652382 # 前向可匹配角门限 35°，单位 rad
+  yaw_match_gate: 1.5 # 装甲板朝向匹配门限，单位 rad
+  position_match_gate: 0.05 # 装甲板三维位置匹配门限，单位 m
+  mismatch_reset_count: 5 # 连续失配超过此次数后重置方向与角速度
+  direction_sample_count: 30 # 方向判定所需的有效观测数量
+  direction_compare_interval: 3 # 方向判定时比较的帧间隔
+  direction_stable_threshold: 0.005 # 判定静止方向的角度变化门限，单位 rad
+  direction_jump_threshold: 0.4 # 过滤角度跳变的门限，单位 rad
 observation_mode: "pnp" # pnp | reprojection
 
 pnp:
@@ -69,8 +100,6 @@ ekf:
   # 过程噪声（Piecewise White Noise Model）
   accel_var: 100                  # 加速度方差 v1（前哨站除外）
   angular_accel_var: 400          # 角加速度方差 v2（前哨站除外）
-  outpost_accel_var: 10           # 前哨站加速度方差
-  outpost_angular_accel_var: 0.1  # 前哨站角加速度方差
 
   # 观测噪声
   obs_yaw_var: 4e-3               # yaw 观测方差
@@ -81,13 +110,11 @@ ekf:
   P0:
     default: [1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1]
     balance: [1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1]
-    outpost: [1, 64, 1, 64, 1, 81, 0.4, 100, 1e-4, 0, 0]
     base: [1, 64, 1, 64, 1, 64, 0.4, 100, 1e-4, 0, 0]
 
   # 初始半径
   radius:
     default: 0.2
-    outpost: 0.2765
     base: 0.3205
 
 #####-----aimer参数-----#####

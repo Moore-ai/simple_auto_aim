@@ -39,14 +39,20 @@ public:
 
   std::vector<cv::Point2f> reproject_armor(
     const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const;
+  std::vector<cv::Point2f> reproject_armor(
+    const Eigen::Vector3d & xyz_in_world, double yaw, double pitch, ArmorType type) const;
 
   ArmorProjection project_armor_with_jacobian(
     const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const;
+  ArmorProjection project_armor_with_jacobian(
+    const Eigen::Vector3d & xyz_in_world, double yaw, double pitch, ArmorType type) const;
 
   std::optional<double> armor_lights_depth_diff(const Armor & armor) const;
 
   double armor_visibility_score(
     const Eigen::Vector3d & xyz_in_world, double yaw, ArmorName name) const;
+  double armor_visibility_score(
+    const Eigen::Vector3d & xyz_in_world, double yaw, double pitch) const;
 
   double oupost_reprojection_error(Armor armor, const double & picth);
 

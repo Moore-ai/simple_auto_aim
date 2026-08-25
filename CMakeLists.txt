@@ -124,8 +124,13 @@ add_executable(reprojection_observation_test tests/reprojection_observation_test
 target_link_libraries(reprojection_observation_test ${OpenCV_LIBS} fmt::fmt tools auto_aim)
 target_compile_options(reprojection_observation_test PRIVATE -UNDEBUG)
 add_test(NAME reprojection_observation_test COMMAND reprojection_observation_test)
+add_executable(outpost_target_test tests/outpost_target_test.cpp)
+target_link_libraries(outpost_target_test ${OpenCV_LIBS} fmt::fmt tools auto_aim)
+target_compile_options(outpost_target_test PRIVATE -UNDEBUG)
+add_test(NAME outpost_target_test COMMAND outpost_target_test)
 add_test(NAME video_camera_test COMMAND video_camera_test)
 set_tests_properties(reprojection_observation_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(outpost_target_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # 检查 ROS 环境
 find_package(ament_cmake QUIET)
