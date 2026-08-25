@@ -28,16 +28,10 @@ struct __attribute__((packed)) VisionToGimbal
   float distance = 0;
 };
 
-enum class GimbalMode
-{
-  IDLE,        // 空闲
-  AUTO_AIM,    // 自瞄
-  SMALL_BUFF,  // 小符
-  BIG_BUFF     // 大符
-};
-
 struct GimbalState
 {
+  // 下位机反馈包 byte[1] 的原始值；不参与上位机业务模式切换。
+  uint8_t mode = 0;
   // yaw/pitch 为 SP 内部坐标系中的绝对反馈角；pitch 向上为负。
   float yaw = 0;
   float yaw_vel = 0;
@@ -69,10 +63,8 @@ public:
 
   ~Gimbal();
 
-  GimbalMode mode() const;
   GimbalState state() const;
   GimbalCommand command() const;
-  std::string str(GimbalMode mode) const;
   Eigen::Quaterniond q(std::chrono::steady_clock::time_point t);
 
   void send(
@@ -89,7 +81,6 @@ private:
   mutable std::mutex mutex_;
   InfantryFeedbackStreamParser rx_parser_;
 
-  GimbalMode mode_ = GimbalMode::IDLE;
   GimbalState state_;
   GimbalCommand command_;
   tools::ThreadSafeQueue<std::tuple<Eigen::Quaterniond, std::chrono::steady_clock::time_point>>

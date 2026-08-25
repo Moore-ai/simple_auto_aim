@@ -3,7 +3,7 @@
 int main()
 {
   tools::WebDebugContext context;
-  context.mode = io::GimbalMode::AUTO_AIM;
+  context.gimbal.mode = 7;
   tools::WebDebug web;
   web.publish(context, cv::Mat::zeros(4, 4, CV_8UC3));
   return 0;

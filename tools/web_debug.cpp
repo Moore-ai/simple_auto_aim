@@ -35,36 +35,6 @@ nlohmann::json vector_json(const Eigen::VectorXd & vector)
   return result;
 }
 
-const char * mode_string(io::GimbalMode mode)
-{
-  switch (mode) {
-    case io::GimbalMode::IDLE:
-      return "IDLE";
-    case io::GimbalMode::AUTO_AIM:
-      return "AUTO_AIM";
-    case io::GimbalMode::SMALL_BUFF:
-      return "SMALL_BUFF";
-    case io::GimbalMode::BIG_BUFF:
-      return "BIG_BUFF";
-  }
-  return "UNKNOWN";
-}
-
-uint8_t mode_value(io::GimbalMode mode)
-{
-  switch (mode) {
-    case io::GimbalMode::IDLE:
-      return 0;
-    case io::GimbalMode::AUTO_AIM:
-      return 1;
-    case io::GimbalMode::SMALL_BUFF:
-      return 2;
-    case io::GimbalMode::BIG_BUFF:
-      return 3;
-  }
-  return 0;
-}
-
 const char * color_string(auto_aim::Color color)
 {
   switch (color) {
@@ -148,6 +118,7 @@ nlohmann::json lightbar_json(const auto_aim::Lightbar & lightbar)
 nlohmann::json gimbal_json(const io::GimbalState & gimbal)
 {
   return {
+    {"mode", gimbal.mode},
     {"roll", gimbal.roll},
     {"yaw", gimbal.yaw},
     {"yaw_vel", gimbal.yaw_vel},
@@ -175,11 +146,10 @@ nlohmann::json serial_tx_json(const io::GimbalCommand & command)
   };
 }
 
-nlohmann::json serial_rx_json(const io::GimbalState & gimbal, io::GimbalMode mode)
+nlohmann::json serial_rx_json(const io::GimbalState & gimbal)
 {
   return {
-    {"mode", mode_value(mode)},
-    {"mode_name", mode_string(mode)},
+    {"mode", gimbal.mode},
     {"roll", gimbal.roll},
     // state 中为 SP 坐标系，串口原始反馈 pitch 向上为正。
     {"pitch", -gimbal.pitch},
@@ -278,10 +248,9 @@ nlohmann::json WebDebug::make_log_json(const WebDebugContext & context)
     {"frame_id", context.frame_id},
     {"time", context.elapsed_seconds},
     {"latency_ms", context.latency_ms},
-    {"mode", mode_string(context.mode)},
+    {"mode", context.gimbal.mode},
     {"gimbal", gimbal_json(context.gimbal)},
-    {"serial", {{"tx", serial_tx_json(context.serial_tx)},
-                {"rx", serial_rx_json(context.gimbal, context.mode)}}},
+    {"serial", {{"tx", serial_tx_json(context.serial_tx)}, {"rx", serial_rx_json(context.gimbal)}}},
     {"detector", {
       {"count", context.armors.size()},
       {"lightbar_count", context.lightbars.size()},
@@ -374,7 +343,7 @@ void WebDebug::append_data(const WebDebugContext & context)
     {"serial_tx_yaw_acc", context.serial_tx.yaw_acc},
     {"serial_tx_pitch_acc", -context.serial_tx.pitch_acc},
     {"serial_rx_roll", context.gimbal.roll},
-    {"serial_rx_mode", static_cast<double>(mode_value(context.mode))},
+    {"serial_rx_mode", static_cast<double>(context.gimbal.mode)},
     {"serial_rx_pitch", -context.gimbal.pitch},
     {"serial_rx_yaw", context.gimbal.yaw},
     {"control_v_yaw", context.plan.yaw_vel},

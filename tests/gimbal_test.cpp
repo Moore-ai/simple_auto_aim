@@ -32,7 +32,7 @@ int main(int argc, char * argv[])
   io::Gimbal gimbal(config_path);
 
   auto t0 = std::chrono::steady_clock::now();
-  auto last_mode = gimbal.mode();
+  auto last_mode = gimbal.state().mode;
   uint16_t last_bullet_count = 0;
 
   auto fire = false;
@@ -41,15 +41,12 @@ int main(int argc, char * argv[])
   auto first_fired = false;
 
   while (!exiter.exit()) {
-    auto mode = gimbal.mode();
-
-    if (mode != last_mode) {
-      tools::logger()->info("Gimbal mode changed: {}", gimbal.str(mode));
-      last_mode = mode;
-    }
-
     auto t = std::chrono::steady_clock::now();
     auto state = gimbal.state();
+    if (state.mode != last_mode) {
+      tools::logger()->info("Gimbal feedback mode changed: {}", state.mode);
+      last_mode = state.mode;
+    }
     auto q = gimbal.q(t);
     auto ypr = tools::eulers(q, 2, 1, 0);
 

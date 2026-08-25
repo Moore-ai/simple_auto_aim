@@ -48,12 +48,6 @@ Gimbal::~Gimbal()
   serial_.close();
 }
 
-GimbalMode Gimbal::mode() const
-{
-  std::lock_guard<std::mutex> lock(mutex_);
-  return mode_;
-}
-
 GimbalState Gimbal::state() const
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -64,22 +58,6 @@ GimbalCommand Gimbal::command() const
 {
   std::lock_guard<std::mutex> lock(mutex_);
   return command_;
-}
-
-std::string Gimbal::str(GimbalMode mode) const
-{
-  switch (mode) {
-    case GimbalMode::IDLE:
-      return "IDLE";
-    case GimbalMode::AUTO_AIM:
-      return "AUTO_AIM";
-    case GimbalMode::SMALL_BUFF:
-      return "SMALL_BUFF";
-    case GimbalMode::BIG_BUFF:
-      return "BIG_BUFF";
-    default:
-      return "INVALID";
-  }
 }
 
 Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
@@ -169,6 +147,7 @@ void Gimbal::read_thread()
 
       std::lock_guard<std::mutex> lock(mutex_);
 
+      state_.mode = feedback.mode;
       state_.yaw = feedback.yaw;
       state_.yaw_vel = 0;
       state_.pitch = infantry_feedback_pitch_to_sp(feedback.pitch);
@@ -177,24 +156,6 @@ void Gimbal::read_thread()
       state_.bullet_speed = 0;
       state_.bullet_count = 0;
 
-      switch (feedback.mode) {
-        case 0:
-          mode_ = GimbalMode::IDLE;
-          break;
-        case 1:
-          mode_ = GimbalMode::AUTO_AIM;
-          break;
-        case 2:
-          mode_ = GimbalMode::SMALL_BUFF;
-          break;
-        case 3:
-          mode_ = GimbalMode::BIG_BUFF;
-          break;
-        default:
-          mode_ = GimbalMode::IDLE;
-          tools::logger()->warn("[Gimbal] Invalid mode: {}", feedback.mode);
-          break;
-      }
     }
     error_count = 0;
   }

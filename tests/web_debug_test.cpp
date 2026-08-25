@@ -8,7 +8,7 @@ int main()
   context.frame_id = 17;
   context.elapsed_seconds = 1.25;
   context.latency_ms = 3.5;
-  context.mode = io::GimbalMode::AUTO_AIM;
+  context.gimbal.mode = 7;
   context.gimbal.yaw = 0.1F;
   context.gimbal.pitch = -0.2F;
   context.gimbal.roll = 0.3F;
@@ -22,13 +22,13 @@ int main()
 
   const auto log = tools::WebDebug::make_log_json(context);
   assert(log.at("frame_id") == 17);
-  assert(log.at("mode") == "AUTO_AIM");
+  assert(log.at("mode") == 7);
   assert(log.at("gimbal").at("yaw") == 0.1F);
   assert(log.at("serial").at("rx").at("roll") == 0.3F);
   assert(log.at("serial").at("tx").at("control") == true);
   assert(log.at("serial").at("tx").at("status") == 1);
   assert(log.at("serial").at("tx").at("distance") == 6.0F);
-  assert(log.at("serial").at("rx").at("mode") == 1);
+  assert(log.at("serial").at("rx").at("mode") == 7);
   assert(log.at("mpc").at("debug_valid") == false);
   assert(log.at("detector").at("lightbar_count") == 1);
 
@@ -44,7 +44,7 @@ int main()
   assert(data.at("serial_tx_yaw").at(0) == 0.4F);
   assert(data.at("serial_rx_roll").at(0) == 0.3F);
   assert(data.at("serial_tx_status").at(0) == 1.0);
-  assert(data.at("serial_rx_mode").at(0) == 1.0);
+  assert(data.at("serial_rx_mode").at(0) == 7.0);
 
   for (uint64_t frame_id = 0; frame_id < 100; ++frame_id) {
     context.frame_id = frame_id;
