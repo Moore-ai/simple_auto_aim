@@ -22,10 +22,11 @@ OutpostTarget::OutpostTarget(
   Eigen::VectorXd initial = Eigen::VectorXd::Zero(OutpostState::dimension);
   initial[0] = armor.xyz_in_world.x() + OUTPOST_RADIUS * std::cos(armor.ypr_in_world[0]);
   initial[2] = armor.xyz_in_world.y() + OUTPOST_RADIUS * std::sin(armor.ypr_in_world[0]);
-  initial[4] = armor.xyz_in_world.z() - OUTPOST_ARMOR_HEIGHT_OFFSETS[0];
+  initial[4] = armor.xyz_in_world.z() - armor_height_offset(0);
   initial[6] = armor.ypr_in_world[0];
   estimator_ = TargetEstimator(initial, covariance_diagonal, {FilterMethod::EKF});
   current_yaws_[0] = armor.ypr_in_world[0];
+  observed_heights_[0] = armor.xyz_in_world.z();
   enforce_yaw_rate();
 }
 
@@ -82,6 +83,7 @@ OutpostUpdateResult OutpostTarget::update(const std::vector<Armor> & armors)
 
 void OutpostTarget::update(const Armor & armor, int id)
 {
+  update_height_phase(id, armor.xyz_in_world.z());
   update_direction(id, armor.ypr_in_world[0]);
   const auto current_state = state();
   const auto H = observation_jacobian(current_state, id);
@@ -192,7 +194,61 @@ Eigen::Vector3d OutpostTarget::armor_center(const OutpostState & state, int id) 
   return {
     state.center_x() - OUTPOST_RADIUS * std::cos(yaw),
     state.center_y() - OUTPOST_RADIUS * std::sin(yaw),
-    state.center_z() + OUTPOST_ARMOR_HEIGHT_OFFSETS[id]};
+    state.center_z() + armor_height_offset(id)};
+}
+
+double OutpostTarget::armor_height_offset(int id) const
+{
+  return OUTPOST_ARMOR_HEIGHT_OFFSETS[(id + height_phase_) % OUTPOST_ARMOR_COUNT];
+}
+
+void OutpostTarget::update_height_phase(int id, double observed_height)
+{
+  if (id < 0 || id >= OUTPOST_ARMOR_COUNT || !std::isfinite(observed_height)) return;
+  observed_heights_[id] = observed_height;
+
+  auto residual = [&](int phase, double & center_z) {
+    double sum = 0.0;
+    int count = 0;
+    for (int index = 0; index < OUTPOST_ARMOR_COUNT; ++index) {
+      if (!observed_heights_[index]) continue;
+      sum += *observed_heights_[index] -
+        OUTPOST_ARMOR_HEIGHT_OFFSETS[(index + phase) % OUTPOST_ARMOR_COUNT];
+      ++count;
+    }
+    if (count == 0) return std::numeric_limits<double>::infinity();
+    center_z = sum / count;
+
+    double error = 0.0;
+    for (int index = 0; index < OUTPOST_ARMOR_COUNT; ++index) {
+      if (!observed_heights_[index]) continue;
+      const auto expected = center_z +
+        OUTPOST_ARMOR_HEIGHT_OFFSETS[(index + phase) % OUTPOST_ARMOR_COUNT];
+      error += std::pow(*observed_heights_[index] - expected, 2);
+    }
+    return error;
+  };
+
+  double current_center_z = 0.0;
+  const auto current_error = residual(height_phase_, current_center_z);
+  auto best_phase = height_phase_;
+  auto best_center_z = current_center_z;
+  auto best_error = current_error;
+  for (int phase = 0; phase < OUTPOST_ARMOR_COUNT; ++phase) {
+    double center_z = 0.0;
+    const auto error = residual(phase, center_z);
+    if (error < best_error) {
+      best_phase = phase;
+      best_center_z = center_z;
+      best_error = error;
+    }
+  }
+  if (best_phase == height_phase_) return;
+
+  height_phase_ = best_phase;
+  auto values = estimator_.state_vector();
+  values[4] = best_center_z;
+  estimator_.set_state_vector(values);
 }
 
 Eigen::MatrixXd OutpostTarget::observation_jacobian(const OutpostState & state, int id) const

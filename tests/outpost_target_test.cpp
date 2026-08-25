@@ -252,6 +252,22 @@ int main()
   assert(std::abs(height_predictions[1].z() - height_center.z()) < 1e-12);
   assert(std::abs(height_predictions[2].z() - height_center.z() - 0.102) < 1e-12);
 
+  // The first visible armor need not be the physical low armor.  Once all three phase
+  // observations are available, their fixed heights must establish the correct phase.
+  const Eigen::Vector3d phase_center{2.0, 0.0, 0.3};
+  auto phase_target = auto_aim::Target::make_outpost(
+    make_outpost_measurement(armor, phase_center, 0.0, 0.102), t0, outpost_p0);
+  assert(phase_target.update_outpost({
+    make_outpost_measurement(armor, phase_center, 0.0, 0.102),
+    make_outpost_measurement(armor, phase_center, 2.0 * CV_PI / 3.0, -0.102),
+    make_outpost_measurement(armor, phase_center, 4.0 * CV_PI / 3.0, 0.0)}));
+  const auto phase_state = phase_target.outpost_state().value();
+  assert(std::abs(phase_state.center_z() - phase_center.z()) < 0.02);
+  const auto phase_predictions = phase_target.armor_xyza_list();
+  assert(std::abs(phase_predictions[0].z() - (phase_center.z() + 0.102)) < 0.02);
+  assert(std::abs(phase_predictions[1].z() - (phase_center.z() - 0.102)) < 0.02);
+  assert(std::abs(phase_predictions[2].z() - phase_center.z()) < 0.02);
+
   auto reprojection_target = auto_aim::Target(armor, t0, 0.4, 3, outpost_p0);
   auto_aim::ObservationPath observation_path(solver);
   auto_aim::ObservationPathConfig observation_config;

@@ -54,12 +54,16 @@ private:
   TargetEstimator estimator_;
   std::array<std::optional<double>, OUTPOST_ARMOR_COUNT> previous_yaws_{};
   std::array<std::optional<double>, OUTPOST_ARMOR_COUNT> current_yaws_{};
+  std::array<std::optional<double>, OUTPOST_ARMOR_COUNT> observed_heights_{};
+  int height_phase_ = 0;
   int direction_vote_ = 0;
   int direction_ = 0;
 
   Eigen::Vector3d armor_center(const OutpostState & state, int id) const;
   Eigen::MatrixXd observation_jacobian(const OutpostState & state, int id) const;
   int match_armor(const Armor & armor) const;
+  double armor_height_offset(int id) const;
+  void update_height_phase(int id, double observed_height);
   void update_direction(int id, double observed_yaw);
   void enforce_yaw_rate();
   void constrain_velocity();
