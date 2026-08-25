@@ -14,11 +14,14 @@ class Classifier
 public:
   explicit Classifier(const std::string & config_path);
 
+  static bool uses_openvino(const std::string & device) { return device == "CPU"; }
+
   void classify(Armor & armor);
 
   void ovclassify(Armor & armor);
 
 private:
+  std::string device_;
   cv::dnn::Net net_;
   ov::Core core_;
   ov::CompiledModel compiled_model_;

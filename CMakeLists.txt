@@ -105,6 +105,11 @@ add_executable(gimbal_protocol_test tests/gimbal_protocol_test.cpp)
 target_compile_options(gimbal_protocol_test PRIVATE -UNDEBUG)
 add_test(NAME gimbal_protocol_test COMMAND gimbal_protocol_test)
 
+add_executable(classifier_backend_test tests/classifier_backend_test.cpp)
+target_link_libraries(classifier_backend_test ${OpenCV_LIBS} openvino::runtime)
+target_compile_options(classifier_backend_test PRIVATE -UNDEBUG)
+add_test(NAME classifier_backend_test COMMAND classifier_backend_test)
+
 add_executable(planner_test tests/planner_test.cpp)
 target_link_libraries(planner_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 

@@ -8,14 +8,23 @@ Classifier::Classifier(const std::string & config_path)
 {
   auto yaml = YAML::LoadFile(config_path);
   auto model = yaml["classify_model"].as<std::string>();
-  net_ = cv::dnn::readNetFromONNX(model);
-  auto ovmodel = core_.read_model(model);
-  compiled_model_ = core_.compile_model(
-    ovmodel, "AUTO", ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+  device_ = yaml["device"].as<std::string>();
+  if (uses_openvino(device_)) {
+    auto ovmodel = core_.read_model(model);
+    compiled_model_ = core_.compile_model(
+      ovmodel, device_, ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+  } else {
+    net_ = cv::dnn::readNetFromONNX(model);
+  }
 }
 
 void Classifier::classify(Armor & armor)
 {
+  if (uses_openvino(device_)) {
+    ovclassify(armor);
+    return;
+  }
+
   if (armor.pattern.empty()) {
     armor.name = ArmorName::not_armor;
     return;
