@@ -215,6 +215,8 @@ can_interface: "can0"
 
 #####-----gimbal参数-----#####
 com_port: "/dev/gimbal"           # Gimbal 串口设备路径
+baudrate: 115200                   # 串口波特率
+bytesize: 8                        # 数据位宽
 
 #####-----planner-----#####
 fire_thresh: 0.003               # 开火阈值（rad）：参考轨迹与规划轨迹在发射时刻的偏差 < 此值才开火

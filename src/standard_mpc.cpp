@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cmath>
 #include <mutex>
 #include <opencv2/opencv.hpp>
 #include <thread>
@@ -85,7 +86,9 @@ int main(int argc, char * argv[])
 
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-          plan.pitch_acc);
+          plan.pitch_acc,
+          plan.debug_valid ? static_cast<float>(std::hypot(plan.debug_xyza.x(), plan.debug_xyza.y()))
+                            : 0.0F);
 
         std::this_thread::sleep_for(10ms);
       } else

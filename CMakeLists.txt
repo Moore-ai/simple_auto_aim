@@ -101,6 +101,10 @@ target_link_libraries(video_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools i
 add_executable(gimbal_test tests/gimbal_test.cpp)
 target_link_libraries(gimbal_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 
+add_executable(gimbal_protocol_test tests/gimbal_protocol_test.cpp)
+target_compile_options(gimbal_protocol_test PRIVATE -UNDEBUG)
+add_test(NAME gimbal_protocol_test COMMAND gimbal_protocol_test)
+
 add_executable(planner_test tests/planner_test.cpp)
 target_link_libraries(planner_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 
@@ -131,6 +135,7 @@ add_test(NAME outpost_target_test COMMAND outpost_target_test)
 add_test(NAME video_camera_test COMMAND video_camera_test)
 set_tests_properties(reprojection_observation_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(outpost_target_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(gimbal_protocol_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # 检查 ROS 环境
 find_package(ament_cmake QUIET)

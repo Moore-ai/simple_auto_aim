@@ -25,11 +25,22 @@ create_aim_fn(const std::string & config_path)
       std::list<auto_aim::Target> targets;
       targets.push_back(*target);
       auto cmd = aimer->aim(targets, timestamp, bullet_speed);
-      return {cmd.control,           cmd.shoot,
-              static_cast<float>(cmd.yaw),    static_cast<float>(cmd.pitch),
-              static_cast<float>(cmd.yaw),    0,
-              0,                              static_cast<float>(cmd.pitch),
-              0,                              0};
+      auto plan = auto_aim::Plan{
+        cmd.control,
+        cmd.shoot,
+        static_cast<float>(cmd.yaw),
+        static_cast<float>(cmd.pitch),
+        static_cast<float>(cmd.yaw),
+        0,
+        0,
+        static_cast<float>(cmd.pitch),
+        0,
+        0};
+      if (cmd.control && aimer->debug_aim_point.valid) {
+        plan.debug_xyza = aimer->debug_aim_point.xyza;
+        plan.debug_valid = true;
+      }
+      return plan;
     };
   }
 

@@ -1,6 +1,7 @@
 #include <fmt/core.h>
 
 #include <atomic>
+#include <cmath>
 #include <chrono>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
@@ -60,7 +61,9 @@ int main(int argc, char * argv[])
 
       gimbal.send(
         plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-        plan.pitch_acc);
+        plan.pitch_acc,
+        plan.debug_valid ? static_cast<float>(std::hypot(plan.debug_xyza.x(), plan.debug_xyza.y()))
+                          : 0.0F);
 
       auto fired = gs.bullet_count > last_bullet_count;
       last_bullet_count = gs.bullet_count;
