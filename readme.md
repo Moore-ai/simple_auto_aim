@@ -324,11 +324,35 @@ DPS = 单位时间射击窗口占比 \times 射频 \times 单发子弹伤害
 Web 调试仅接入 `standard_mpc` 的自瞄 MPC 链路。启动视觉程序和 Web 服务两个进程：
 
 ```bash
+./build/virtual_gimbal
 ./build/standard_mpc configs/standard3.yaml
 ./run_web.sh
 ```
 
-在与机器人处于同一隔离网络的电脑浏览器访问 `http://<机器人IP>:9000`。`run_web.sh` 会在项目根目录创建或复用 `.venv`，并用该虚拟环境启动 FastAPI/Uvicorn 服务。
+在没有下位机时，`virtual_gimbal` 会创建 `/tmp/sp_vision_25_gimbal` 并以 100 Hz
+发送零姿态反馈。使用它时，将配置中的 `com_port` 设为该路径；真机运行前必须改回
+实际串口路径。
+
+`debug_window` 控制 OpenCV 调试窗口。无桌面环境（例如 WSL 中通过 Windows 浏览器访问）
+应设为 `false`；需要本地窗口时可改为 `true`。
+
+在 WSL2 + Windows 11 开发机上，请保持三个 WSL 终端运行：
+
+```bash
+# 终端 1：虚拟下位机
+./build/virtual_gimbal
+
+# 终端 2：视觉程序（视频播放期间保持运行）
+./build/standard_mpc configs/standard3.yaml
+
+# 终端 3：Web 服务
+./run_web.sh
+```
+
+然后在 Windows 浏览器打开 `http://localhost:9000`。`run_web.sh` 会在项目根目录创建或复用
+`.venv`，并用该虚拟环境启动 FastAPI/Uvicorn 服务；服务监听 `0.0.0.0:9000`，因此支持
+WSL2 的 localhost 转发。若 localhost 转发被关闭，可在 WSL 执行 `hostname -I`，然后在
+Windows 浏览器访问 `http://<第一个地址>:9000`。
 
 两个进程通过以下本机 IPC 文件交换数据：
 

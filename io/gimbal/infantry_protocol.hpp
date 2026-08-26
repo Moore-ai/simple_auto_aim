@@ -92,6 +92,20 @@ inline bool parse_infantry_feedback_packet(const uint8_t * packet, InfantryFeedb
   return true;
 }
 
+inline std::array<uint8_t, kInfantryFeedbackPacketSize> make_infantry_feedback_packet(
+  uint8_t mode, float roll, float pitch, float yaw)
+{
+  std::array<uint8_t, kInfantryFeedbackPacketSize> packet{};
+  packet[0] = 0xFF;
+  packet[1] = mode;
+  load_infantry_float(packet.data(), 2, roll);
+  load_infantry_float(packet.data(), 6, pitch);
+  load_infantry_float(packet.data(), 10, yaw);
+  packet[22] = infantry_crc8(packet.data(), 22);
+  packet[23] = 0x0D;
+  return packet;
+}
+
 class InfantryFeedbackStreamParser
 {
 public:

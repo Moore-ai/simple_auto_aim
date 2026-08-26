@@ -8,6 +8,7 @@
 #include "tools/exiter.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/plotter.hpp"
+#include "tools/yaml.hpp"
 
 const std::string keys =
   "{help h usage ? |                        | 输出命令行参数说明 }"
@@ -30,14 +31,17 @@ int main(int argc, char * argv[])
   auto start_index = cli.get<int>("start-index");
   auto end_index = cli.get<int>("end-index");
   auto use_tradition = cli.get<bool>("tradition");
+  auto config = tools::load(config_path);
+  const auto debug_window =
+    config["debug_window"] ? config["debug_window"].as<bool>() : true;
 
   tools::Exiter exiter;
   tools::Plotter plotter;
 
   cv::VideoCapture video(video_path);
 
-  auto_aim::Detector detector(config_path);
-  auto_aim::YOLO yolo(config_path);
+  auto_aim::Detector detector(config_path, debug_window);
+  auto_aim::YOLO yolo(config_path, debug_window);
 
   video.set(cv::CAP_PROP_POS_FRAMES, start_index);
 
@@ -70,8 +74,7 @@ int main(int argc, char * argv[])
       plotter.plot(data);
     }
 
-    auto key = cv::waitKey(33);
-    if (key == 'q') break;
+    if (debug_window && cv::waitKey(33) == 'q') break;
   }
 
   return 0;

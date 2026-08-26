@@ -188,10 +188,7 @@ bool YOLO11::check_name(const Armor & armor) const
 
 bool YOLO11::check_type(const Armor & armor) const
 {
-  auto name_ok = (armor.type == ArmorType::small)
-                   ? (armor.name != ArmorName::one && armor.name != ArmorName::base)
-                   : (armor.name != ArmorName::two && armor.name != ArmorName::sentry &&
-                      armor.name != ArmorName::outpost);
+  auto name_ok = armor_type_matches_name(armor.type, armor.name);
 
   // 保存异常的图案，用于神经网络的迭代
   // if (!name_ok) save(armor);

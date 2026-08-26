@@ -47,10 +47,11 @@ classify_model: assets/tiny_resnet.onnx
 yolo11_model_path: assets/yolo11.xml
 yolov8_model_path: assets/yolov8.xml
 yolov5_model_path: assets/yolov5.xml
-device: GPU
+device: CPU
 min_confidence: 0.8
 use_traditional: true
-detect_method: "yolo"              # 检测方法："yolo" 或 "traditional"，traditional 使用纯传统灯条检测
+detect_method: "yolo"              # YOLO 主检测；use_traditional=true 时进行传统方法二次校正
+debug_window: false                # 是否显示 OpenCV 调试窗口；Web/WSL 环境建议关闭
 
 #####-----ROI-----#####
 roi:
@@ -180,7 +181,7 @@ gain: 16.9
 vid_pid: "2bdf:0001"
 
 virtual_camera:
-  enable: false
+  enable: true
   video_path: assets/demo/demo.avi
 
 auto_exposure:
@@ -215,7 +216,7 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port: "/dev/gimbal"            # Gimbal 串口设备路径
+com_port: "/tmp/sp_vision_25_gimbal" # 虚拟云台串口路径；真机运行时改回 /dev/gimbal
 baudrate: 115200                   # 串口波特率
 bytesize: 8                        # 数据位宽
 yaw_kp: 0

@@ -258,9 +258,7 @@ bool Detector::check_name(const Armor & armor) const
 
 bool Detector::check_type(const Armor & armor) const
 {
-  auto name_ok = armor.type == ArmorType::small
-                   ? (armor.name != ArmorName::one && armor.name != ArmorName::base)
-                   : (armor.name == ArmorName::one || armor.name == ArmorName::base);
+  auto name_ok = armor_type_matches_name(armor.type, armor.name);
 
   // 保存异常的图案，用于分类器的迭代
   if (!name_ok) {
@@ -306,31 +304,8 @@ cv::Mat Detector::get_pattern(const cv::Mat & bgr_img, const Armor & armor) cons
 
 ArmorType Detector::get_type(const Armor & armor)
 {
-  /// 优先根据当前armor.ratio判断
-  /// TODO: 25赛季是否还需要根据比例判断大小装甲？能否根据图案直接判断？
-
-  if (armor.ratio > 3.0) {
-    // tools::logger()->debug(
-    //   "[Detector] get armor type by ratio: BIG {} {:.2f}", ARMOR_NAMES[armor.name], armor.ratio);
-    return ArmorType::big;
-  }
-
-  if (armor.ratio < 2.5) {
-    // tools::logger()->debug(
-    //   "[Detector] get armor type by ratio: SMALL {} {:.2f}", ARMOR_NAMES[armor.name], armor.ratio);
-    return ArmorType::small;
-  }
-
-  // tools::logger()->debug("[Detector] get armor type by name: {}", ARMOR_NAMES[armor.name]);
-
-  // 英雄、基地只能是大装甲板
-  if (armor.name == ArmorName::one || armor.name == ArmorName::base) {
-    return ArmorType::big;
-  }
-
-  // 其他所有（工程、哨兵、前哨站、步兵）都是小装甲板
-  /// TODO: 基地顶装甲是小装甲板
-  return ArmorType::small;
+  /// 类型由装甲板名称决定：只有 1 号为大装甲，其余均为小装甲。
+  return armor_type_for_name(armor.name);
 }
 
 cv::Point2f Detector::get_center_norm(const cv::Mat & bgr_img, const cv::Point2f & center) const

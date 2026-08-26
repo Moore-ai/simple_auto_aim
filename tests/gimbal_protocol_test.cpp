@@ -85,6 +85,14 @@ int main()
   assert(std::abs(decoded.yaw - yaw) < 1e-6F);
   assert(io::infantry_feedback_pitch_to_sp(decoded.pitch) == -pitch);
 
+  const auto simulated_feedback = io::make_infantry_feedback_packet(3, 0.4F, -0.5F, 0.6F);
+  io::InfantryFeedback simulated_decoded;
+  assert(io::parse_infantry_feedback_packet(simulated_feedback.data(), simulated_decoded));
+  assert(simulated_decoded.mode == 3);
+  assert(std::abs(simulated_decoded.roll - 0.4F) < 1e-6F);
+  assert(std::abs(simulated_decoded.pitch + 0.5F) < 1e-6F);
+  assert(std::abs(simulated_decoded.yaw - 0.6F) < 1e-6F);
+
   const auto feedback_q = io::infantry_feedback_quaternion(roll, pitch, yaw);
   const Eigen::Quaterniond expected_q(
     Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
