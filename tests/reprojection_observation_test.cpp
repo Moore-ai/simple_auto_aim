@@ -50,6 +50,20 @@ int main()
                       "enable_lightbar_assist: true\n"))
            .collect_lightbars);
   assert(auto_aim::DetectionOptions::from_yaml(
+           YAML::Load("observation_mode: pnp\nfilter_method: ekf\npnp:\n  "
+                      "enable_outpost_distance_optimizer: true\n"))
+           .collect_lightbars);
+  assert(!auto_aim::ObservationPathConfig::from_yaml(
+            YAML::Load("observation_mode: pnp\nfilter_method: ekf\npnp:\n  "
+                       "enable_outpost_distance_optimizer: false\n"),
+            auto_aim::FilterMethod::EKF)
+            .outpost_distance_optimizer_enabled);
+  assert(auto_aim::ObservationPathConfig::from_yaml(
+           YAML::Load("observation_mode: pnp\nfilter_method: ekf\npnp:\n  "
+                      "enable_outpost_distance_optimizer: true\n"),
+           auto_aim::FilterMethod::EKF)
+           .outpost_distance_optimizer_enabled);
+  assert(auto_aim::DetectionOptions::from_yaml(
            YAML::Load("observation_mode: reprojection\nfilter_method: ekf\n"))
            .collect_lightbars);
   assert(!auto_aim::DetectionOptions::from_yaml(

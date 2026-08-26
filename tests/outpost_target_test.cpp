@@ -383,4 +383,49 @@ int main()
   const auto v2_target_state = v2_targets.front().outpost_state_v2();
   assert(v2_target_state.has_value());
   assert(std::abs(v2_target_state->center_x() - v2_targets.front().state_vector()[0]) < 1e-12);
+
+  // The six-point optimizer must also run on the frame that initializes an outpost target.
+  const Eigen::Vector3d optimizer_center{2.0, 0.0, 0.3};
+  const auto clean_points = solver.reproject_armor(
+    optimizer_center, 0.0, auto_aim::ArmorType::small, auto_aim::ArmorName::outpost);
+  auto perturbed_points = clean_points;
+  const auto image_center =
+    (clean_points[0] + clean_points[1] + clean_points[2] + clean_points[3]) * 0.25F;
+  for (auto & point : perturbed_points) point = image_center + (point - image_center) * 0.97F;
+  auto optimizer_armor =
+    auto_aim::Armor(19, 0.99F, cv::Rect(640, 480, 100, 50), perturbed_points);
+  auto expected_optimized = optimizer_armor;
+  assert(solver.solve(expected_optimized));
+  const auto four_point_position = expected_optimized.xyz_in_world;
+  auto neighbor_lightbar = auto_aim::Lightbar();
+  neighbor_lightbar.color = auto_aim::Color::red;
+  neighbor_lightbar.top = {896.3336F, -827.9412F};
+  neighbor_lightbar.bottom = {883.1733F, -777.8211F};
+  assert(solver.optimize_outpost_distance(expected_optimized, {neighbor_lightbar}));
+  assert((expected_optimized.xyz_in_world - four_point_position).norm() > 1e-6);
+
+  auto optimizer_yaml = demo_text.str();
+  const auto optimizer_color_position = optimizer_yaml.find("enemy_color: \"blue\"");
+  assert(optimizer_color_position != std::string::npos);
+  optimizer_yaml.replace(
+    optimizer_color_position, std::string("enemy_color: \"blue\"").size(),
+    "enemy_color: \"red\"");
+  const auto optimizer_switch_position =
+    optimizer_yaml.find("enable_outpost_distance_optimizer: false");
+  assert(optimizer_switch_position != std::string::npos);
+  optimizer_yaml.replace(
+    optimizer_switch_position, std::string("enable_outpost_distance_optimizer: false").size(),
+    "enable_outpost_distance_optimizer: true");
+  std::ofstream optimizer_output("/tmp/outpost_optimizer_init_test.yaml");
+  optimizer_output << optimizer_yaml;
+  optimizer_output.close();
+  auto_aim::Solver optimizer_solver("/tmp/outpost_optimizer_init_test.yaml");
+  auto_aim::Tracker optimizer_tracker("/tmp/outpost_optimizer_init_test.yaml", optimizer_solver);
+  auto optimizer_detections =
+    auto_aim::DetectionResult{{optimizer_armor}, {neighbor_lightbar}};
+  const auto optimizer_targets = optimizer_tracker.track(
+    optimizer_detections, std::chrono::steady_clock::now());
+  assert(!optimizer_targets.empty());
+  assert((optimizer_detections.armors.front().xyz_in_world -
+          expected_optimized.xyz_in_world).norm() < 1e-6);
 }

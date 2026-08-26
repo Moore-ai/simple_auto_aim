@@ -28,6 +28,7 @@ struct ObservationPathConfig
   ObservationMode mode = ObservationMode::PNP;
   bool lightbar_assist_enabled = false;
   bool yaw_refinement_enabled = false;
+  bool outpost_distance_optimizer_enabled = false;
   ReprojectionObservationConfig reprojection;
 
   static ObservationPathConfig from_yaml(const YAML::Node & yaml, FilterMethod filter_method);
@@ -38,6 +39,7 @@ struct ObservationPathDebugInfo
   std::string observation_mode{"pnp"};
   bool lightbar_assist_enabled = false;
   bool yaw_refinement_enabled = false;
+  bool outpost_distance_optimizer_enabled = false;
   std::string last_update_source{"none"};
   std::size_t matched_armor_count = 0;
   std::size_t matched_light_count = 0;
@@ -62,6 +64,7 @@ public:
 
   bool uses_reprojection() const;
   bool lightbar_assist_enabled() const;
+  bool outpost_distance_optimizer_enabled() const;
   const ReprojectionObservationConfig & reprojection_config() const;
   const ObservationPathDebugInfo & debug_info() const;
 

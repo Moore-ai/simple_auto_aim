@@ -87,7 +87,7 @@ private:
 
   void state_machine(bool found);
 
-  bool set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t);
+  bool set_target(DetectionResult & detections, std::chrono::steady_clock::time_point t);
 
   bool update_target(DetectionResult & detections, std::chrono::steady_clock::time_point t);
 

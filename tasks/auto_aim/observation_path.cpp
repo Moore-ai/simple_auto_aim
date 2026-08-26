@@ -73,6 +73,9 @@ ObservationPathConfig ObservationPathConfig::from_yaml(
     pnp_config["enable_lightbar_assist"].as<bool>() : false;
   const auto pnp_yaw_refinement_requested = pnp_config && pnp_config["enable_yaw_refinement"] ?
     pnp_config["enable_yaw_refinement"].as<bool>() : false;
+  const auto outpost_distance_optimizer_requested =
+    pnp_config && pnp_config["enable_outpost_distance_optimizer"] ?
+      pnp_config["enable_outpost_distance_optimizer"].as<bool>() : false;
 
   if (observation_mode == "reprojection") {
     if (filter_method == FilterMethod::EKF) {
@@ -85,6 +88,7 @@ ObservationPathConfig ObservationPathConfig::from_yaml(
     }
   } else if (observation_mode == "pnp") {
     config.yaw_refinement_enabled = pnp_yaw_refinement_requested;
+    config.outpost_distance_optimizer_enabled = outpost_distance_optimizer_requested;
     if (pnp_assist_requested && filter_method == FilterMethod::EKF) {
       config.lightbar_assist_enabled = true;
       load_reprojection_config(yaml, config.reprojection);
@@ -107,6 +111,7 @@ void ObservationPath::configure(const ObservationPathConfig & config, Color enem
     "reprojection" : "pnp";
   debug_info_.lightbar_assist_enabled = config_.lightbar_assist_enabled;
   debug_info_.yaw_refinement_enabled = config_.yaw_refinement_enabled;
+  debug_info_.outpost_distance_optimizer_enabled = config_.outpost_distance_optimizer_enabled;
 }
 
 bool ObservationPath::uses_reprojection() const
@@ -117,6 +122,11 @@ bool ObservationPath::uses_reprojection() const
 bool ObservationPath::lightbar_assist_enabled() const
 {
   return config_.lightbar_assist_enabled;
+}
+
+bool ObservationPath::outpost_distance_optimizer_enabled() const
+{
+  return config_.outpost_distance_optimizer_enabled;
 }
 
 const ReprojectionObservationConfig & ObservationPath::reprojection_config() const
@@ -407,6 +417,9 @@ bool ObservationPath::update_pnp(
   for (auto & armor : detections.armors) {
     if (armor.name != target.name || armor.type != target.armor_type) continue;
     if (!solver_.solve(armor)) continue;
+    if (config_.outpost_distance_optimizer_enabled && armor.name == ArmorName::outpost) {
+      solver_.optimize_outpost_distance(armor, detections.lightbars);
+    }
     if (config_.yaw_refinement_enabled) {
       const auto predicted_armors = target.armor_xyza_list();
       if (!predicted_armors.empty()) {

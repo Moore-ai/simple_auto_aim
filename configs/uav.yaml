@@ -35,6 +35,7 @@ observation_mode: "pnp" # pnp | reprojection
 pnp:
   enable_lightbar_assist: false
   enable_yaw_refinement: false
+  enable_outpost_distance_optimizer: false # 前哨站六点 PnP 距离优化（4 个装甲角点 + 相邻灯条 2 点）
 
 target_geometry_cache:
   enabled: false

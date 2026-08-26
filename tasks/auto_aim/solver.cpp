@@ -2,6 +2,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <array>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -216,6 +217,136 @@ bool Solver::refine_yaw_with_prediction(
   const auto refined_yaw = tools::limit_rad((left + right) * 0.5 + gimbal_yaw);
   if (!std::isfinite(refined_yaw)) return false;
   armor.ypr_in_world[0] = refined_yaw;
+  return true;
+}
+
+bool Solver::optimize_outpost_distance(Armor & armor, const std::list<Lightbar> & lightbars) const
+{
+  if (armor.name != ArmorName::outpost || armor.type != ArmorType::small ||
+      armor.points.size() != 4) {
+    return false;
+  }
+
+  if (!armor.xyz_in_gimbal.allFinite() || !armor.ypr_in_gimbal.allFinite()) return false;
+  const Eigen::Matrix3d initial_rotation =
+    R_camera2gimbal_.transpose() * tools::rotation_matrix(armor.ypr_in_gimbal);
+  const Eigen::Vector3d initial_translation =
+    R_camera2gimbal_.transpose() * (armor.xyz_in_gimbal - t_camera2gimbal_);
+  cv::Mat initial_rotation_cv;
+  cv::eigen2cv(initial_rotation, initial_rotation_cv);
+  cv::Vec3d initial_rvec;
+  cv::Rodrigues(initial_rotation_cv, initial_rvec);
+  const cv::Vec3d initial_tvec{
+    initial_translation.x(), initial_translation.y(), initial_translation.z()};
+
+  struct PredictedNeighbor
+  {
+    std::array<cv::Point3f, 2> object_points;
+    std::vector<cv::Point2f> image_points;
+  };
+  std::vector<PredictedNeighbor> predicted_neighbors;
+  constexpr double height_step = 0.102;
+  const auto armor_to_center =
+    Eigen::AngleAxisd(-OUTPOST_MOUNT_PITCH, Eigen::Vector3d::UnitY()) * Eigen::Vector3d::UnitX();
+  const auto vertical = Eigen::AngleAxisd(-CV_PI / 2.0, Eigen::Vector3d::UnitY()) * armor_to_center;
+  const auto rotation_center = OUTPOST_RADIUS * armor_to_center;
+  const std::array<std::array<double, 2>, 4> relations{{
+    {2.0 * height_step, 2.0 * CV_PI / 3.0},
+    {-height_step, 2.0 * CV_PI / 3.0},
+    {height_step, -2.0 * CV_PI / 3.0},
+    {-2.0 * height_step, -2.0 * CV_PI / 3.0}}};
+  for (const auto & relation : relations) {
+    const Eigen::AngleAxisd rotate_to_neighbor(relation[1], vertical);
+    const auto neighbor_center =
+      rotation_center + rotate_to_neighbor * (-armor_to_center * OUTPOST_RADIUS) +
+      vertical * relation[0];
+    const auto x_axis = (rotate_to_neighbor * Eigen::Vector3d::UnitX()).normalized();
+    const auto y_axis = vertical.cross(x_axis).normalized();
+    const auto z_axis = x_axis.cross(y_axis).normalized();
+    const Eigen::Matrix3d rotation = (Eigen::Matrix3d() << x_axis, y_axis, z_axis).finished();
+
+    std::array<Eigen::Vector3d, 4> endpoints{
+      neighbor_center +
+        rotation * Eigen::Vector3d{0.0, SMALL_ARMOR_WIDTH / 2.0, LIGHTBAR_LENGTH / 2.0},
+      neighbor_center +
+        rotation * Eigen::Vector3d{0.0, SMALL_ARMOR_WIDTH / 2.0, -LIGHTBAR_LENGTH / 2.0},
+      neighbor_center +
+        rotation * Eigen::Vector3d{0.0, -SMALL_ARMOR_WIDTH / 2.0, LIGHTBAR_LENGTH / 2.0},
+      neighbor_center +
+        rotation * Eigen::Vector3d{0.0, -SMALL_ARMOR_WIDTH / 2.0, -LIGHTBAR_LENGTH / 2.0}};
+    const auto use_first_side = endpoints[0].norm() < endpoints[2].norm();
+    const auto offset = use_first_side ? 0U : 2U;
+    PredictedNeighbor neighbor;
+    for (std::size_t index = 0; index < 2; ++index) {
+      const auto & point = endpoints[offset + index];
+      neighbor.object_points[index] = {
+        static_cast<float>(point.x()), static_cast<float>(point.y()),
+        static_cast<float>(point.z())};
+    }
+    cv::projectPoints(
+      std::vector<cv::Point3f>{neighbor.object_points[0], neighbor.object_points[1]}, initial_rvec,
+      initial_tvec, camera_matrix_, distort_coeffs_, neighbor.image_points);
+    predicted_neighbors.push_back(neighbor);
+  }
+
+  const PredictedNeighbor * best_neighbor = nullptr;
+  std::array<cv::Point2f, 2> best_image_points;
+  double best_error = std::numeric_limits<double>::infinity();
+  for (const auto & lightbar : lightbars) {
+    if (lightbar.color != armor.color || lightbar.top == lightbar.bottom) continue;
+    for (const auto & neighbor : predicted_neighbors) {
+      const auto expected_length = cv::norm(neighbor.image_points[1] - neighbor.image_points[0]);
+      const auto observed_length = cv::norm(lightbar.bottom - lightbar.top);
+      if (expected_length <= 1e-6 ||
+          std::abs(observed_length / expected_length - 1.0) > 0.2) {
+        continue;
+      }
+      const std::array<std::array<cv::Point2f, 2>, 2> orientations{{
+        {lightbar.top, lightbar.bottom}, {lightbar.bottom, lightbar.top}}};
+      for (const auto & observed : orientations) {
+        const auto error = cv::norm(observed[0] - neighbor.image_points[0]) +
+          cv::norm(observed[1] - neighbor.image_points[1]);
+        if (error < best_error && error < expected_length * 5.0) {
+          best_error = error;
+          best_neighbor = &neighbor;
+          best_image_points = observed;
+        }
+      }
+    }
+  }
+  if (!best_neighbor) return false;
+
+  std::vector<cv::Point3f> object_points = SMALL_ARMOR_POINTS;
+  object_points.insert(
+    object_points.end(), best_neighbor->object_points.begin(), best_neighbor->object_points.end());
+  std::vector<cv::Point2f> image_points = armor.points;
+  image_points.insert(image_points.end(), best_image_points.begin(), best_image_points.end());
+  cv::Vec3d optimized_rvec = initial_rvec;
+  cv::Vec3d optimized_tvec = initial_tvec;
+  if (!cv::solvePnP(
+        object_points, image_points, camera_matrix_, distort_coeffs_, optimized_rvec,
+        optimized_tvec, true, cv::SOLVEPNP_ITERATIVE) ||
+      optimized_tvec[2] <= 0.0) {
+    return false;
+  }
+
+  Armor optimized = armor;
+  Eigen::Vector3d xyz_in_camera;
+  cv::cv2eigen(optimized_tvec, xyz_in_camera);
+  optimized.xyz_in_gimbal = R_camera2gimbal_ * xyz_in_camera + t_camera2gimbal_;
+  optimized.xyz_in_world = R_gimbal2world_ * optimized.xyz_in_gimbal;
+  cv::Mat rotation_cv;
+  cv::Rodrigues(optimized_rvec, rotation_cv);
+  Eigen::Matrix3d R_armor2camera;
+  cv::cv2eigen(rotation_cv, R_armor2camera);
+  const auto R_armor2gimbal = R_camera2gimbal_ * R_armor2camera;
+  const auto R_armor2world = R_gimbal2world_ * R_armor2gimbal;
+  optimized.ypr_in_gimbal = tools::eulers(R_armor2gimbal, 2, 1, 0);
+  optimized.ypr_in_world = tools::eulers(R_armor2world, 2, 1, 0);
+  optimized.ypd_in_world = tools::xyz2ypd(optimized.xyz_in_world);
+  optimize_yaw(optimized);
+  if (!optimized.xyz_in_world.allFinite() || !optimized.ypr_in_world.allFinite()) return false;
+  armor = optimized;
   return true;
 }
 

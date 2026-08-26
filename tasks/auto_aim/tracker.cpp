@@ -205,7 +205,7 @@ std::list<Target> Tracker::track(
 
   bool found;
   if (state_ == "lost") {
-    found = set_target(armors, t);
+    found = set_target(detections, t);
   } else {
     found = update_target(detections, t);
   }
@@ -272,12 +272,12 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
 
   bool found;
   if (state_ == "lost") {
-    found = set_target(armors, t);
+    found = set_target(detections, t);
   }
 
   // 此时主相机画面中出现了优先级更高的装甲板，切换目标
   else if (state_ == "tracking" && !armors.empty() && armors.front().priority < target_.priority) {
-    found = set_target(armors, t);
+    found = set_target(detections, t);
     tools::logger()->debug("auto_aim switch target to {}", ARMOR_NAMES[armors.front().name]);
   }
 
@@ -298,7 +298,7 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
   }
 
   else if (state_ == "detecting" && pre_state_ == "switching") {
-    found = set_target(armors, t);
+    found = set_target(detections, t);
   }
 
   else {
@@ -373,12 +373,24 @@ void Tracker::state_machine(bool found)
   }
 }
 
-bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::time_point t)
+bool Tracker::set_target(
+  DetectionResult & detections, std::chrono::steady_clock::time_point t)
 {
+  auto & armors = detections.armors;
   if (armors.empty()) return false;
 
+  auto solve_armor = [&](Armor & candidate) {
+    if (!solver_.solve(candidate)) return false;
+    if (
+      candidate.name == ArmorName::outpost &&
+      observation_path_.outpost_distance_optimizer_enabled()) {
+      solver_.optimize_outpost_distance(candidate, detections.lightbars);
+    }
+    return true;
+  };
+
   auto & armor = armors.front();
-  if (!solver_.solve(armor)) {
+  if (!solve_armor(armor)) {
     observation_path_.record_predict_only();
     return false;
   }
@@ -400,7 +412,7 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
       std::vector<Armor> outpost_armors;
       for (auto & candidate : armors) {
         if (candidate.name != ArmorName::outpost || candidate.type != armor.type) continue;
-        if (solver_.solve(candidate)) outpost_armors.push_back(candidate);
+        if (solve_armor(candidate)) outpost_armors.push_back(candidate);
       }
       target_ = Target::make_outpost_v2(outpost_armors, t, P0_outpost_v2_, outpost_v2_config_);
     } else {

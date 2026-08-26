@@ -6,6 +6,7 @@
 #include <opencv2/core/eigen.hpp>
 
 #include <vector>
+#include <list>
 #include <optional>
 
 #include "armor.hpp"
@@ -36,6 +37,11 @@ public:
 
   // Refine a PnP armor yaw from its four image corners using the tracker prediction.
   bool refine_yaw_with_prediction(Armor & armor, double predicted_yaw, int armor_num) const;
+
+  // Refine an outpost armor pose with a matched neighboring lightbar (six image points total).
+  // Returns false and leaves armor unchanged when no reliable neighbor is available.
+  // from 南京理工大学 https://github.com/Alliance-Algorithm/rmcs_auto_aim_v2.git
+  bool optimize_outpost_distance(Armor & armor, const std::list<Lightbar> & lightbars) const;
 
   std::vector<cv::Point2f> reproject_armor(
     const Eigen::Vector3d & xyz_in_world, double yaw, ArmorType type, ArmorName name) const;
