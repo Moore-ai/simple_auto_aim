@@ -1,5 +1,7 @@
 # enemy_color: "red"
 enemy_color: "blue"
+image_width: 1440
+image_height: 1080
 outpost_model: current # 模型选择：current=固定低/中/高板高度模型，v2=相位编号与高度差在线估计模型
 outpost_current: # current 模型专用配置；id=0/1/2 固定对应低/中/高装甲板
   P0: [1, 64, 1, 64, 1, 81, 0.4, 0] # 初始协方差对角线，状态顺序为[x,vx,y,vy,z,vz,yaw,yaw_rate]

@@ -52,6 +52,8 @@ private:
   Solver & solver_;
   ObservationPath observation_path_;
   Color enemy_color_;
+  int image_width_;
+  int image_height_;
   int min_detect_count_;
   int max_temp_lost_count_;
   int detect_count_;

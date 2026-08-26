@@ -21,6 +21,8 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
 {
   auto yaml = tools::load(config_path);
   enemy_color_ = (tools::read<std::string>(yaml, "enemy_color") == "red") ? Color::red : Color::blue;
+  image_width_ = tools::read<int>(yaml, "image_width");
+  image_height_ = tools::read<int>(yaml, "image_height");
   min_detect_count_ = tools::read<int>(yaml, "min_detect_count");
   max_temp_lost_count_ = tools::read<int>(yaml, "max_temp_lost_count");
   outpost_max_temp_lost_count_ = tools::read<int>(yaml, "outpost_max_temp_lost_count");
@@ -473,16 +475,16 @@ void Tracker::update_geometry_cache()
 
 void Tracker::sort_armors(std::list<Armor> & armors) const
 {
+  const cv::Point2f img_center(
+    static_cast<float>(image_width_) / 2, static_cast<float>(image_height_) / 2);
   if (use_priority_) {
     assign_priorities(armors);
-    cv::Point2f img_center((float)1440 / 2, (float)1080 / 2);  // TODO
     armors.sort([img_center](const Armor & a, const Armor & b) {
       if (a.priority != b.priority) return a.priority < b.priority;
       return cv::norm(a.center - img_center) < cv::norm(b.center - img_center);
     });
   } else {
-    armors.sort([](const Armor & a, const Armor & b) {
-      cv::Point2f img_center((float)1440 / 2, (float)1080 / 2);  // TODO
+    armors.sort([img_center](const Armor & a, const Armor & b) {
       auto distance_1 = cv::norm(a.center - img_center);
       auto distance_2 = cv::norm(b.center - img_center);
       return distance_1 < distance_2;
