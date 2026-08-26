@@ -18,16 +18,16 @@ using Trajectory = Eigen::Matrix<double, 4, HORIZON>;  // yaw, yaw_vel, pitch, p
 
 struct Plan
 {
-  bool control;
-  bool fire;
-  float target_yaw;
-  float target_pitch;
-  float yaw;
-  float yaw_vel;
-  float yaw_acc;
-  float pitch;
-  float pitch_vel;
-  float pitch_acc;
+  bool control{false};
+  bool fire{false};
+  float target_yaw{0.0F};
+  float target_pitch{0.0F};
+  float yaw{0.0F};
+  float yaw_vel{0.0F};
+  float yaw_acc{0.0F};
+  float pitch{0.0F};
+  float pitch_vel{0.0F};
+  float pitch_acc{0.0F};
   Eigen::Vector4d debug_xyza{Eigen::Vector4d::Zero()};
   double fly_time{0.0};
   bool debug_valid{false};
@@ -71,8 +71,10 @@ private:
   ManeuverAdaptConfig maneuver_;
   double nis_avg_{0.0};
 
-  TinySolver * yaw_solver_;
-  TinySolver * pitch_solver_;
+  TinySolver * yaw_solver_{nullptr};
+  TinySolver * pitch_solver_{nullptr};
+  bool yaw_nonconvergence_logged_{false};
+  bool pitch_nonconvergence_logged_{false};
 
   void setup_yaw_solver(const std::string & config_path);
   void setup_pitch_solver(const std::string & config_path);

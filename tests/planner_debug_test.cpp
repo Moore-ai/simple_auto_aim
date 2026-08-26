@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cmath>
+#include <limits>
 #include <optional>
 
 #include "tasks/auto_aim/planner/planner.hpp"
@@ -15,6 +16,11 @@ int main()
   assert(std::isfinite(plan.fly_time));
   assert(plan.fly_time > 0.0);
   assert(plan.debug_xyza.array().isFinite().all());
+
+  const auto invalid_speed_plan = planner.plan(target, std::numeric_limits<double>::quiet_NaN());
+  assert(!invalid_speed_plan.control);
+  assert(!invalid_speed_plan.fire);
+  assert(!invalid_speed_plan.debug_valid);
 
   const auto idle_plan = planner.plan(std::optional<auto_aim::Target>{}, 22.0);
   assert(!idle_plan.control);

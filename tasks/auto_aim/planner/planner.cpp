@@ -1,8 +1,11 @@
 #include "planner.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <stdexcept>
 #include <vector>
 
+#include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/trajectory.hpp"
 #include "tools/yaml.hpp"
@@ -11,6 +14,29 @@ using namespace std::chrono_literals;
 
 namespace auto_aim
 {
+namespace
+{
+bool finite_solver_result(const TinySolver * solver)
+{
+  return solver && solver->solution && solver->work && solver->solution->x.allFinite() &&
+    solver->solution->u.allFinite() && solver->work->x.allFinite() && solver->work->u.allFinite();
+}
+
+bool valid_plan(const Plan & plan)
+{
+  return std::isfinite(plan.target_yaw) && std::isfinite(plan.target_pitch) &&
+    std::isfinite(plan.yaw) && std::isfinite(plan.yaw_vel) && std::isfinite(plan.yaw_acc) &&
+    std::isfinite(plan.pitch) && std::isfinite(plan.pitch_vel) && std::isfinite(plan.pitch_acc) &&
+    plan.debug_xyza.allFinite() && std::isfinite(plan.fly_time);
+}
+
+Plan invalid_plan(const char * reason)
+{
+  tools::logger()->warn("[Planner] MPC plan rejected: {}", reason);
+  return {};
+}
+}  // namespace
+
 Planner::Planner(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
@@ -70,7 +96,11 @@ Planner::Planner(const std::string & config_path)
 Plan Planner::plan(Target target, double bullet_speed)
 {
   // 0. Check bullet speed
+  if (!std::isfinite(bullet_speed)) return invalid_plan("non-finite bullet speed");
   if (bullet_speed < bullet_speed_min_ || bullet_speed > bullet_speed_max_) {
+    tools::logger()->warn(
+      "[Planner] Bullet speed {:.2f} outside [{:.2f}, {:.2f}], using default {:.2f}", bullet_speed,
+      bullet_speed_min_, bullet_speed_max_, bullet_speed_default_);
     bullet_speed = bullet_speed_default_;
   }
 
@@ -85,6 +115,9 @@ Plan Planner::plan(Target target, double bullet_speed)
     }
   }
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
+  if (bullet_traj.unsolvable || !std::isfinite(bullet_traj.fly_time)) {
+    return invalid_plan("invalid bullet trajectory");
+  }
   auto fly_time = bullet_traj.fly_time;
   target.predict(bullet_traj.fly_time);
 
@@ -95,9 +128,10 @@ Plan Planner::plan(Target target, double bullet_speed)
     yaw0 = aim(target, bullet_speed)(0);
     traj = get_trajectory(target, yaw0, bullet_speed);
   } catch (const std::exception & e) {
-    tools::logger()->warn("Unsolvable target {:.2f}", bullet_speed);
-    return {false};
+    tools::logger()->warn("[Planner] Unsolvable target at bullet speed {:.2f}: {}", bullet_speed, e.what());
+    return {};
   }
+  if (!traj.allFinite() || !std::isfinite(yaw0)) return invalid_plan("non-finite reference trajectory");
 
   // 3. 机动自适应：NIS 高时衰减轨迹速度，使跟踪更平滑
   if (maneuver_.enable) {
@@ -117,14 +151,44 @@ Plan Planner::plan(Target target, double bullet_speed)
   tiny_set_x0(yaw_solver_, x0);
 
   yaw_solver_->work->Xref = traj.block(0, 0, 2, HORIZON);
-  tiny_solve(yaw_solver_);
+  const auto yaw_status = tiny_solve(yaw_solver_);
+  if (yaw_status != 0 && !yaw_nonconvergence_logged_) {
+    tools::logger()->warn(
+      "[Planner] Yaw MPC did not converge: status={}, iterations={}, using finite partial solution",
+      yaw_status,
+      yaw_solver_ ? yaw_solver_->solution->iter : 0);
+    yaw_nonconvergence_logged_ = true;
+  } else if (yaw_status == 0) {
+    yaw_nonconvergence_logged_ = false;
+  }
+  if (!finite_solver_result(yaw_solver_)) {
+    tools::logger()->warn(
+      "[Planner] Yaw MPC output is invalid: status={}, iterations={}", yaw_status,
+      yaw_solver_ ? yaw_solver_->solution->iter : 0);
+    return {};
+  }
 
   // 4. Solve pitch
   x0 << traj(2, 0), traj(3, 0);
   tiny_set_x0(pitch_solver_, x0);
 
   pitch_solver_->work->Xref = traj.block(2, 0, 2, HORIZON);
-  tiny_solve(pitch_solver_);
+  const auto pitch_status = tiny_solve(pitch_solver_);
+  if (pitch_status != 0 && !pitch_nonconvergence_logged_) {
+    tools::logger()->warn(
+      "[Planner] Pitch MPC did not converge: status={}, iterations={}, using finite partial solution",
+      pitch_status,
+      pitch_solver_ ? pitch_solver_->solution->iter : 0);
+    pitch_nonconvergence_logged_ = true;
+  } else if (pitch_status == 0) {
+    pitch_nonconvergence_logged_ = false;
+  }
+  if (!finite_solver_result(pitch_solver_)) {
+    tools::logger()->warn(
+      "[Planner] Pitch MPC output is invalid: status={}, iterations={}", pitch_status,
+      pitch_solver_ ? pitch_solver_->solution->iter : 0);
+    return {};
+  }
 
   Plan plan;
   plan.control = true;
@@ -149,6 +213,7 @@ Plan Planner::plan(Target target, double bullet_speed)
       traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
       traj(2, HALF_HORIZON + shoot_offset_) -
         pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
+  if (!valid_plan(plan)) return invalid_plan("non-finite MPC output");
   return plan;
 }
 
@@ -205,13 +270,22 @@ void Planner::setup_yaw_solver(const std::string & config_path)
   Eigen::VectorXd f{{0, 0}};
   Eigen::Matrix<double, 2, 1> Q(Q_yaw.data());
   Eigen::Matrix<double, 1, 1> R(R_yaw.data());
-  tiny_setup(&yaw_solver_, A, B, f, Q.asDiagonal(), R.asDiagonal(), rho_, 2, 1, HORIZON, 0);
+  const auto setup_status =
+    tiny_setup(&yaw_solver_, A, B, f, Q.asDiagonal(), R.asDiagonal(), rho_, 2, 1, HORIZON, 0);
+  if (setup_status != 0) {
+    tools::logger()->error("[Planner] Failed to initialize yaw MPC solver: status={}", setup_status);
+    throw std::runtime_error("failed to initialize yaw MPC solver");
+  }
 
   Eigen::MatrixXd x_min = Eigen::MatrixXd::Constant(2, HORIZON, -1e17);
   Eigen::MatrixXd x_max = Eigen::MatrixXd::Constant(2, HORIZON, 1e17);
   Eigen::MatrixXd u_min = Eigen::MatrixXd::Constant(1, HORIZON - 1, -max_yaw_acc);
   Eigen::MatrixXd u_max = Eigen::MatrixXd::Constant(1, HORIZON - 1, max_yaw_acc);
-  tiny_set_bound_constraints(yaw_solver_, x_min, x_max, u_min, u_max);
+  const auto bound_status = tiny_set_bound_constraints(yaw_solver_, x_min, x_max, u_min, u_max);
+  if (bound_status != 0) {
+    tools::logger()->error("[Planner] Failed to configure yaw MPC constraints: status={}", bound_status);
+    throw std::runtime_error("failed to configure yaw MPC constraints");
+  }
 
   yaw_solver_->settings->max_iter = max_iter_;
 }
@@ -228,13 +302,22 @@ void Planner::setup_pitch_solver(const std::string & config_path)
   Eigen::VectorXd f{{0, 0}};
   Eigen::Matrix<double, 2, 1> Q(Q_pitch.data());
   Eigen::Matrix<double, 1, 1> R(R_pitch.data());
-  tiny_setup(&pitch_solver_, A, B, f, Q.asDiagonal(), R.asDiagonal(), rho_, 2, 1, HORIZON, 0);
+  const auto setup_status =
+    tiny_setup(&pitch_solver_, A, B, f, Q.asDiagonal(), R.asDiagonal(), rho_, 2, 1, HORIZON, 0);
+  if (setup_status != 0) {
+    tools::logger()->error("[Planner] Failed to initialize pitch MPC solver: status={}", setup_status);
+    throw std::runtime_error("failed to initialize pitch MPC solver");
+  }
 
   Eigen::MatrixXd x_min = Eigen::MatrixXd::Constant(2, HORIZON, -1e17);
   Eigen::MatrixXd x_max = Eigen::MatrixXd::Constant(2, HORIZON, 1e17);
   Eigen::MatrixXd u_min = Eigen::MatrixXd::Constant(1, HORIZON - 1, -max_pitch_acc);
   Eigen::MatrixXd u_max = Eigen::MatrixXd::Constant(1, HORIZON - 1, max_pitch_acc);
-  tiny_set_bound_constraints(pitch_solver_, x_min, x_max, u_min, u_max);
+  const auto bound_status = tiny_set_bound_constraints(pitch_solver_, x_min, x_max, u_min, u_max);
+  if (bound_status != 0) {
+    tools::logger()->error("[Planner] Failed to configure pitch MPC constraints: status={}", bound_status);
+    throw std::runtime_error("failed to configure pitch MPC constraints");
+  }
 
   pitch_solver_->settings->max_iter = max_iter_;
 }

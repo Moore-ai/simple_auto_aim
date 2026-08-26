@@ -126,6 +126,8 @@ target_link_libraries(planner_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim too
 
 add_executable(planner_debug_test tests/planner_debug_test.cpp)
 target_link_libraries(planner_debug_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+target_compile_options(planner_debug_test PRIVATE -UNDEBUG)
+add_test(NAME planner_debug_test COMMAND planner_debug_test)
 
 add_executable(web_debug_test tests/web_debug_test.cpp)
 target_link_libraries(web_debug_test ${OpenCV_LIBS} fmt::fmt tools io auto_aim)
@@ -156,6 +158,7 @@ add_test(NAME video_camera_test COMMAND video_camera_test)
 set_tests_properties(reprojection_observation_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(outpost_target_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(tracker_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(planner_debug_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(gimbal_protocol_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(armor_type_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(detector_config_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
