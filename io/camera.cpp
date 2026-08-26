@@ -48,9 +48,7 @@ Camera::Camera(const std::string & config_path)
   }
 
   else if (camera_name == "hikrobot") {
-    auto gain = tools::read<double>(yaml, "gain");
-    auto vid_pid = tools::read<std::string>(yaml, "vid_pid");
-    camera_ = std::make_unique<HikRobot>(exposure_ms, gain, vid_pid);
+    camera_ = std::make_unique<HikRobot>(load_hikrobot_config(yaml));
   }
 
   else {
@@ -58,7 +56,9 @@ Camera::Camera(const std::string & config_path)
   }
 }
 
-bool Camera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
+bool Camera::read(
+  cv::Mat & img, std::chrono::steady_clock::time_point & timestamp,
+  std::chrono::milliseconds timeout)
 {
   if (virtual_camera_) {
     if (!virtual_camera_->read(img)) {
@@ -69,7 +69,10 @@ bool Camera::read(cv::Mat & img, std::chrono::steady_clock::time_point & timesta
     return true;
   }
 
-  camera_->read(img, timestamp);
+  if (!camera_->read(img, timestamp, timeout)) {
+    img.release();
+    return false;
+  }
 
   if (auto_exposure_) {
     auto_exposure_->update(

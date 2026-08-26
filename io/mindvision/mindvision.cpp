@@ -50,13 +50,17 @@ MindVision::~MindVision()
   tools::logger()->info("Mindvision destructed.");
 }
 
-void MindVision::read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp)
+bool MindVision::read(
+  cv::Mat & img, std::chrono::steady_clock::time_point & timestamp,
+  std::chrono::milliseconds timeout)
 {
+  (void)timeout;
   CameraData data;
   queue_.pop(data);
 
   img = data.img;
   timestamp = data.timestamp;
+  return !img.empty();
 }
 
 double MindVision::get_exposure_us() const

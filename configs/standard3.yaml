@@ -1,6 +1,6 @@
 enemy_color: "red"
-image_width: 1440
-image_height: 1080
+image_width: 1280
+image_height: 1024
 outpost_model: current # 模型选择：current=固定低/中/高板高度模型，v2=相位编号与高度差在线估计模型
 outpost_current: # current 模型专用配置；id=0/1/2 固定对应低/中/高装甲板
   P0: [1, 64, 1, 64, 1, 81, 0.4, 0] # 初始协方差对角线，状态顺序为[x,vx,y,vy,z,vz,yaw,yaw_rate]
@@ -178,12 +178,15 @@ judge_distance: 2 #距离判断阈值
 auto_fire: true # 是否由自瞄控制射击
 
 camera_name: "hikrobot"
-exposure_ms: 2.5
-gain: 16.9
+exposure_ms: 5.5
+gain: 16.0
 vid_pid: "2bdf:0001"
+camera_index: 0
+fps: 120
+flip_image: true
 
 virtual_camera:
-  enable: true
+  enable: false
   video_path: assets/demo/demo.avi
 
 auto_exposure:
@@ -201,15 +204,12 @@ auto_exposure:
 #  0  0  1
 R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]
 
-# 重投影误差: 0.1820px
-camera_matrix: [1785.4881526822305, 0, 672.4806478241826, 0, 1785.026019470562, 559.89603224794314, 0, 0, 1]
-distort_coeffs: [-0.076005079619881746, 0.11182817466388446, 0.0005362204787722057, -0.0027546300984895122, 0]
+# HFUT 已验证的 1280x1024 海康标定参数
+camera_matrix: [1762.22864, 0.0, 513.82984, 0.0, 1763.58882, 478.72438, 0.0, 0.0, 1.0]
+distort_coeffs: [-0.069163, 0.078039, 0.001264, -0.000786, 0.0]
 
-# 相机同理想情况的偏角: yaw1.44 pitch-7.28 roll0.96 degree
-# 标定板到世界坐标系原点的水平距离: 1.13 m
-# 标定板同竖直摆放时的偏角: yaw7.61 pitch13.92 roll-0.46 degree
-R_camera2gimbal: [-0.027182119030230909, -0.12616154330853446, 0.99163723074269183, -0.99949106557517331, 0.019998323121329122, -0.024853106601381177, -0.016695575474690555, -0.99180811252093692, -0.12664093215554434]
-t_camera2gimbal: [0.13160669975045827, 0.10377721766577375, 0.024908271912914642]
+R_camera2gimbal: [0, -0.136571843168, 0.99063016896, -1, 0, 0, 0, -0.99063016896, -0.136571843168]
+t_camera2gimbal: [0.100, 0.0075, 0.000]
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x100

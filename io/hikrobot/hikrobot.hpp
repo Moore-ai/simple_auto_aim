@@ -5,52 +5,55 @@
 #include <chrono>
 #include <opencv2/opencv.hpp>
 #include <string>
-#include <thread>
+#include <vector>
+
+#include <yaml-cpp/yaml.h>
 
 #include "MvCameraControl.h"
 #include "io/camera.hpp"
-#include "tools/thread_safe_queue.hpp"
 
 namespace io
 {
+struct HikRobotConfig
+{
+  double exposure_us{0.0};
+  double gain{0.0};
+  int device_index{0};
+  int image_width{0};
+  int image_height{0};
+  double fps{150.0};
+  bool flip_image{false};
+};
+
+HikRobotConfig load_hikrobot_config(const YAML::Node & yaml);
+
 class HikRobot : public CameraBase
 {
 public:
-  HikRobot(double exposure_ms, double gain, const std::string & vid_pid);
+  explicit HikRobot(HikRobotConfig config);
   ~HikRobot() override;
-  void read(cv::Mat & img, std::chrono::steady_clock::time_point & timestamp) override;
+  bool read(
+    cv::Mat & img, std::chrono::steady_clock::time_point & timestamp,
+    std::chrono::milliseconds timeout) override;
   double get_exposure_us() const override;
   void set_exposure_us(double exposure_us) override;
 
 private:
-  struct CameraData
-  {
-    cv::Mat img;
-    std::chrono::steady_clock::time_point timestamp;
-  };
-
+  HikRobotConfig config_;
   std::atomic<double> exposure_us_;
-  double gain_;
+  void * handle_{nullptr};
+  bool grabbing_{false};
+  std::vector<unsigned char> frame_buffer_;
+  std::vector<unsigned char> bgr_buffer_;
 
-  std::thread daemon_thread_;
-  std::atomic<bool> daemon_quit_;
-
-  void * handle_;
-  std::thread capture_thread_;
-  std::atomic<bool> capturing_;
-  std::atomic<bool> capture_quit_;
-  tools::ThreadSafeQueue<CameraData> queue_;
-
-  int vid_, pid_;
-
-  void capture_start();
-  void capture_stop();
-
-  void set_float_value(const std::string & name, double value);
-  void set_enum_value(const std::string & name, unsigned int value);
-
-  void set_vid_pid(const std::string & vid_pid);
-  void reset_usb() const;
+  bool open();
+  void close();
+  bool configure();
+  bool prepare_frame_buffer();
+  bool set_float_value(const std::string & name, double value);
+  bool set_int_value(const std::string & name, unsigned int value);
+  bool set_enum_value(const std::string & name, unsigned int value);
+  bool set_enum_value(const std::string & name, const std::string & value);
 };
 
 }  // namespace io
