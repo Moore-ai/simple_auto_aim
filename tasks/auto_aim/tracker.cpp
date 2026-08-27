@@ -20,7 +20,6 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   omni_target_priority_{ArmorPriority::fifth}
 {
   auto yaml = tools::load(config_path);
-  enemy_color_ = (tools::read<std::string>(yaml, "enemy_color") == "red") ? Color::red : Color::blue;
   image_width_ = tools::read<int>(yaml, "image_width");
   image_height_ = tools::read<int>(yaml, "image_height");
   min_detect_count_ = tools::read<int>(yaml, "min_detect_count");
@@ -170,6 +169,20 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
 }
 
 std::string Tracker::state() const { return state_; }
+
+void Tracker::set_enemy_color(Color enemy_color)
+{
+  if (enemy_color_received_ && enemy_color_ == enemy_color) return;
+
+  enemy_color_ = enemy_color;
+  enemy_color_received_ = true;
+  observation_path_.set_enemy_color(enemy_color);
+  state_ = "lost";
+  pre_state_ = "lost";
+  detect_count_ = 0;
+  temp_lost_count_ = 0;
+  tools::logger()->info("[Tracker] Enemy color switched to {}", COLORS[enemy_color_]);
+}
 
 std::list<Target> Tracker::track(
   std::list<Armor> & armors, std::chrono::steady_clock::time_point t, bool use_enemy_color)

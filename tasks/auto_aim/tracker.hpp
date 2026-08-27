@@ -28,6 +28,8 @@ public:
   Tracker(const std::string & config_path, Solver & solver);
 
   std::string state() const;
+  void set_enemy_color(Color enemy_color);
+  Color enemy_color() const { return enemy_color_; }
   bool reprojection_enabled() const { return observation_path_.uses_reprojection(); }
   const TrackerDebugInfo & debug_info() const { return observation_path_.debug_info(); }
 
@@ -51,7 +53,9 @@ public:
 private:
   Solver & solver_;
   ObservationPath observation_path_;
-  Color enemy_color_;
+  // 由下位机反馈 mode 设置；在收到首包前保持默认值，不读取 YAML。
+  Color enemy_color_ = Color::blue;
+  bool enemy_color_received_ = false;
   int image_width_;
   int image_height_;
   int min_detect_count_;

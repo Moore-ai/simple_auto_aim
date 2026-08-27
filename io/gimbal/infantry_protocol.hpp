@@ -7,17 +7,37 @@
 #include <cstring>
 #include <cmath>
 #include <deque>
+#include <optional>
 
 #include <Eigen/Geometry>
 
+#include "io/gimbal/infantry_packet.hpp"
+
 namespace io
 {
-constexpr size_t kInfantryCommandPacketSize = 32;
-constexpr size_t kInfantryFeedbackPacketSize = 24;
 constexpr uint32_t kInfantryDefaultBaudrate = 115200;
 constexpr int kInfantryDefaultBytesize = 8;
 constexpr uint32_t kInfantryReadTimeoutMs = 2;
 constexpr uint32_t kInfantryWriteTimeoutMs = 5;
+
+// 下位机反馈模式中的目标颜色约定：0=红，1=蓝。
+enum class InfantryEnemyColor : uint8_t
+{
+  red,
+  blue,
+};
+
+inline std::optional<InfantryEnemyColor> infantry_enemy_color(uint8_t mode)
+{
+  switch (mode) {
+    case 0:
+      return InfantryEnemyColor::red;
+    case 1:
+      return InfantryEnemyColor::blue;
+    default:
+      return std::nullopt;
+  }
+}
 
 inline bool is_supported_infantry_bytesize(int bytesize)
 {
@@ -53,56 +73,57 @@ inline uint8_t infantry_crc8(const uint8_t * data, size_t size)
   return crc;
 }
 
-inline void load_infantry_float(uint8_t * data, size_t offset, float value)
-{
-  if (!std::isfinite(value)) value = 0.0F;
-  std::memcpy(data + offset, &value, sizeof(value));
-}
-
 inline std::array<uint8_t, kInfantryCommandPacketSize> make_infantry_command_packet(
   bool control, bool fire, float pitch_abs_sp, float yaw_abs_sp, float distance, float pitch_vel_sp,
   float yaw_vel_sp, float pitch_acc_sp, float yaw_acc_sp)
 {
-  std::array<uint8_t, kInfantryCommandPacketSize> packet{};
-  packet[0] = 0xFF;
-  packet[1] = control && fire ? 1 : 0;
+  InfantryCommandPacket command;
+  command.fire = control && fire ? 1 : 0;
   // 本项目内部 pitch 向上为负；下位机绝对角度约定向上为正。
-  load_infantry_float(packet.data(), 2, -pitch_abs_sp);
-  load_infantry_float(packet.data(), 6, yaw_abs_sp);
-  load_infantry_float(packet.data(), 10, distance);
-  load_infantry_float(packet.data(), 14, -pitch_vel_sp);
-  load_infantry_float(packet.data(), 18, yaw_vel_sp);
-  load_infantry_float(packet.data(), 22, -pitch_acc_sp);
-  load_infantry_float(packet.data(), 26, yaw_acc_sp);
-  packet[30] = infantry_crc8(packet.data(), 30);
-  packet[31] = 0x0D;
+  command.pitch_abs = std::isfinite(pitch_abs_sp) ? -pitch_abs_sp : 0.0F;
+  command.yaw_abs = std::isfinite(yaw_abs_sp) ? yaw_abs_sp : 0.0F;
+  command.distance = std::isfinite(distance) ? distance : 0.0F;
+  command.pitch_vel = std::isfinite(pitch_vel_sp) ? -pitch_vel_sp : 0.0F;
+  command.yaw_vel = std::isfinite(yaw_vel_sp) ? yaw_vel_sp : 0.0F;
+  command.pitch_acc = std::isfinite(pitch_acc_sp) ? -pitch_acc_sp : 0.0F;
+  command.yaw_acc = std::isfinite(yaw_acc_sp) ? yaw_acc_sp : 0.0F;
+  command.crc8 = infantry_crc8(
+    reinterpret_cast<const uint8_t *>(&command), offsetof(InfantryCommandPacket, crc8));
+
+  std::array<uint8_t, kInfantryCommandPacketSize> packet{};
+  std::memcpy(packet.data(), &command, sizeof(command));
   return packet;
 }
 
 inline bool parse_infantry_feedback_packet(const uint8_t * packet, InfantryFeedback & feedback)
 {
-  if (packet[0] != 0xFF || packet[23] != 0x0D || infantry_crc8(packet, 22) != packet[22]) {
+  InfantryFeedbackPacket raw;
+  std::memcpy(&raw, packet, sizeof(raw));
+  if (raw.start != 0xFF || raw.end != 0x0D ||
+      infantry_crc8(packet, offsetof(InfantryFeedbackPacket, crc8)) != raw.crc8) {
     return false;
   }
 
-  feedback.mode = packet[1];
-  std::memcpy(&feedback.roll, packet + 2, sizeof(feedback.roll));
-  std::memcpy(&feedback.pitch, packet + 6, sizeof(feedback.pitch));
-  std::memcpy(&feedback.yaw, packet + 10, sizeof(feedback.yaw));
+  feedback.mode = raw.mode;
+  feedback.roll = raw.roll;
+  feedback.pitch = raw.pitch;
+  feedback.yaw = raw.yaw;
   return true;
 }
 
 inline std::array<uint8_t, kInfantryFeedbackPacketSize> make_infantry_feedback_packet(
   uint8_t mode, float roll, float pitch, float yaw)
 {
+  InfantryFeedbackPacket feedback;
+  feedback.mode = mode;
+  feedback.roll = std::isfinite(roll) ? roll : 0.0F;
+  feedback.pitch = std::isfinite(pitch) ? pitch : 0.0F;
+  feedback.yaw = std::isfinite(yaw) ? yaw : 0.0F;
+
   std::array<uint8_t, kInfantryFeedbackPacketSize> packet{};
-  packet[0] = 0xFF;
-  packet[1] = mode;
-  load_infantry_float(packet.data(), 2, roll);
-  load_infantry_float(packet.data(), 6, pitch);
-  load_infantry_float(packet.data(), 10, yaw);
-  packet[22] = infantry_crc8(packet.data(), 22);
-  packet[23] = 0x0D;
+  std::memcpy(packet.data(), &feedback, sizeof(feedback));
+  packet[offsetof(InfantryFeedbackPacket, crc8)] =
+    infantry_crc8(packet.data(), offsetof(InfantryFeedbackPacket, crc8));
   return packet;
 }
 

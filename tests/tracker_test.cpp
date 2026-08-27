@@ -13,9 +13,8 @@ int main()
   std::stringstream config_buffer;
   config_buffer << config_input.rdbuf();
   auto config_text = config_buffer.str();
-  const auto insertion_point = config_text.find('\n');
-  assert(insertion_point != std::string::npos);
-  config_text.insert(insertion_point + 1, "image_width: 640\nimage_height: 480\n");
+  assert(config_text.find("enemy_color:") == std::string::npos);
+  config_text.insert(0, "image_width: 640\nimage_height: 480\n");
 
   constexpr auto config_path = "/tmp/tracker_test.yaml";
   std::ofstream config_output(config_path);
@@ -24,6 +23,8 @@ int main()
 
   auto solver = auto_aim::Solver(config_path);
   auto tracker = auto_aim::Tracker(config_path, solver);
+  // 模拟下位机首包：蓝色不能因默认值相同而跳过 ObservationPath 的同步。
+  tracker.set_enemy_color(auto_aim::Color::blue);
   const auto points = solver.reproject_armor(
     {2.0, 0.0, 0.0}, 0.0, auto_aim::ArmorType::small, auto_aim::ArmorName::sentry);
 

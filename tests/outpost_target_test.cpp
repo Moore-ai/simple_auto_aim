@@ -367,14 +367,12 @@ int main()
   const auto model_position = v2_yaml.find("outpost_model: current");
   assert(model_position != std::string::npos);
   v2_yaml.replace(model_position, std::string("outpost_model: current").size(), "outpost_model: v2");
-  const auto color_position = v2_yaml.find("enemy_color: \"blue\"");
-  assert(color_position != std::string::npos);
-  v2_yaml.replace(color_position, std::string("enemy_color: \"blue\"").size(), "enemy_color: \"red\"");
   std::ofstream v2_output("/tmp/outpost_v2_test.yaml");
   v2_output << v2_yaml;
   v2_output.close();
   auto_aim::Solver v2_solver("/tmp/outpost_v2_test.yaml");
   auto_aim::Tracker v2_tracker("/tmp/outpost_v2_test.yaml", v2_solver);
+  v2_tracker.set_enemy_color(auto_aim::Color::red);
   auto v2_detections = auto_aim::DetectionResult{{armor}, {}};
   const auto v2_targets = v2_tracker.track(v2_detections, t0 + std::chrono::milliseconds(10));
   assert(!v2_targets.empty());
@@ -405,11 +403,6 @@ int main()
   assert((expected_optimized.xyz_in_world - four_point_position).norm() > 1e-6);
 
   auto optimizer_yaml = demo_text.str();
-  const auto optimizer_color_position = optimizer_yaml.find("enemy_color: \"blue\"");
-  assert(optimizer_color_position != std::string::npos);
-  optimizer_yaml.replace(
-    optimizer_color_position, std::string("enemy_color: \"blue\"").size(),
-    "enemy_color: \"red\"");
   const auto optimizer_switch_position =
     optimizer_yaml.find("enable_outpost_distance_optimizer: false");
   assert(optimizer_switch_position != std::string::npos);
@@ -421,6 +414,7 @@ int main()
   optimizer_output.close();
   auto_aim::Solver optimizer_solver("/tmp/outpost_optimizer_init_test.yaml");
   auto_aim::Tracker optimizer_tracker("/tmp/outpost_optimizer_init_test.yaml", optimizer_solver);
+  optimizer_tracker.set_enemy_color(auto_aim::Color::red);
   auto optimizer_detections =
     auto_aim::DetectionResult{{optimizer_armor}, {neighbor_lightbar}};
   const auto optimizer_targets = optimizer_tracker.track(

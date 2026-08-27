@@ -81,6 +81,11 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     if (!camera.read(img, t)) break;
+    const auto gimbal_state = gimbal.state();
+    if (const auto color = io::infantry_enemy_color(gimbal_state.mode)) {
+      tracker.set_enemy_color(
+        *color == io::InfantryEnemyColor::red ? auto_aim::red : auto_aim::blue);
+    }
     auto q = gimbal.q(t);
     recorder.record(img, q, t);
     solver.set_R_gimbal2world(q);
@@ -178,7 +183,6 @@ int main(int argc, char * argv[])
 
   quit = true;
   if (plan_thread.joinable()) plan_thread.join();
-  gimbal.send(false, false, 0, 0, 0, 0, 0, 0);
-
+  
   return 0;
 }

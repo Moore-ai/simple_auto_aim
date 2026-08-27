@@ -5,6 +5,7 @@
 
 #include <Eigen/Geometry>
 
+#include "io/gimbal/infantry_packet.hpp"
 #include "io/gimbal/infantry_protocol.hpp"
 
 namespace
@@ -33,11 +34,26 @@ int main()
   static_assert(io::kInfantryDefaultBytesize == 8);
   static_assert(io::kInfantryReadTimeoutMs == 2);
   static_assert(io::kInfantryWriteTimeoutMs == 5);
+  static_assert(sizeof(io::InfantryCommandPacket) == 32);
+  static_assert(sizeof(io::InfantryFeedbackPacket) == 24);
+  static_assert(offsetof(io::InfantryCommandPacket, pitch_abs) == 2);
+  static_assert(offsetof(io::InfantryCommandPacket, yaw_abs) == 6);
+  static_assert(offsetof(io::InfantryFeedbackPacket, roll) == 2);
+  static_assert(offsetof(io::InfantryFeedbackPacket, crc8) == 22);
   assert(io::is_supported_infantry_bytesize(5));
   assert(io::is_supported_infantry_bytesize(6));
   assert(io::is_supported_infantry_bytesize(7));
   assert(io::is_supported_infantry_bytesize(8));
   assert(!io::is_supported_infantry_bytesize(9));
+
+  // 当前下位机约定：0=红色目标，1=蓝色目标；其余值不改变目标颜色。
+  assert(io::infantry_enemy_color(0) == io::InfantryEnemyColor::red);
+  assert(io::infantry_enemy_color(1) == io::InfantryEnemyColor::blue);
+  assert(!io::infantry_enemy_color(2).has_value());
+  assert(!io::infantry_enemy_color(3).has_value());
+  assert(!io::infantry_enemy_color(4).has_value());
+  assert(!io::infantry_enemy_color(5).has_value());
+  assert(!io::infantry_enemy_color(6).has_value());
 
   const auto command = io::make_infantry_command_packet(
     true, true, 1.25F, -2.5F, 8.5F, 3.75F, -4.0F, 5.0F, -6.0F);

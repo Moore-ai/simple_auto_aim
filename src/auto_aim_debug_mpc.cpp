@@ -113,6 +113,11 @@ int main(int argc, char * argv[])
 
   while (!exiter.exit()) {
     camera.read(img, t);
+    const auto gimbal_state = gimbal.state();
+    if (const auto color = io::infantry_enemy_color(gimbal_state.mode)) {
+      tracker.set_enemy_color(
+        *color == io::InfantryEnemyColor::red ? auto_aim::red : auto_aim::blue);
+    }
     auto q = gimbal.q(t);
 
     solver.set_R_gimbal2world(q);

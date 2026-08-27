@@ -61,6 +61,7 @@ public:
   explicit ObservationPath(Solver & solver);
 
   void configure(const ObservationPathConfig & config, Color enemy_color);
+  void set_enemy_color(Color enemy_color) { enemy_color_ = enemy_color; }
 
   bool uses_reprojection() const;
   bool lightbar_assist_enabled() const;
