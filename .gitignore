@@ -1,5 +1,7 @@
 .vscode/
 .github/
+AGENTS.md
+CLAUDE.md
 build/
 Camera/
 logs/
