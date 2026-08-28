@@ -20,9 +20,9 @@ namespace tools
 
 struct WebDebugPaths
 {
-  std::string shm_name{"/sp_vision_25_frame"};
-  std::string data_path{"/dev/shm/sp_vision_25_data.json"};
-  std::string log_path{"/dev/shm/sp_vision_25_log.json"};
+  std::string shm_name{"/simple_auto_aim_frame"};
+  std::string data_path{"/dev/shm/simple_auto_aim_data.json"};
+  std::string log_path{"/dev/shm/simple_auto_aim_log.json"};
 };
 
 struct WebDebugContext

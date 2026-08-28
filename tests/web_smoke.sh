@@ -2,9 +2,9 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
-frame_path=/dev/shm/sp_vision_25_frame
-data_path=/dev/shm/sp_vision_25_data.json
-log_path=/dev/shm/sp_vision_25_log.json
+frame_path=/dev/shm/simple_auto_aim_frame
+data_path=/dev/shm/simple_auto_aim_data.json
+log_path=/dev/shm/simple_auto_aim_log.json
 web_pid=""
 
 for path in "$frame_path" "$data_path" "$log_path"; do
@@ -51,7 +51,7 @@ with open(log_path, "w", encoding="utf-8") as stream:
 PY
 
 cd "$project_root"
-./run_web.sh >/tmp/sp_vision_25_web_smoke.log 2>&1 &
+./run_web.sh >/tmp/simple_auto_aim_web_smoke.log 2>&1 &
 web_pid=$!
 
 for _ in $(seq 1 50); do
@@ -69,7 +69,7 @@ log_headers="$(curl --fail --silent --show-error --dump-header - --output /dev/n
 log_body="$(curl --fail --silent --show-error http://127.0.0.1:9000/log)"
 
 set +e
-video_body=/tmp/sp_vision_25_video
+video_body=/tmp/simple_auto_aim_video
 video_headers="$(curl --silent --max-time 2 --dump-header - --output "$video_body" http://127.0.0.1:9000/video)"
 video_status=$?
 set -e

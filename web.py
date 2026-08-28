@@ -26,10 +26,10 @@ from fastapi.templating import Jinja2Templates
 STREAM_FPS = 60
 FRAME_INTERVAL = 1.0 / STREAM_FPS
 JSON_CACHE_TTL = 0.05
-SHARED_MEMORY_PATH = "/dev/shm/sp_vision_25_frame"
+SHARED_MEMORY_PATH = "/dev/shm/simple_auto_aim_frame"
 SHARED_MEMORY_SIZE = 2 * 1024 * 1024
-DATA_PATH = "/dev/shm/sp_vision_25_data.json"
-LOG_PATH = "/dev/shm/sp_vision_25_log.json"
+DATA_PATH = "/dev/shm/simple_auto_aim_data.json"
+LOG_PATH = "/dev/shm/simple_auto_aim_log.json"
 HOST = "0.0.0.0"
 PORT = 9000
 PROJECT_ROOT = Path(__file__).resolve().parent

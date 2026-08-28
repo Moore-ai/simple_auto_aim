@@ -26,7 +26,7 @@ void stop(int)
 
 int main(int argc, char * argv[])
 {
-  const std::string link_path = argc > 1 ? argv[1] : "/tmp/sp_vision_25_gimbal";
+  const std::string link_path = argc > 1 ? argv[1] : "/tmp/simple_auto_aim_gimbal";
 
   int master_fd = -1;
   int slave_fd = -1;

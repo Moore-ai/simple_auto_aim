@@ -9,9 +9,9 @@
 int main()
 {
   const auto video_path =
-    (std::filesystem::temp_directory_path() / "sp_vision_video_camera_test.avi").string();
+    (std::filesystem::temp_directory_path() / "simple_auto_aim_video_camera_test.avi").string();
   const auto config_path =
-    (std::filesystem::temp_directory_path() / "sp_vision_video_camera_test.yaml").string();
+    (std::filesystem::temp_directory_path() / "simple_auto_aim_video_camera_test.yaml").string();
   cv::VideoWriter writer(video_path, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, {8, 8});
   if (!writer.isOpened()) {
     std::cerr << "failed to create test video\n";

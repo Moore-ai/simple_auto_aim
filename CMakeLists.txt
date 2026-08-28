@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16.3)
 
-project(sp_vision)
+project(simple_auto_aim)
 
 enable_testing()
 

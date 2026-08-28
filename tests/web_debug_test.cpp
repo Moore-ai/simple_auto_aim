@@ -33,9 +33,9 @@ int main()
   assert(log.at("detector").at("lightbar_count") == 1);
 
   tools::WebDebug web({
-    "/sp_vision_25_web_debug_test",
-    "/tmp/sp_vision_25_data_test.json",
-    "/tmp/sp_vision_25_log_test.json"
+    "/simple_auto_aim_web_debug_test",
+    "/tmp/simple_auto_aim_data_test.json",
+    "/tmp/simple_auto_aim_log_test.json"
   });
   web.publish(context, cv::Mat::zeros(8, 8, CV_8UC3));
   const auto data = web.data_json();
