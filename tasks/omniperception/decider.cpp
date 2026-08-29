@@ -143,12 +143,6 @@ bool Decider::armor_filter(std::list<auto_aim::Armor> & armors)
   armors.remove_if(
     [&](const auto_aim::Armor & a) { return a.name == auto_aim::ArmorName::outpost; });
 
-  // 过滤掉刚复活无敌的装甲板
-  armors.remove_if([&](const auto_aim::Armor & a) {
-    return std::find(invincible_armor_.begin(), invincible_armor_.end(), a.name) !=
-           invincible_armor_.end();
-  });
-
   return armors.empty();
 }
 
@@ -180,42 +174,6 @@ Eigen::Vector4d Decider::get_target_info(
   }
 
   return Eigen::Vector4d::Zero();
-}
-
-void Decider::get_invincible_armor(const std::vector<int8_t> & invincible_enemy_ids)
-{
-  invincible_armor_.clear();
-
-  if (invincible_enemy_ids.empty()) return;
-
-  for (const auto & id : invincible_enemy_ids) {
-    tools::logger()->info("invincible armor id: {}", id);
-    invincible_armor_.push_back(auto_aim::ArmorName(id - 1));
-  }
-}
-
-void Decider::get_auto_aim_target(
-  std::list<auto_aim::Armor> & armors, const std::vector<int8_t> & auto_aim_target)
-{
-  if (auto_aim_target.empty()) return;
-
-  std::vector<auto_aim::ArmorName> auto_aim_targets;
-
-  for (const auto & target : auto_aim_target) {
-    if (target <= 0 || static_cast<size_t>(target) > auto_aim::ARMOR_NAMES.size()) {
-      tools::logger()->warn("Received invalid auto_aim target value: {}", int(target));
-      continue;
-    }
-    auto_aim_targets.push_back(static_cast<auto_aim::ArmorName>(target - 1));
-    tools::logger()->info("nav send auto_aim target is {}", auto_aim::ARMOR_NAMES[target - 1]);
-  }
-
-  if (auto_aim_targets.empty()) return;
-
-  armors.remove_if([&](const auto_aim::Armor & a) {
-    return std::find(auto_aim_targets.begin(), auto_aim_targets.end(), a.name) ==
-           auto_aim_targets.end();
-  });
 }
 
 }  // namespace omniperception

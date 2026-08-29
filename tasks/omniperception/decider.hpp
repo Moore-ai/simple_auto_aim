@@ -39,11 +39,6 @@ public:
   Eigen::Vector4d get_target_info(
     const std::list<auto_aim::Armor> & armors, const std::list<auto_aim::Target> & targets);
 
-  void get_invincible_armor(const std::vector<int8_t> & invincible_enemy_ids);
-
-  void get_auto_aim_target(
-    std::list<auto_aim::Armor> & armors, const std::vector<int8_t> & auto_aim_target);
-
 private:
   int img_width_;
   int img_height_;
@@ -53,8 +48,6 @@ private:
 
   auto_aim::Color enemy_color_;
   auto_aim::YOLO detector_;
-  std::vector<auto_aim::ArmorName> invincible_armor_;  //无敌状态机器人编号,英雄为1，哨兵为6
-
 };
 
 }  // namespace omniperception
