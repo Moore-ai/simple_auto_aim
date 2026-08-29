@@ -33,6 +33,7 @@ private:
   std::unique_ptr<CameraBase> camera_;
   std::unique_ptr<cv::VideoCapture> virtual_camera_;
   std::unique_ptr<AutoExposure> auto_exposure_;
+  int image_rotation_{0};
 };
 
 }  // namespace io

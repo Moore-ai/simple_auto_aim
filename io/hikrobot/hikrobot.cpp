@@ -6,6 +6,7 @@
 
 #include "tools/logger.hpp"
 #include "tools/yaml.hpp"
+#include "MvCameraControl.h"
 
 namespace io
 {
@@ -18,7 +19,6 @@ HikRobotConfig load_hikrobot_config(const YAML::Node & yaml)
   if (yaml["image_width"]) config.image_width = yaml["image_width"].as<int>();
   if (yaml["image_height"]) config.image_height = yaml["image_height"].as<int>();
   if (yaml["fps"]) config.fps = yaml["fps"].as<double>();
-  if (yaml["flip_image"]) config.flip_image = yaml["flip_image"].as<bool>();
   return config;
 }
 
@@ -83,10 +83,7 @@ bool HikRobot::read(
   }
 
   const cv::Mat bgr(frame_info.nHeight, frame_info.nWidth, CV_8UC3, bgr_buffer_.data());
-  if (config_.flip_image)
-    cv::flip(bgr, img, -1);
-  else
-    img = bgr.clone();
+  img = bgr.clone();
   if (img.empty()) return false;
 
   timestamp = std::chrono::steady_clock::now();

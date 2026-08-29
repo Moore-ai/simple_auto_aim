@@ -9,7 +9,6 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include "MvCameraControl.h"
 #include "io/camera.hpp"
 
 namespace io
@@ -22,7 +21,6 @@ struct HikRobotConfig
   int image_width{0};
   int image_height{0};
   double fps{150.0};
-  bool flip_image{false};
 };
 
 HikRobotConfig load_hikrobot_config(const YAML::Node & yaml);

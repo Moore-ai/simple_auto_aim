@@ -102,7 +102,6 @@ gain: 16.9
 vid_pid: "2bdf:0001"
 camera_index: 0
 fps: 150
-flip_image: false
 
 auto_exposure:
   enable: false
