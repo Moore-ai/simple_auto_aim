@@ -166,9 +166,6 @@ decision_speed: 12 # rad/s
 high_speed_delay_time: 0.005 # s
 low_speed_delay_time: 0.005 # s
 
-#####-----decider参数-----#####
-mode: 1
-
 #####-----shooter参数-----#####
 first_tolerance: 2 # 近距离射击容差，degree
 second_tolerance: 0.8 # 远距离射击容差，degree

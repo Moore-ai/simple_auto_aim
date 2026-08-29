@@ -79,18 +79,6 @@ min_detect_count: 5               # 帧 连续检测到目标后，状态从 det
 max_temp_lost_count: 15           # 帧 短暂丢失上限，超过则状态从 temp_lost → lost
 outpost_max_temp_lost_count: 75   # 帧 前哨站短暂丢失上限，高于普通值（前哨站旋转时遮挡时间长）
 
-#####-----击打优先级配置-----#####
-use_priority: false                # 是否启用兵种优先级，启用后按 priority_list 顺序选择目标
-priority_list:                     # 优先级从高到低排列（未列出兵种优先级最低）
-  - one
-  - three
-  - four
-  - five
-  - two
-  - sentry
-  - outpost
-  - base
-
 #####-----滤波器配置-----#####
 filter_method: "ekf"                  # 滤波器类型："ekf"(标准EKF), "inekf"(左不变误差EKF), "ukf"(无迹卡尔曼滤波)
 

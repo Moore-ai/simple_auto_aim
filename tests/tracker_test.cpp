@@ -40,5 +40,27 @@ int main()
   tracker.track(armors, std::chrono::steady_clock::now());
 
   assert(armors.front().center == configured_center_armor.center);
+
+  const auto legacy_priority_config =
+    "use_priority: true\npriority_list: [one, sentry]\n" + config_text;
+  constexpr auto legacy_priority_config_path = "/tmp/tracker_legacy_priority_test.yaml";
+  std::ofstream legacy_priority_output(legacy_priority_config_path);
+  legacy_priority_output << legacy_priority_config;
+  legacy_priority_output.close();
+
+  auto legacy_priority_solver = auto_aim::Solver(legacy_priority_config_path);
+  auto legacy_priority_tracker =
+    auto_aim::Tracker(legacy_priority_config_path, legacy_priority_solver);
+  legacy_priority_tracker.set_enemy_color(auto_aim::Color::blue);
+
+  auto centered_sentry = auto_aim::Armor(0, 0.9F, cv::Rect{}, points);
+  centered_sentry.center = {320.0F, 240.0F};
+  auto off_center_hero = auto_aim::Armor(3, 0.9F, cv::Rect{}, points);
+  off_center_hero.center = {600.0F, 400.0F};
+  std::list<auto_aim::Armor> legacy_priority_armors{off_center_hero, centered_sentry};
+
+  legacy_priority_tracker.track(legacy_priority_armors, std::chrono::steady_clock::now());
+
+  assert(legacy_priority_armors.front().name == auto_aim::ArmorName::sentry);
   return 0;
 }

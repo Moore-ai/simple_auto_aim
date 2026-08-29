@@ -79,8 +79,6 @@ int main(int argc, char * argv[])
 
     // decider.get_auto_aim_target(armors, ros2.subscribe_autoaim_target());
 
-    decider.set_priority(armors);
-
     auto targets = tracker.track(detections, timestamp);
 
     io::Command command{false, false, 0, 0};

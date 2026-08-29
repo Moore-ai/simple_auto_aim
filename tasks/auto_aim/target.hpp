@@ -100,7 +100,6 @@ class Target
 public:
   ArmorName name;
   ArmorType armor_type;
-  ArmorPriority priority;
   bool jumped;
   int last_id;  // debug only
 

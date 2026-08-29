@@ -2,6 +2,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <opencv2/opencv.hpp>
 
@@ -21,7 +22,6 @@ Decider::Decider(const std::string & config_path) : detector_(config_path), coun
   new_fov_v_ = yaml["new_fov_v"].as<double>();
   enemy_color_ =
     (yaml["enemy_color"].as<std::string>() == "red") ? auto_aim::Color::red : auto_aim::Color::blue;
-  mode_ = yaml["mode"].as<double>();
 }
 
 io::Command Decider::decide(
@@ -152,39 +152,16 @@ bool Decider::armor_filter(std::list<auto_aim::Armor> & armors)
   return armors.empty();
 }
 
-void Decider::set_priority(std::list<auto_aim::Armor> & armors)
+void Decider::filter(std::vector<DetectionResult> & detection_queue)
 {
-  if (armors.empty()) return;
-
-  const PriorityMap & priority_map = (mode_ == MODE_ONE) ? mode1 : mode2;
-
-  if (!armors.empty()) {
-    for (auto & armor : armors) {
-      armor.priority = priority_map.at(armor.name);
-    }
-  }
-}
-
-void Decider::sort(std::vector<DetectionResult> & detection_queue)
-{
-  if (detection_queue.empty()) return;
-
-  // 对每个 DetectionResult 调用 armor_filter 和 set_priority
   for (auto & dr : detection_queue) {
     armor_filter(dr.armors);
-    set_priority(dr.armors);
-
-    // 对每个 DetectionResult 中的 armors 进行排序
-    dr.armors.sort(
-      [](const auto_aim::Armor & a, const auto_aim::Armor & b) { return a.priority < b.priority; });
   }
-
-  // 根据优先级对 DetectionResult 进行排序
-  std::sort(
-    detection_queue.begin(), detection_queue.end(),
-    [](const DetectionResult & a, const DetectionResult & b) {
-      return a.armors.front().priority < b.armors.front().priority;
-    });
+  detection_queue.erase(
+    std::remove_if(
+      detection_queue.begin(), detection_queue.end(),
+      [](const DetectionResult & result) { return result.armors.empty(); }),
+    detection_queue.end());
 }
 
 Eigen::Vector4d Decider::get_target_info(

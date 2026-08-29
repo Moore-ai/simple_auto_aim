@@ -15,9 +15,7 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   detect_count_(0),
   temp_lost_count_(0),
   state_{"lost"},
-  pre_state_{"lost"},
-  last_timestamp_(std::chrono::steady_clock::now()),
-  omni_target_priority_{ArmorPriority::fifth}
+  last_timestamp_(std::chrono::steady_clock::now())
 {
   auto yaml = tools::load(config_path);
   image_width_ = tools::read<int>(yaml, "image_width");
@@ -66,29 +64,6 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
     tools::read<double>(outpost_v2, "direction_stable_threshold");
   outpost_v2_config_.direction_jump_threshold =
     tools::read<double>(outpost_v2, "direction_jump_threshold");
-
-  // 读取优先级配置
-  use_priority_ = yaml["use_priority"] ? yaml["use_priority"].as<bool>() : false;
-  if (use_priority_ && yaml["priority_list"]) {
-    auto list = yaml["priority_list"].as<std::vector<std::string>>();
-    for (size_t i = 0; i < list.size(); i++) {
-      bool matched = false;
-      for (size_t j = 0; j < ARMOR_NAMES.size(); j++) {
-        if (ARMOR_NAMES[j] == list[i]) {
-          auto key = static_cast<ArmorName>(j);
-          if (priority_map_.find(key) != priority_map_.end()) {
-            tools::logger()->warn("[Tracker] Duplicate priority entry: {} at index {}", list[i], i);
-          }
-          priority_map_[key] = static_cast<ArmorPriority>(i + 1);
-          matched = true;
-          break;
-        }
-      }
-      if (!matched) {
-        tools::logger()->warn("[Tracker] Unknown armor name in priority_list: {}", list[i]);
-      }
-    }
-  }
 
   // 读取滤波器共用参数（filter 段：过程噪声、P0、radius，EKF/InEKF 共用）
   auto filter_cfg = yaml["filter"];
@@ -178,7 +153,6 @@ void Tracker::set_enemy_color(Color enemy_color)
   enemy_color_received_ = true;
   observation_path_.set_enemy_color(enemy_color);
   state_ = "lost";
-  pre_state_ = "lost";
   detect_count_ = 0;
   temp_lost_count_ = 0;
   tools::logger()->info("[Tracker] Enemy color switched to {}", COLORS[enemy_color_]);
@@ -215,7 +189,7 @@ std::list<Target> Tracker::track(
   //            solver_.oupost_reprojection_error(a, OUTPOST_MOUNT_PITCH);
   // });
 
-  // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
+  // 优先选择靠近画面中心的装甲板
   sort_armors(armors);
 
   bool found;
@@ -262,79 +236,8 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
   DetectionResult & detections, std::chrono::steady_clock::time_point t, bool use_enemy_color)
 {
   omniperception::DetectionResult switch_target{std::list<Armor>(), t, 0, 0};
-  omniperception::DetectionResult temp_target{std::list<Armor>(), t, 0, 0};
-  if (!detection_queue.empty()) {
-    temp_target = detection_queue.front();
-  }
-
-  auto dt = tools::delta_time(t, last_timestamp_);
-  last_timestamp_ = t;
-
-  // 时间间隔过长，说明可能发生了相机离线
-  if (state_ != "lost" && dt > 0.1) {
-    tools::logger()->warn("[Tracker] Large dt: {:.3f}s", dt);
-    state_ = "lost";
-  }
-
-  // 对全向感知队列中的目标也应用 tracker 的优先级方案，保证比较一致性
-  if (use_priority_ && !temp_target.armors.empty()) {
-    assign_priorities(temp_target.armors);
-  }
-
-  // 按优先级排序，优先级最高在首位(优先级越高数字越小，1的优先级最高)
-  auto & armors = detections.armors;
-  sort_armors(armors);
-
-  bool found;
-  if (state_ == "lost") {
-    found = set_target(detections, t);
-  }
-
-  // 此时主相机画面中出现了优先级更高的装甲板，切换目标
-  else if (state_ == "tracking" && !armors.empty() && armors.front().priority < target_.priority) {
-    found = set_target(detections, t);
-    tools::logger()->debug("auto_aim switch target to {}", ARMOR_NAMES[armors.front().name]);
-  }
-
-  // 此时全向感知相机画面中出现了优先级更高的装甲板，切换目标
-  else if (
-    state_ == "tracking" && !temp_target.armors.empty() &&
-    temp_target.armors.front().priority < target_.priority && target_.convergened()) {
-    state_ = "switching";
-    switch_target = omniperception::DetectionResult{
-      temp_target.armors, t, temp_target.delta_yaw, temp_target.delta_pitch};
-    omni_target_priority_ = temp_target.armors.front().priority;
-    found = false;
-    tools::logger()->debug("omniperception find higher priority target");
-  }
-
-  else if (state_ == "switching") {
-    found = !armors.empty() && armors.front().priority == omni_target_priority_;
-  }
-
-  else if (state_ == "detecting" && pre_state_ == "switching") {
-    found = set_target(detections, t);
-  }
-
-  else {
-    found = update_target(detections, t);
-  }
-
-  pre_state_ = state_;
-  // 更新状态机
-  state_machine(found);
-
-  // 发散检测
-  if (state_ != "lost" && target_.diverged()) {
-    tools::logger()->debug("[Tracker] Target diverged!");
-    state_ = "lost";
-    return {switch_target, {}};  // 返回switch_target和空的targets
-  }
-
-  if (state_ == "lost") return {switch_target, {}};  // 返回switch_target和空的targets
-
-  std::list<Target> targets = {target_};
-  return {switch_target, targets};
+  (void)detection_queue;
+  return {switch_target, track(detections, t, use_enemy_color)};
 }
 
 void Tracker::state_machine(bool found)
@@ -361,15 +264,6 @@ void Tracker::state_machine(bool found)
 
     temp_lost_count_ = 1;
     state_ = "temp_lost";
-  }
-
-  else if (state_ == "switching") {
-    if (found) {
-      state_ = "detecting";
-    } else {
-      temp_lost_count_++;
-      if (temp_lost_count_ > 200) state_ = "lost";
-    }
   }
 
   else if (state_ == "temp_lost") {
@@ -490,28 +384,9 @@ void Tracker::sort_armors(std::list<Armor> & armors) const
 {
   const cv::Point2f img_center(
     static_cast<float>(image_width_) / 2, static_cast<float>(image_height_) / 2);
-  if (use_priority_) {
-    assign_priorities(armors);
-    armors.sort([img_center](const Armor & a, const Armor & b) {
-      if (a.priority != b.priority) return a.priority < b.priority;
-      return cv::norm(a.center - img_center) < cv::norm(b.center - img_center);
-    });
-  } else {
-    armors.sort([img_center](const Armor & a, const Armor & b) {
-      auto distance_1 = cv::norm(a.center - img_center);
-      auto distance_2 = cv::norm(b.center - img_center);
-      return distance_1 < distance_2;
-    });
-    for (auto & armor : armors) armor.priority = ArmorPriority::fifth;
-  }
-}
-
-void Tracker::assign_priorities(std::list<Armor> & armors) const
-{
-  for (auto & armor : armors) {
-    auto it = priority_map_.find(armor.name);
-    armor.priority = (it != priority_map_.end()) ? it->second : static_cast<ArmorPriority>(priority_map_.size() + 1);
-  }
+  armors.sort([img_center](const Armor & a, const Armor & b) {
+    return cv::norm(a.center - img_center) < cv::norm(b.center - img_center);
+  });
 }
 
 }  // namespace auto_aim

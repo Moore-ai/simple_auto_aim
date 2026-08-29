@@ -83,25 +83,17 @@ int main(int argc, char * argv[])
 
     decider.armor_filter(armors);
 
-    decider.set_priority(armors);
-
     auto detection_queue = perceptron.get_detection_queue();
 
-    decider.sort(detection_queue);
+    decider.filter(detection_queue);
 
     auto [switch_target, targets] = tracker.track(detection_queue, detections, timestamp);
+    (void)switch_target;
 
     io::Command command{false, false, 0, 0};
 
     /// 全向感知逻辑
-    if (tracker.state() == "switching") {
-      command.control = switch_target.armors.empty() ? false : true;
-      command.shoot = false;
-      command.pitch = tools::limit_rad(switch_target.delta_pitch);
-      command.yaw = tools::limit_rad(switch_target.delta_yaw + gimbal_pos[0]);
-    }
-
-    else if (tracker.state() == "lost") {
+    if (tracker.state() == "lost") {
       command = decider.decide(detection_queue);
       command.yaw = tools::limit_rad(command.yaw + gimbal_pos[0]);
     }

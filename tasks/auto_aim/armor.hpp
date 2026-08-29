@@ -62,15 +62,6 @@ constexpr double armor_mount_pitch(ArmorName name)
   return name == ArmorName::outpost ? OUTPOST_MOUNT_PITCH : DEFAULT_ARMOR_MOUNT_PITCH;
 }
 
-enum ArmorPriority
-{
-  first = 1,
-  second,
-  third,
-  forth,
-  fifth
-};
-
 // clang-format off
 const std::vector<std::tuple<Color, ArmorName, ArmorType>> armor_properties = {
   {blue, sentry, small},     {red, sentry, small},     {extinguish, sentry, small},
@@ -114,7 +105,6 @@ struct Armor
 
   ArmorType type;
   ArmorName name;
-  ArmorPriority priority;
   int class_id;
   cv::Rect box;
   cv::Mat pattern;

@@ -18,7 +18,6 @@ Target::Target() = default;
 Target::Target(const Target & other)
 : name(other.name),
   armor_type(other.armor_type),
-  priority(other.priority),
   jumped(other.jumped),
   last_id(other.last_id),
   isinit(other.isinit),
@@ -49,7 +48,6 @@ Target & Target::operator=(const Target & other)
   if (this != &other) {
     name = other.name;
     armor_type = other.armor_type;
-    priority = other.priority;
     jumped = other.jumped;
     last_id = other.last_id;
     isinit = other.isinit;
@@ -94,7 +92,6 @@ Target::Target(
   reprojection_config_(std::move(reprojection_config)),
   t_(t)
 {
-  priority = armor.priority;
   if (name == ArmorName::outpost) {
     outpost_model_ = std::make_unique<OutpostTarget>(
       armor, P0_dig,
@@ -139,7 +136,6 @@ Target Target::make_outpost(
   Target result;
   result.name = ArmorName::outpost;
   result.armor_type = armor.type;
-  result.priority = armor.priority;
   result.jumped = false;
   result.last_id = 0;
   result.isinit = false;
@@ -164,7 +160,6 @@ Target Target::make_outpost_v2(
   if (armors.empty()) return result;
   result.name = ArmorName::outpost;
   result.armor_type = armors.front().type;
-  result.priority = armors.front().priority;
   result.jumped = false;
   result.last_id = 0;
   result.isinit = false;

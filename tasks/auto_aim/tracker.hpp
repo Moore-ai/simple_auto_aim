@@ -64,14 +64,9 @@ private:
   int temp_lost_count_;
   int outpost_max_temp_lost_count_;
   int normal_temp_lost_count_;
-  std::string state_, pre_state_;
+  std::string state_;
   Target target_;
   std::chrono::steady_clock::time_point last_timestamp_;
-  ArmorPriority omni_target_priority_;
-
-  // 优先级配置
-  bool use_priority_;
-  std::unordered_map<ArmorName, ArmorPriority> priority_map_;
 
   // 滤波器配置（一次性读取，传递给 Target）
   FilterConfig filter_config_;
@@ -101,8 +96,6 @@ private:
   void update_geometry_cache();
 
   void sort_armors(std::list<Armor> & armors) const;
-
-  void assign_priorities(std::list<Armor> & armors) const;
 };
 
 }  // namespace auto_aim
