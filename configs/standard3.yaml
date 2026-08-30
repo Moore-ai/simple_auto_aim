@@ -204,7 +204,7 @@ send_canid: 0xff
 can_interface: "can0"
 
 #####-----gimbal参数-----#####
-com_port: "/tmp/simple_auto_aim_gimbal" # 虚拟云台串口路径；真机运行时改回 /dev/gimbal
+com_port: "/dev/ttyACM0"           # 串口路径
 baudrate: 115200                   # 串口波特率
 bytesize: 8                        # 数据位宽
 yaw_kp: 0

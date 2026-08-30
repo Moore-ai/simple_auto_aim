@@ -23,8 +23,7 @@ auto_exposure:
   exposure_max: 3500.0
   control_interval_ms: 300
 
-#####-----cboard参数-----#####
-quaternion_canid: 0x01
-bullet_speed_canid: 0x110
-send_canid: 0xff
-can_interface: "can0"
+#####-----gimbal串口参数-----#####
+com_port: "/dev/ttyACM0"
+baudrate: 115200
+bytesize: 8
