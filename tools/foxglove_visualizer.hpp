@@ -4,7 +4,10 @@
 #include <list>
 #include <memory>
 
+#include <Eigen/Core>
 #include <opencv2/opencv.hpp>
+
+#include <foxglove/schemas.hpp>
 
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/tracker.hpp"
@@ -14,6 +17,8 @@ namespace tools
 namespace detail
 {
 cv::Mat prepare_image_for_publish(const cv::Mat & image);
+foxglove::schemas::CubePrimitive armor_cube(
+  const Eigen::Vector3d & center, double yaw, double pitch, auto_aim::ArmorType armor_type);
 void draw_detected_armors(
   cv::Mat & image, const std::list<auto_aim::Armor> & armors, auto_aim::Color target_color);
 }

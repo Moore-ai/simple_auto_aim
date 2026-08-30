@@ -1,7 +1,9 @@
 #include <cassert>
+#include <cmath>
 #include <list>
 #include <vector>
 
+#include <Eigen/Geometry>
 #include <opencv2/core.hpp>
 
 #include "tools/foxglove_visualizer.hpp"
@@ -27,5 +29,23 @@ int main()
   const auto channel_sum = cv::sum(detection_image);
   assert(channel_sum[2] > 0.0);
   assert(channel_sum[0] == 0.0);
+
+  const double yaw = 0.3;
+  const double pitch = CV_PI / 12.0;
+  const auto cube = tools::detail::armor_cube({-0.3, 0.0, 0.0}, yaw, pitch, auto_aim::big);
+  assert(cube.pose.has_value());
+  assert(cube.pose->orientation.has_value());
+  const auto & orientation = *cube.pose->orientation;
+  const Eigen::Quaterniond visualization_rotation{
+    orientation.w, orientation.x, orientation.y, orientation.z};
+  const Eigen::Quaterniond expected_rotation{
+    Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
+    Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY())};
+  assert(visualization_rotation.angularDistance(expected_rotation) < 1e-12);
+
+  assert(cube.size.has_value());
+  assert(std::abs(cube.size->x - 0.020) < 1e-12);
+  assert(std::abs(cube.size->y - 0.230) < 1e-12);
+  assert(std::abs(cube.size->z - 0.130) < 1e-12);
   return 0;
 }

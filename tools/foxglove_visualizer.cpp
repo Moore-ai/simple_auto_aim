@@ -27,22 +27,11 @@ foxglove::schemas::Color color(double r, double g, double b)
 foxglove::schemas::Pose pose(const Eigen::Vector3d & center, double yaw, double pitch)
 {
   const Eigen::Quaterniond q{Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
-                             Eigen::AngleAxisd(-pitch, Eigen::Vector3d::UnitY())};
+                             Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY())};
   foxglove::schemas::Pose result;
   result.position = {center.x(), center.y(), center.z()};
   result.orientation = {q.x(), q.y(), q.z(), q.w()};
   return result;
-}
-
-foxglove::schemas::CubePrimitive armor_cube(
-  const Eigen::Vector3d & center, double yaw, double pitch, auto_aim::ArmorType armor_type,
-  const foxglove::schemas::Color & cube_color)
-{
-  foxglove::schemas::CubePrimitive cube;
-  cube.pose = pose(center, yaw, pitch);
-  cube.size = {armor_type == auto_aim::big ? 0.230 : 0.135, 0.020, 0.130};
-  cube.color = cube_color;
-  return cube;
 }
 
 void draw_polygon(cv::Mat & image, const std::vector<cv::Point2f> & points, const cv::Scalar & color)
@@ -84,6 +73,15 @@ bool create(
 cv::Mat detail::prepare_image_for_publish(const cv::Mat & image)
 {
   return image;
+}
+
+foxglove::schemas::CubePrimitive detail::armor_cube(
+  const Eigen::Vector3d & center, double yaw, double pitch, auto_aim::ArmorType armor_type)
+{
+  foxglove::schemas::CubePrimitive cube;
+  cube.pose = pose(center, yaw, pitch);
+  cube.size = {0.020, armor_type == auto_aim::big ? 0.230 : 0.135, 0.130};
+  return cube;
 }
 
 void detail::draw_detected_armors(
@@ -200,10 +198,11 @@ void FoxgloveVisualizer::publish(
     foxglove::schemas::SceneEntity detected;
     detected.id = "locked_armor";
     detected.frame_id = "world";
-    detected.cubes.push_back(armor_cube(
+    auto cube = detail::armor_cube(
       locked_armor->xyz_in_world, locked_armor->ypr_in_world[0], locked_armor->ypr_in_world[1],
-      locked_armor->type,
-      color(1.0, 0.0, 0.0)));
+      locked_armor->type);
+    cube.color = color(1.0, 0.0, 0.0);
+    detected.cubes.push_back(std::move(cube));
     update.entities.push_back(std::move(detected));
   }
 
@@ -212,8 +211,9 @@ void FoxgloveVisualizer::publish(
     foxglove::schemas::SceneEntity predicted;
     predicted.id = "predicted_armor_" + std::to_string(i);
     predicted.frame_id = "world";
-    predicted.cubes.push_back(armor_cube(armor.center, armor.yaw, armor.pitch,
-                                         target_data.armor_type, color(0.0, 0.0, 1.0)));
+    auto cube = detail::armor_cube(armor.center, armor.yaw, armor.pitch, target_data.armor_type);
+    cube.color = color(0.0, 0.0, 1.0);
+    predicted.cubes.push_back(std::move(cube));
     update.entities.push_back(std::move(predicted));
   }
 
