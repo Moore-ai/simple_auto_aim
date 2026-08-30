@@ -218,7 +218,7 @@ std::list<Target> Tracker::track(
 
   if (state_ == "lost") return {};
 
-  update_debug_data();
+  update_debug_data(found);
 
   std::list<Target> targets = {target_};
   return targets;
@@ -383,9 +383,9 @@ void Tracker::update_geometry_cache()
       target_.armor_type, {state.radius(), state.radius_diff(), state.height_diff()}});
 }
 
-void Tracker::update_debug_data()
+void Tracker::update_debug_data(bool has_current_observation)
 {
-  debug_data_.locked_armor = target_.locked_armor();
+  debug_data_.locked_armor = has_current_observation ? target_.locked_armor() : std::nullopt;
   debug_data_.predicted_world_armors = target_.armor_pose_list();
   debug_data_.target_state = target_.state();
   debug_data_.armor_type = target_.armor_type;

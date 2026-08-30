@@ -37,7 +37,8 @@ int main()
     hard_coded_center_armor,
     configured_center_armor,
   };
-  tracker.track(armors, std::chrono::steady_clock::now());
+  const auto timestamp = std::chrono::steady_clock::now();
+  tracker.track(armors, timestamp);
 
   assert(armors.front().center == configured_center_armor.center);
   const auto & debug_data = tracker.debug_data();
@@ -45,6 +46,18 @@ int main()
   assert(debug_data.target_state.has_value());
   assert(debug_data.predicted_world_armors.size() == 4);
   assert(debug_data.predicted_image_armors.size() == debug_data.predicted_world_armors.size());
+
+  for (int frame = 1; frame < 5; ++frame) {
+    std::list<auto_aim::Armor> observed_armors{configured_center_armor};
+    tracker.track(observed_armors, timestamp + std::chrono::milliseconds(frame * 10));
+  }
+  assert(tracker.state() == "tracking");
+
+  std::list<auto_aim::Armor> missing_armors;
+  tracker.track(missing_armors, timestamp + std::chrono::milliseconds(50));
+  assert(tracker.state() == "temp_lost");
+  assert(!tracker.debug_data().locked_armor.has_value());
+  assert(!tracker.debug_data().predicted_image_armors.empty());
 
   const auto legacy_priority_config =
     "use_priority: true\npriority_list: [one, sentry]\n" + config_text;

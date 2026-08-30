@@ -105,7 +105,7 @@ private:
 
   std::optional<TargetGeometryPrior> geometry_prior_for(const Armor & armor) const;
   void update_geometry_cache();
-  void update_debug_data();
+  void update_debug_data(bool has_current_observation);
 
   void sort_armors(std::list<Armor> & armors) const;
 };
