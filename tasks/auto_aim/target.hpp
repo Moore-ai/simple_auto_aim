@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "armor.hpp"
+#include "armor_layout.hpp"
 #include "observation_geometry.hpp"
 #include "outpost_model.hpp"
 #include "outpost_state.hpp"
@@ -164,6 +165,7 @@ public:
 
 private:
   int armor_num_;
+  ArmorLayout armor_layout_;
   int switch_count_;
   int update_count_;
   std::vector<bool> seen_armor_ids_;

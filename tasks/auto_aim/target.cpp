@@ -23,6 +23,7 @@ Target::Target(const Target & other)
   isinit(other.isinit),
   locked_armor_(other.locked_armor_),
   armor_num_(other.armor_num_),
+  armor_layout_(other.armor_layout_),
   switch_count_(other.switch_count_),
   update_count_(other.update_count_),
   seen_armor_ids_(other.seen_armor_ids_),
@@ -54,6 +55,7 @@ Target & Target::operator=(const Target & other)
     isinit = other.isinit;
     locked_armor_ = other.locked_armor_;
     armor_num_ = other.armor_num_;
+    armor_layout_ = other.armor_layout_;
     switch_count_ = other.switch_count_;
     update_count_ = other.update_count_;
     seen_armor_ids_ = other.seen_armor_ids_;
@@ -95,6 +97,7 @@ Target::Target(
   reprojection_config_(std::move(reprojection_config)),
   t_(t)
 {
+  armor_layout_.configure(name, armor_num_);
   if (name == ArmorName::outpost) {
     outpost_model_ = std::make_unique<OutpostTarget>(
       armor, P0_dig,
@@ -144,6 +147,7 @@ Target Target::make_outpost(
   result.locked_armor_ = armor;
   result.isinit = false;
   result.armor_num_ = OUTPOST_ARMOR_COUNT;
+  result.armor_layout_.configure(result.name, result.armor_num_);
   result.switch_count_ = 0;
   result.update_count_ = 0;
   result.seen_armor_ids_.assign(OUTPOST_ARMOR_COUNT, false);
@@ -169,6 +173,7 @@ Target Target::make_outpost_v2(
   result.locked_armor_ = armors.front();
   result.isinit = false;
   result.armor_num_ = OUTPOST_ARMOR_COUNT;
+  result.armor_layout_.configure(result.name, result.armor_num_);
   result.switch_count_ = 0;
   result.update_count_ = 0;
   result.seen_armor_ids_.assign(OUTPOST_ARMOR_COUNT, false);
@@ -190,6 +195,7 @@ Target::Target(double x, double vyaw, double radius, double h)
   initial_state.set_yaw_rate(vyaw);
   initial_state.set_radius(radius);
   initial_state.set_height_diff(h);
+  armor_layout_.configure(ArmorName::not_armor, armor_num_);
   estimator_ = TargetEstimator(initial_state, P0_dig, {FilterMethod::EKF});
 }
 
@@ -639,28 +645,13 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
     return result;
   }
 
-  std::vector<Eigen::Vector4d> _armor_xyza_list;
-  const auto state = estimator_.state();
-
-  for (int i = 0; i < armor_num_; i++) {
-    auto angle = tools::limit_rad(state.yaw() + i * 2 * CV_PI / armor_num_);
-    Eigen::Vector3d xyz = h_armor_xyz(state, i);
-    _armor_xyza_list.push_back({xyz[0], xyz[1], xyz[2], angle});
-  }
-  return _armor_xyza_list;
+  return armor_layout_.armor_xyza_list(estimator_.state());
 }
 
 std::vector<PredictedArmorPose> Target::armor_pose_list() const
 {
   if (outpost_model_) return outpost_model_->armor_pose_list();
-  std::vector<PredictedArmorPose> poses;
-  const auto xyza_list = armor_xyza_list();
-  poses.reserve(xyza_list.size());
-  const auto pitch = armor_mount_pitch(name);
-  for (const auto & xyza : xyza_list) {
-    poses.push_back({xyza.head<3>(), xyza[3], pitch});
-  }
-  return poses;
+  return armor_layout_.armor_pose_list(estimator_.state());
 }
 
 const std::optional<Armor> & Target::locked_armor() const { return locked_armor_; }
@@ -717,38 +708,13 @@ bool Target::convergened()
 // 计算出装甲板中心的坐标（考虑长短轴）
 Eigen::Vector3d Target::h_armor_xyz(const TargetState & state, int id) const
 {
-  auto angle = tools::limit_rad(state.yaw() + id * 2 * CV_PI / armor_num_);
-  auto use_l_h = (armor_num_ == 4) && (id == 1 || id == 3);
-
-  auto r = state.radius(use_l_h);
-  auto armor_x = state.center_x() - r * std::cos(angle);
-  auto armor_y = state.center_y() - r * std::sin(angle);
-  auto armor_z = state.armor_height(use_l_h);
-
-  return {armor_x, armor_y, armor_z};
+  return armor_layout_.armor_xyz(state, id);
 }
 
 Eigen::Matrix<double, 3, TargetState::dimension> Target::h_armor_xyz_jacobian(
   const TargetState & state, int id) const
 {
-  const auto angle = tools::limit_rad(state.yaw() + id * 2 * CV_PI / armor_num_);
-  const auto use_l_h = (armor_num_ == 4) && (id == 1 || id == 3);
-  const auto radius = state.radius(use_l_h);
-  Eigen::Matrix<double, 3, TargetState::dimension> result =
-    Eigen::Matrix<double, 3, TargetState::dimension>::Zero();
-  result(0, static_cast<Eigen::Index>(TargetStateComponent::center_x)) = 1.0;
-  result(1, static_cast<Eigen::Index>(TargetStateComponent::center_y)) = 1.0;
-  result(2, static_cast<Eigen::Index>(TargetStateComponent::center_z)) = 1.0;
-  result(0, static_cast<Eigen::Index>(TargetStateComponent::yaw)) = radius * std::sin(angle);
-  result(1, static_cast<Eigen::Index>(TargetStateComponent::yaw)) = -radius * std::cos(angle);
-  result(0, static_cast<Eigen::Index>(TargetStateComponent::radius)) = -std::cos(angle);
-  result(1, static_cast<Eigen::Index>(TargetStateComponent::radius)) = -std::sin(angle);
-  if (use_l_h) {
-    result(0, static_cast<Eigen::Index>(TargetStateComponent::radius_diff)) = -std::cos(angle);
-    result(1, static_cast<Eigen::Index>(TargetStateComponent::radius_diff)) = -std::sin(angle);
-    result(2, static_cast<Eigen::Index>(TargetStateComponent::height_diff)) = 1.0;
-  }
-  return result;
+  return armor_layout_.armor_xyz_jacobian(state, id);
 }
 
 void Target::constrain_reprojection_state()
@@ -772,34 +738,7 @@ void Target::constrain_reprojection_state()
 
 Eigen::MatrixXd Target::h_jacobian(const TargetState & state, int id) const
 {
-  auto angle = tools::limit_rad(state.yaw() + id * 2 * CV_PI / armor_num_);
-  auto use_l_h = (armor_num_ == 4) && (id == 1 || id == 3);
-
-  auto r = state.radius(use_l_h);
-  auto dx_da = r * std::sin(angle);
-  auto dy_da = -r * std::cos(angle);
-
-  auto dx_dr = -std::cos(angle);
-  auto dy_dr = -std::sin(angle);
-  auto dx_dl = (use_l_h) ? -std::cos(angle) : 0.0;
-  auto dy_dl = (use_l_h) ? -std::sin(angle) : 0.0;
-
-  auto dz_dh = (use_l_h) ? 1.0 : 0.0;
-
-  // clang-format off
-  Eigen::MatrixXd H_armor_xyza = Eigen::MatrixXd::Zero(4, TargetState::dimension);
-  H_armor_xyza(0, static_cast<Eigen::Index>(TargetStateComponent::center_x)) = 1;
-  H_armor_xyza(1, static_cast<Eigen::Index>(TargetStateComponent::center_y)) = 1;
-  H_armor_xyza(2, static_cast<Eigen::Index>(TargetStateComponent::center_z)) = 1;
-  H_armor_xyza(3, static_cast<Eigen::Index>(TargetStateComponent::yaw)) = 1;
-  H_armor_xyza(0, static_cast<Eigen::Index>(TargetStateComponent::yaw)) = dx_da;
-  H_armor_xyza(1, static_cast<Eigen::Index>(TargetStateComponent::yaw)) = dy_da;
-  H_armor_xyza(0, static_cast<Eigen::Index>(TargetStateComponent::radius)) = dx_dr;
-  H_armor_xyza(1, static_cast<Eigen::Index>(TargetStateComponent::radius)) = dy_dr;
-  H_armor_xyza(0, static_cast<Eigen::Index>(TargetStateComponent::radius_diff)) = dx_dl;
-  H_armor_xyza(1, static_cast<Eigen::Index>(TargetStateComponent::radius_diff)) = dy_dl;
-  H_armor_xyza(2, static_cast<Eigen::Index>(TargetStateComponent::height_diff)) = dz_dh;
-  // clang-format on
+  const auto H_armor_xyza = armor_layout_.armor_xyza_jacobian(state, id);
 
   Eigen::VectorXd armor_xyz = h_armor_xyz(state, id);
   Eigen::MatrixXd H_armor_ypd = tools::xyz2ypd_jacobian(armor_xyz);
@@ -817,30 +756,7 @@ Eigen::MatrixXd Target::h_jacobian(const TargetState & state, int id) const
 
 Eigen::MatrixXd Target::h_jacobian_xyza(const TargetState & state, int id) const
 {
-  auto angle = tools::limit_rad(state.yaw() + id * 2 * CV_PI / armor_num_);
-  auto use_l_h = (armor_num_ == 4) && (id == 1 || id == 3);
-  auto r = state.radius(use_l_h);
-  auto dx_da = r * std::sin(angle);
-  auto dy_da = -r * std::cos(angle);
-  auto dx_dr = -std::cos(angle);
-  auto dy_dr = -std::sin(angle);
-  auto dx_dl = (use_l_h) ? -std::cos(angle) : 0.0;
-  auto dy_dl = (use_l_h) ? -std::sin(angle) : 0.0;
-  auto dz_dh = (use_l_h) ? 1.0 : 0.0;
-
-  Eigen::MatrixXd H_xyza = Eigen::MatrixXd::Zero(4, TargetState::dimension);
-  H_xyza(0, static_cast<Eigen::Index>(TargetStateComponent::center_x)) = 1;
-  H_xyza(1, static_cast<Eigen::Index>(TargetStateComponent::center_y)) = 1;
-  H_xyza(2, static_cast<Eigen::Index>(TargetStateComponent::center_z)) = 1;
-  H_xyza(3, static_cast<Eigen::Index>(TargetStateComponent::yaw)) = 1;
-  H_xyza(0, static_cast<Eigen::Index>(TargetStateComponent::yaw)) = dx_da;
-  H_xyza(1, static_cast<Eigen::Index>(TargetStateComponent::yaw)) = dy_da;
-  H_xyza(0, static_cast<Eigen::Index>(TargetStateComponent::radius)) = dx_dr;
-  H_xyza(1, static_cast<Eigen::Index>(TargetStateComponent::radius)) = dy_dr;
-  H_xyza(0, static_cast<Eigen::Index>(TargetStateComponent::radius_diff)) = dx_dl;
-  H_xyza(1, static_cast<Eigen::Index>(TargetStateComponent::radius_diff)) = dy_dl;
-  H_xyza(2, static_cast<Eigen::Index>(TargetStateComponent::height_diff)) = dz_dh;
-  return H_xyza;
+  return armor_layout_.armor_xyza_jacobian(state, id);
 }
 
 void Target::constrain_velocity()
