@@ -15,6 +15,7 @@ add_library(auto_aim OBJECT
     aimer.cpp
     detection_result.cpp
     observation_geometry.cpp
+    observation_matcher.cpp
     observation_path.cpp
     outpost_target_v2.cpp
     outpost_target.cpp

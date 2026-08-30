@@ -5,10 +5,10 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
-#include <vector>
 
 #include "armor.hpp"
 #include "observation_geometry.hpp"
+#include "observation_matcher.hpp"
 #include "target.hpp"
 
 namespace YAML
@@ -89,10 +89,7 @@ private:
   bool update_reprojection(
     Target & target, DetectionResult & detections, std::chrono::steady_clock::time_point t);
 
-  std::vector<ReprojectionMeasurement> match_independent_lightbars(
-    Target & target, DetectionResult & detections,
-    const std::vector<Eigen::Vector4d> & predicted_armors,
-    const std::vector<int> & visible_ids, const std::vector<int> & occupied_ids);
+  ObservationMatcher matcher_;
 };
 
 }  // namespace auto_aim

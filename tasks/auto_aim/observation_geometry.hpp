@@ -70,7 +70,7 @@ struct PredictedDepthDifference
 };
 
 // Geometry seam for image observations. It owns projection-to-observation
-// conversion and geometric matching metrics; assignment remains in ObservationPath.
+// conversion and geometric matching metrics; assignment lives in ObservationMatcher.
 class ObservationGeometry
 {
 public:
