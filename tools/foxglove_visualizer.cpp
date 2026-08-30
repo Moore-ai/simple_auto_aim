@@ -68,6 +68,14 @@ bool create(
             << foxglove::strerror(channel.error()) << '\n';
   return false;
 }
+
+template <typename Channel>
+void log_json(std::optional<Channel> & channel, const Json & message)
+{
+  if (!channel) return;
+  const auto payload = message.dump();
+  channel->log(reinterpret_cast<const std::byte *>(payload.data()), payload.size());
+}
 }  // namespace
 
 cv::Mat detail::prepare_image_for_publish(const cv::Mat & image)
@@ -153,29 +161,24 @@ void FoxgloveVisualizer::publish(
 {
   if (!impl_->server) return;
 
-  if (impl_->serial_receive) {
-    const auto message = Json{{"mode", serial_receive.mode}, {"roll", serial_receive.roll},
-                              {"yaw", serial_receive.yaw}, {"yaw_vel", serial_receive.yaw_vel},
-                              {"pitch", serial_receive.pitch}, {"pitch_vel", serial_receive.pitch_vel},
-                              {"bullet_speed", serial_receive.bullet_speed},
-                              {"bullet_count", serial_receive.bullet_count}}
-                           .dump();
-    impl_->serial_receive->log(
-      reinterpret_cast<const std::byte *>(message.data()), message.size());
-  }
-  if (impl_->serial_send) {
-    const auto message = Json{{"control", serial_send.control}, {"fire", serial_send.fire},
-                              {"yaw", serial_send.yaw}, {"yaw_vel", serial_send.yaw_vel},
-                              {"yaw_acc", serial_send.yaw_acc}, {"pitch", serial_send.pitch},
-                              {"pitch_vel", serial_send.pitch_vel}, {"pitch_acc", serial_send.pitch_acc},
-                              {"distance", serial_send.distance}}
-                           .dump();
-    impl_->serial_send->log(reinterpret_cast<const std::byte *>(message.data()), message.size());
-  }
+  log_json(
+    impl_->serial_receive,
+    Json{{"mode", serial_receive.mode}, {"roll", serial_receive.roll},
+         {"yaw", serial_receive.yaw}, {"yaw_vel", serial_receive.yaw_vel},
+         {"pitch", serial_receive.pitch}, {"pitch_vel", serial_receive.pitch_vel},
+         {"bullet_speed", serial_receive.bullet_speed},
+         {"bullet_count", serial_receive.bullet_count}});
+  log_json(
+    impl_->serial_send,
+    Json{{"control", serial_send.control}, {"fire", serial_send.fire},
+         {"yaw", serial_send.yaw}, {"yaw_vel", serial_send.yaw_vel},
+         {"yaw_acc", serial_send.yaw_acc}, {"pitch", serial_send.pitch},
+         {"pitch_vel", serial_send.pitch_vel}, {"pitch_acc", serial_send.pitch_acc},
+         {"distance", serial_send.distance}});
 
   const auto * locked_armor =
     target_data.locked_armor && target_data.locked_armor->color == target_color ?
-    &*target_data.locked_armor : nullptr;
+    &target_data.locked_armor.value() : nullptr;
   if (locked_armor) draw_polygon(image, locked_armor->points, {0, 0, 255});
   for (const auto & polygon : target_data.predicted_image_armors) draw_polygon(image, polygon, {255, 0, 0});
 
@@ -218,25 +221,25 @@ void FoxgloveVisualizer::publish(
   }
 
   if (target_data.target_state) {
+    const auto & target_state = *target_data.target_state;
     foxglove::schemas::SceneEntity state;
     state.id = "target_state";
     state.frame_id = "world";
     const Eigen::Vector3d center(
-      target_data.target_state->center_x(), target_data.target_state->center_y(),
-      target_data.target_state->center_z());
+      target_state.center_x(), target_state.center_y(), target_state.center_z());
     const auto vehicle_pitch = -std::atan2(center.z(), std::hypot(center.x(), center.y()));
-    state.metadata = {{"center_x", std::to_string(target_data.target_state->center_x())},
-                      {"velocity_x", std::to_string(target_data.target_state->velocity_x())},
-                      {"center_y", std::to_string(target_data.target_state->center_y())},
-                      {"velocity_y", std::to_string(target_data.target_state->velocity_y())},
-                      {"center_z", std::to_string(target_data.target_state->center_z())},
-                      {"velocity_z", std::to_string(target_data.target_state->velocity_z())},
-                      {"vehicle_yaw", std::to_string(target_data.target_state->yaw())},
+    state.metadata = {{"center_x", std::to_string(target_state.center_x())},
+                      {"velocity_x", std::to_string(target_state.velocity_x())},
+                      {"center_y", std::to_string(target_state.center_y())},
+                      {"velocity_y", std::to_string(target_state.velocity_y())},
+                      {"center_z", std::to_string(target_state.center_z())},
+                      {"velocity_z", std::to_string(target_state.velocity_z())},
+                      {"vehicle_yaw", std::to_string(target_state.yaw())},
                       {"vehicle_pitch", std::to_string(vehicle_pitch)},
-                      {"yaw_rate", std::to_string(target_data.target_state->yaw_rate())},
-                      {"radius", std::to_string(target_data.target_state->radius())},
-                      {"radius_diff", std::to_string(target_data.target_state->radius_diff())},
-                      {"height_diff", std::to_string(target_data.target_state->height_diff())}};
+                      {"yaw_rate", std::to_string(target_state.yaw_rate())},
+                      {"radius", std::to_string(target_state.radius())},
+                      {"radius_diff", std::to_string(target_state.radius_diff())},
+                      {"height_diff", std::to_string(target_state.height_diff())}};
     if (locked_armor) {
       state.metadata.push_back(
         {"selected_armor_yaw", std::to_string(locked_armor->ypr_in_world[0])});
@@ -249,7 +252,7 @@ void FoxgloveVisualizer::publish(
     text.font_size = 18;
     text.color = color(1.0, 1.0, 1.0);
     text.pose = pose(center, 0, 0);
-    text.text = "vehicle yaw=" + std::to_string(target_data.target_state->yaw()) +
+    text.text = "vehicle yaw=" + std::to_string(target_state.yaw()) +
       " pitch=" + std::to_string(vehicle_pitch);
     if (locked_armor) {
       text.text += "\narmor yaw=" + std::to_string(locked_armor->ypr_in_world[0]) +

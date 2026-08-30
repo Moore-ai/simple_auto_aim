@@ -79,14 +79,13 @@ int main(int argc, char * argv[])
 
     auto detections = detect_armors(img, -1);
     auto targets = tracker.track(detections, t);
-    const auto detected_armors = detections.armors;
     if (!targets.empty())
       target_queue.push(targets.front());
     else
       target_queue.push(std::nullopt);
 
     foxglove.publish(
-      gimbal_state, gimbal.command(), img, img.clone(), detected_armors, tracker.enemy_color(),
+      gimbal_state, gimbal.command(), img, img.clone(), detections.armors, tracker.enemy_color(),
       tracker.debug_data());
   }
 

@@ -52,7 +52,7 @@ public:
     bool use_enemy_color = true);
 
   std::tuple<omniperception::DetectionResult, std::list<Target>> track(
-    const std::vector<omniperception::DetectionResult> & detection_queue,
+    const std::vector<omniperception::DetectionResult> &,
     DetectionResult & detections, std::chrono::steady_clock::time_point t,
     bool use_enemy_color = true);
 

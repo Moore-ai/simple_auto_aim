@@ -235,11 +235,10 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
 }
 
 std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
-  const std::vector<omniperception::DetectionResult> & detection_queue,
-  DetectionResult & detections, std::chrono::steady_clock::time_point t, bool use_enemy_color)
+  const std::vector<omniperception::DetectionResult> &, DetectionResult & detections,
+  std::chrono::steady_clock::time_point t, bool use_enemy_color)
 {
   omniperception::DetectionResult switch_target{std::list<Armor>(), t, 0, 0};
-  (void)detection_queue;
   return {switch_target, track(detections, t, use_enemy_color)};
 }
 
