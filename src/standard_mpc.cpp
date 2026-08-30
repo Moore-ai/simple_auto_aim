@@ -10,6 +10,7 @@
 #include "tasks/auto_aim/tracker.hpp"
 #include "tools/exiter.hpp"
 #include "tools/foxglove_visualizer.hpp"
+#include "tools/frame_runtime.hpp"
 #include "tools/recorder.hpp"
 
 const std::string keys =
@@ -37,14 +38,12 @@ int main(int argc, char * argv[])
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
 
-  auto detect_armors = create_detector_result(config_path);
+  auto detector = tools::create_detector_result(config_path);
   auto aim_fn = create_aim_fn(config_path);
+  tools::FrameRuntime runtime(camera, gimbal, solver, tracker, *detector);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
-
-  cv::Mat img;
-  std::chrono::steady_clock::time_point t;
 
   std::atomic<bool> quit = false;
 
@@ -67,27 +66,16 @@ int main(int argc, char * argv[])
   });
 
   while (!exiter.exit()) {
-    if (!camera.read(img, t)) break;
-    const auto gimbal_state = gimbal.state();
-    if (const auto color = io::infantry_enemy_color(gimbal_state.mode)) {
-      tracker.set_enemy_color(
-        *color == io::InfantryEnemyColor::red ? auto_aim::red : auto_aim::blue);
-    }
-    auto q = gimbal.q(t);
-    solver.set_R_gimbal2world(q);
+    tools::ProcessedFrame processed;
+    if (!runtime.next(processed)) break;
 
-    auto detections = detect_armors(img, -1);
-    auto targets = tracker.track(detections, t);
-    if (!targets.empty())
-      target_queue.push(targets.front());
+    if (!processed.targets.empty())
+      target_queue.push(processed.targets.front());
     else
       target_queue.push(std::nullopt);
 
-    auto frame = tools::FrameSnapshot::capture(
-      t, img, q, gimbal_state, gimbal.command(), std::move(detections), tracker.enemy_color(),
-      tracker.debug_data());
-    recorder.record(frame);
-    foxglove.publish(frame);
+    recorder.record(processed.snapshot);
+    foxglove.publish(processed.snapshot);
   }
 
   quit = true;

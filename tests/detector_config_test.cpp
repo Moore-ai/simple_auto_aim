@@ -6,7 +6,7 @@
 
 int main()
 {
-  assert(detector_debug_window_enabled(YAML::Load("debug_window: true")));
-  assert(!detector_debug_window_enabled(YAML::Load("debug_window: false")));
-  assert(detector_debug_window_enabled(YAML::Load("detect_method: yolo")));
+  assert(tools::detector_debug_window_enabled(YAML::Load("debug_window: true")));
+  assert(!tools::detector_debug_window_enabled(YAML::Load("debug_window: false")));
+  assert(tools::detector_debug_window_enabled(YAML::Load("detect_method: yolo")));
 }

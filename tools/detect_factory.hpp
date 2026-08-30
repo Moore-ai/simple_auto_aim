@@ -1,16 +1,26 @@
-#ifndef SRC__DETECT_FACTORY_HPP
-#define SRC__DETECT_FACTORY_HPP
+#ifndef TOOLS__DETECT_FACTORY_HPP
+#define TOOLS__DETECT_FACTORY_HPP
 
-#include <functional>
+#include <memory>
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <yaml-cpp/yaml.h>
 
 #include "tasks/auto_aim/armor.hpp"
 
-std::function<auto_aim::DetectionResult(const cv::Mat &, int)> create_detector_result(
-  const std::string & config_path);
+namespace tools
+{
+class DetectionBackend
+{
+public:
+  virtual ~DetectionBackend() = default;
+  virtual auto_aim::DetectionResult detect(const cv::Mat & image, int frame_count) = 0;
+};
+
+std::unique_ptr<DetectionBackend> create_detector_result(const std::string & config_path);
 
 bool detector_debug_window_enabled(const YAML::Node & yaml);
 
-#endif  // SRC__DETECT_FACTORY_HPP
+}  // namespace tools
+
+#endif  // TOOLS__DETECT_FACTORY_HPP

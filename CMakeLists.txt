@@ -156,6 +156,10 @@ add_executable(detector_config_test tests/detector_config_test.cpp tools/detect_
 target_link_libraries(detector_config_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 target_compile_options(detector_config_test PRIVATE -UNDEBUG)
 add_test(NAME detector_config_test COMMAND detector_config_test)
+add_executable(detection_backend_test tests/detection_backend_test.cpp)
+target_link_libraries(detection_backend_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+target_compile_options(detection_backend_test PRIVATE -UNDEBUG)
+add_test(NAME detection_backend_test COMMAND detection_backend_test)
 
 add_executable(classifier_backend_test tests/classifier_backend_test.cpp)
 target_link_libraries(classifier_backend_test ${OpenCV_LIBS} openvino::runtime)
