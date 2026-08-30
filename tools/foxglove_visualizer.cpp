@@ -3,6 +3,7 @@
 #include <Eigen/Geometry>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -70,11 +71,11 @@ bool create(
 }
 
 template <typename Channel>
-void log_json(std::optional<Channel> & channel, const Json & message)
+void log_json(std::optional<Channel> & channel, const Json & message, uint64_t log_time)
 {
   if (!channel) return;
   const auto payload = message.dump();
-  channel->log(reinterpret_cast<const std::byte *>(payload.data()), payload.size());
+  channel->log(reinterpret_cast<const std::byte *>(payload.data()), payload.size(), log_time);
 }
 }  // namespace
 
@@ -118,6 +119,17 @@ public:
   std::optional<foxglove::schemas::CompressedImageChannel> image;
   std::optional<foxglove::schemas::CompressedImageChannel> image_detection;
   std::optional<foxglove::schemas::SceneUpdateChannel> target;
+  const std::chrono::steady_clock::time_point steady_origin = std::chrono::steady_clock::now();
+  const std::chrono::system_clock::time_point system_origin = std::chrono::system_clock::now();
+
+  uint64_t log_time(FrameSnapshot::Timestamp timestamp) const
+  {
+    const auto elapsed = timestamp - steady_origin;
+    const auto wall_time = system_origin +
+      std::chrono::duration_cast<std::chrono::system_clock::duration>(elapsed);
+    return static_cast<uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(wall_time.time_since_epoch()).count());
+  }
 };
 
 FoxgloveVisualizer::FoxgloveVisualizer() : impl_(std::make_unique<Impl>())
@@ -152,14 +164,16 @@ FoxgloveVisualizer::~FoxgloveVisualizer()
   if (impl_->server) impl_->server->stop();
 }
 
-void FoxgloveVisualizer::publish(
-  const io::GimbalState & serial_receive, const io::GimbalCommand & serial_send,
-  const cv::Mat & raw, cv::Mat image,
-  const std::list<auto_aim::Armor> & detected_armors,
-  auto_aim::Color target_color,
-  const auto_aim::TrackerDebugData & target_data)
+void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
 {
   if (!impl_->server) return;
+
+  const auto log_time = impl_->log_time(frame.timestamp);
+  const auto & serial_receive = frame.gimbal_state;
+  const auto & serial_send = frame.gimbal_command;
+  const auto & target_color = frame.target_color;
+  const auto & target_data = frame.tracker;
+  cv::Mat image = frame.image.clone();
 
   log_json(
     impl_->serial_receive,
@@ -167,14 +181,16 @@ void FoxgloveVisualizer::publish(
          {"yaw", serial_receive.yaw}, {"yaw_vel", serial_receive.yaw_vel},
          {"pitch", serial_receive.pitch}, {"pitch_vel", serial_receive.pitch_vel},
          {"bullet_speed", serial_receive.bullet_speed},
-         {"bullet_count", serial_receive.bullet_count}});
+         {"bullet_count", serial_receive.bullet_count}},
+    log_time);
   log_json(
     impl_->serial_send,
     Json{{"control", serial_send.control}, {"fire", serial_send.fire},
          {"yaw", serial_send.yaw}, {"yaw_vel", serial_send.yaw_vel},
          {"yaw_acc", serial_send.yaw_acc}, {"pitch", serial_send.pitch},
          {"pitch_vel", serial_send.pitch_vel}, {"pitch_acc", serial_send.pitch_acc},
-         {"distance", serial_send.distance}});
+         {"distance", serial_send.distance}},
+    log_time);
 
   const auto * locked_armor =
     target_data.locked_armor && target_data.locked_armor->color == target_color ?
@@ -182,14 +198,19 @@ void FoxgloveVisualizer::publish(
   if (locked_armor) draw_polygon(image, locked_armor->points, {0, 0, 255});
   for (const auto & polygon : target_data.predicted_image_armors) draw_polygon(image, polygon, {255, 0, 0});
 
-  cv::Mat detection_image = raw.clone();
-  detail::draw_detected_armors(detection_image, detected_armors, target_color);
+  cv::Mat detection_image = frame.image.clone();
+  detail::draw_detected_armors(detection_image, frame.detections.armors, target_color);
 
-  if (impl_->image_raw) impl_->image_raw->log(compressed_image(detail::prepare_image_for_publish(raw)));
-  if (impl_->image) impl_->image->log(compressed_image(detail::prepare_image_for_publish(image)));
+  if (impl_->image_raw) {
+    impl_->image_raw->log(
+      compressed_image(detail::prepare_image_for_publish(frame.image)), log_time);
+  }
+  if (impl_->image) {
+    impl_->image->log(compressed_image(detail::prepare_image_for_publish(image)), log_time);
+  }
   if (impl_->image_detection) {
     impl_->image_detection->log(
-      compressed_image(detail::prepare_image_for_publish(detection_image)));
+      compressed_image(detail::prepare_image_for_publish(detection_image)), log_time);
   }
 
   if (!impl_->target) return;
@@ -261,6 +282,6 @@ void FoxgloveVisualizer::publish(
     state.texts.push_back(std::move(text));
     update.entities.push_back(std::move(state));
   }
-  impl_->target->log(update);
+  impl_->target->log(update, log_time);
 }
 }  // namespace tools

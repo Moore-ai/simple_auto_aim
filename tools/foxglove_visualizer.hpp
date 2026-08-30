@@ -9,8 +9,7 @@
 
 #include <foxglove/schemas.hpp>
 
-#include "io/gimbal/gimbal.hpp"
-#include "tasks/auto_aim/tracker.hpp"
+#include "tools/frame_snapshot.hpp"
 
 namespace tools
 {
@@ -32,12 +31,7 @@ public:
   FoxgloveVisualizer(const FoxgloveVisualizer &) = delete;
   FoxgloveVisualizer & operator=(const FoxgloveVisualizer &) = delete;
 
-  void publish(
-    const io::GimbalState & serial_receive, const io::GimbalCommand & serial_send,
-    const cv::Mat & image_raw, cv::Mat image,
-    const std::list<auto_aim::Armor> & detected_armors,
-    auto_aim::Color target_color,
-    const auto_aim::TrackerDebugData & target_data);
+  void publish(const FrameSnapshot & frame);
 
 private:
   class Impl;

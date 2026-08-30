@@ -74,7 +74,6 @@ int main(int argc, char * argv[])
         *color == io::InfantryEnemyColor::red ? auto_aim::red : auto_aim::blue);
     }
     auto q = gimbal.q(t);
-    recorder.record(img, q, t);
     solver.set_R_gimbal2world(q);
 
     auto detections = detect_armors(img, -1);
@@ -84,9 +83,11 @@ int main(int argc, char * argv[])
     else
       target_queue.push(std::nullopt);
 
-    foxglove.publish(
-      gimbal_state, gimbal.command(), img, img.clone(), detections.armors, tracker.enemy_color(),
+    auto frame = tools::FrameSnapshot::capture(
+      t, img, q, gimbal_state, gimbal.command(), std::move(detections), tracker.enemy_color(),
       tracker.debug_data());
+    recorder.record(frame);
+    foxglove.publish(frame);
   }
 
   quit = true;

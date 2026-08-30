@@ -177,6 +177,11 @@ target_compile_options(web_debug_test PRIVATE -UNDEBUG)
 add_executable(standard_mpc_foxglove_compile_test tests/standard_mpc_foxglove_compile_test.cpp)
 target_link_libraries(standard_mpc_foxglove_compile_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 
+add_executable(frame_snapshot_test tests/frame_snapshot_test.cpp)
+target_link_libraries(frame_snapshot_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+target_compile_options(frame_snapshot_test PRIVATE -UNDEBUG)
+add_test(NAME frame_snapshot_test COMMAND frame_snapshot_test)
+
 add_executable(foxglove_visualizer_image_test
   tests/foxglove_visualizer_image_test.cpp tools/foxglove_visualizer.cpp)
 target_link_libraries(foxglove_visualizer_image_test

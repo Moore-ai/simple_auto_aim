@@ -8,6 +8,7 @@
 #include <thread>
 
 #include "tools/thread_safe_queue.hpp"
+#include "tools/frame_snapshot.hpp"
 namespace tools
 {
 class Recorder
@@ -18,6 +19,10 @@ public:
   void record(
     const cv::Mat & img, const Eigen::Quaterniond & q,
     const std::chrono::steady_clock::time_point & timestamp);
+  void record(const FrameSnapshot & frame)
+  {
+    record(frame.image, frame.gimbal_orientation, frame.timestamp);
+  }
 
 private:
   struct FrameData
