@@ -1,6 +1,7 @@
 #ifndef TOOLS__FOXGLOVE_VISUALIZER_HPP
 #define TOOLS__FOXGLOVE_VISUALIZER_HPP
 
+#include <list>
 #include <memory>
 
 #include <opencv2/opencv.hpp>
@@ -13,6 +14,8 @@ namespace tools
 namespace detail
 {
 cv::Mat prepare_image_for_publish(const cv::Mat & image);
+void draw_detected_armors(
+  cv::Mat & image, const std::list<auto_aim::Armor> & armors, auto_aim::Color target_color);
 }
 
 class FoxgloveVisualizer
@@ -26,7 +29,10 @@ public:
 
   void publish(
     const io::GimbalState & serial_receive, const io::GimbalCommand & serial_send,
-    const cv::Mat & image_raw, cv::Mat image, const auto_aim::TrackerDebugData & target_data);
+    const cv::Mat & image_raw, cv::Mat image,
+    const std::list<auto_aim::Armor> & detected_armors,
+    auto_aim::Color target_color,
+    const auto_aim::TrackerDebugData & target_data);
 
 private:
   class Impl;

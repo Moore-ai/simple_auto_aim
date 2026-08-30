@@ -1,4 +1,6 @@
 #include <cassert>
+#include <list>
+#include <vector>
 
 #include <opencv2/core.hpp>
 
@@ -13,5 +15,17 @@ int main()
 
   const auto output = tools::detail::prepare_image_for_publish(input);
   assert(cv::norm(input, output, cv::NORM_INF) == 0.0);
+
+  const std::vector<cv::Point2f> red_points = {{10, 10}, {30, 10}, {30, 30}, {10, 30}};
+  const std::vector<cv::Point2f> blue_points = {{60, 10}, {80, 10}, {80, 30}, {60, 30}};
+  auto red_armor = auto_aim::Armor(1, 0.9F, {10, 10, 20, 20}, red_points);
+  auto blue_armor = auto_aim::Armor(0, 0.8F, {60, 10, 20, 20}, blue_points);
+  std::list<auto_aim::Armor> armors = {red_armor, blue_armor};
+
+  cv::Mat detection_image = cv::Mat::zeros(40, 90, CV_8UC3);
+  tools::detail::draw_detected_armors(detection_image, armors, auto_aim::red);
+  const auto channel_sum = cv::sum(detection_image);
+  assert(channel_sum[2] > 0.0);
+  assert(channel_sum[0] == 0.0);
   return 0;
 }
