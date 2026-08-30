@@ -22,6 +22,15 @@ namespace auto_aim
 
 using TrackerDebugInfo = ObservationPathDebugInfo;
 
+struct TrackerDebugData
+{
+  std::optional<Armor> locked_armor;
+  std::vector<std::vector<cv::Point2f>> predicted_image_armors;
+  std::vector<PredictedArmorPose> predicted_world_armors;
+  std::optional<TargetState> target_state;
+  ArmorType armor_type = ArmorType::small;
+};
+
 class Tracker
 {
 public:
@@ -32,6 +41,7 @@ public:
   Color enemy_color() const { return enemy_color_; }
   bool reprojection_enabled() const { return observation_path_.uses_reprojection(); }
   const TrackerDebugInfo & debug_info() const { return observation_path_.debug_info(); }
+  const TrackerDebugData & debug_data() const { return debug_data_; }
 
   std::list<Target> track(
     std::list<Armor> & armors, std::chrono::steady_clock::time_point t,
@@ -67,6 +77,7 @@ private:
   std::string state_;
   Target target_;
   std::chrono::steady_clock::time_point last_timestamp_;
+  TrackerDebugData debug_data_;
 
   // 滤波器配置（一次性读取，传递给 Target）
   FilterConfig filter_config_;
@@ -94,6 +105,7 @@ private:
 
   std::optional<TargetGeometryPrior> geometry_prior_for(const Armor & armor) const;
   void update_geometry_cache();
+  void update_debug_data();
 
   void sort_armors(std::list<Armor> & armors) const;
 };

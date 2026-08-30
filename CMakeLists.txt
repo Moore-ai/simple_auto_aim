@@ -9,28 +9,38 @@ set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}--------------------")
 
-option(ENABLE_FOXGLOVE "Enable Foxglove SDK integration" OFF)
-
-if(ENABLE_FOXGLOVE)
-  if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
-    set(DEFAULT_FOXGLOVE_PLATFORM arm64)
-  else()
-    set(DEFAULT_FOXGLOVE_PLATFORM x64)
-  endif()
-
-  set(FOXGLOVE_PLATFORM "${DEFAULT_FOXGLOVE_PLATFORM}" CACHE STRING
-      "Foxglove SDK platform: x64 or arm64")
-  set_property(CACHE FOXGLOVE_PLATFORM PROPERTY STRINGS x64 arm64)
-  set(FOXGLOVE_SDK_DIR "${PROJECT_SOURCE_DIR}/thirdparty/foxglove_${FOXGLOVE_PLATFORM}")
-
-  if(NOT EXISTS "${FOXGLOVE_SDK_DIR}/include" OR
-     NOT EXISTS "${FOXGLOVE_SDK_DIR}/lib/libfoxglove.a")
-    message(FATAL_ERROR "Foxglove SDK is incomplete: ${FOXGLOVE_SDK_DIR}")
-  endif()
-
-  message(STATUS "Foxglove SDK available at: ${FOXGLOVE_SDK_DIR}")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+  set(DEFAULT_FOXGLOVE_PLATFORM arm64)
+else()
+  set(DEFAULT_FOXGLOVE_PLATFORM x64)
 endif()
 
+set(FOXGLOVE_PLATFORM "${DEFAULT_FOXGLOVE_PLATFORM}" CACHE STRING
+    "Foxglove SDK platform: x64 or arm64")
+set_property(CACHE FOXGLOVE_PLATFORM PROPERTY STRINGS x64 arm64)
+set(FOXGLOVE_SDK_DIR "${PROJECT_SOURCE_DIR}/thirdparty/foxglove_${FOXGLOVE_PLATFORM}")
+
+if(NOT EXISTS "${FOXGLOVE_SDK_DIR}/include" OR
+   NOT EXISTS "${FOXGLOVE_SDK_DIR}/lib/libfoxglove.a")
+  message(FATAL_ERROR "Foxglove SDK is incomplete: ${FOXGLOVE_SDK_DIR}")
+endif()
+
+message(STATUS "Foxglove SDK available at: ${FOXGLOVE_SDK_DIR}")
+
+find_package(Threads REQUIRED)
+file(GLOB FOXGLOVE_SDK_SOURCES CONFIGURE_DEPENDS
+  "${FOXGLOVE_SDK_DIR}/src/*.cpp"
+  "${FOXGLOVE_SDK_DIR}/src/server/*.cpp")
+
+add_library(foxglove_sdk STATIC ${FOXGLOVE_SDK_SOURCES})
+target_compile_features(foxglove_sdk PUBLIC cxx_std_20)
+target_include_directories(foxglove_sdk PUBLIC "${FOXGLOVE_SDK_DIR}/include")
+target_link_libraries(foxglove_sdk PUBLIC
+  "${FOXGLOVE_SDK_DIR}/lib/libfoxglove.a"
+  Threads::Threads)
+
+add_executable(foxglove_sine_test tests/foxglove_sine_test.cpp)
+target_link_libraries(foxglove_sine_test PRIVATE foxglove_sdk)
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -66,6 +76,8 @@ add_executable(uav_debug src/uav_debug.cpp)
 target_link_libraries(standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(mt_standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(standard_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+target_sources(standard_mpc PRIVATE tools/foxglove_visualizer.cpp)
+target_link_libraries(standard_mpc foxglove_sdk)
 target_link_libraries(virtual_gimbal util)
 target_link_libraries(auto_aim_debug_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 target_link_libraries(mt_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
@@ -162,8 +174,8 @@ add_executable(web_debug_test tests/web_debug_test.cpp)
 target_link_libraries(web_debug_test ${OpenCV_LIBS} fmt::fmt tools io auto_aim)
 target_compile_options(web_debug_test PRIVATE -UNDEBUG)
 
-add_executable(standard_mpc_web_compile_test tests/standard_mpc_web_compile_test.cpp)
-target_link_libraries(standard_mpc_web_compile_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
+add_executable(standard_mpc_foxglove_compile_test tests/standard_mpc_foxglove_compile_test.cpp)
+target_link_libraries(standard_mpc_foxglove_compile_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
 
 add_executable(planner_test_offline tests/planner_test_offline.cpp)
 target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)

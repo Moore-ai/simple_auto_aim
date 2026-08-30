@@ -149,6 +149,7 @@ public:
   bool geometry_cache_ready() const;
   std::vector<Eigen::Vector4d> armor_xyza_list() const;
   std::vector<PredictedArmorPose> armor_pose_list() const;
+  const std::optional<Armor> & locked_armor() const;
 
   bool diverged() const;
 
@@ -177,6 +178,7 @@ private:
   bool reprojection_mode_ = false;
   ReprojectionObservationConfig reprojection_config_;
   std::chrono::steady_clock::time_point t_;
+  std::optional<Armor> locked_armor_;
 
   void update_filter(const Armor & armor, int id);  // yaw pitch distance angle
 

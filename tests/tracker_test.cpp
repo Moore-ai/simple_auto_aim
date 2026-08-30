@@ -40,6 +40,11 @@ int main()
   tracker.track(armors, std::chrono::steady_clock::now());
 
   assert(armors.front().center == configured_center_armor.center);
+  const auto & debug_data = tracker.debug_data();
+  assert(debug_data.locked_armor.has_value());
+  assert(debug_data.target_state.has_value());
+  assert(debug_data.predicted_world_armors.size() == 4);
+  assert(debug_data.predicted_image_armors.size() == debug_data.predicted_world_armors.size());
 
   const auto legacy_priority_config =
     "use_priority: true\npriority_list: [one, sentry]\n" + config_text;

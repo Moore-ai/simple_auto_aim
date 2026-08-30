@@ -21,6 +21,7 @@ Target::Target(const Target & other)
   jumped(other.jumped),
   last_id(other.last_id),
   isinit(other.isinit),
+  locked_armor_(other.locked_armor_),
   armor_num_(other.armor_num_),
   switch_count_(other.switch_count_),
   update_count_(other.update_count_),
@@ -51,6 +52,7 @@ Target & Target::operator=(const Target & other)
     jumped = other.jumped;
     last_id = other.last_id;
     isinit = other.isinit;
+    locked_armor_ = other.locked_armor_;
     armor_num_ = other.armor_num_;
     switch_count_ = other.switch_count_;
     update_count_ = other.update_count_;
@@ -77,6 +79,7 @@ Target::Target(
   armor_type(armor.type),
   jumped(false),
   last_id(0),
+  locked_armor_(armor),
   armor_num_(armor.name == ArmorName::outpost ? OUTPOST_ARMOR_COUNT : armor_num),
   switch_count_(0),
   update_count_(0),
@@ -138,6 +141,7 @@ Target Target::make_outpost(
   result.armor_type = armor.type;
   result.jumped = false;
   result.last_id = 0;
+  result.locked_armor_ = armor;
   result.isinit = false;
   result.armor_num_ = OUTPOST_ARMOR_COUNT;
   result.switch_count_ = 0;
@@ -162,6 +166,7 @@ Target Target::make_outpost_v2(
   result.armor_type = armors.front().type;
   result.jumped = false;
   result.last_id = 0;
+  result.locked_armor_ = armors.front();
   result.isinit = false;
   result.armor_num_ = OUTPOST_ARMOR_COUNT;
   result.switch_count_ = 0;
@@ -308,6 +313,7 @@ void Target::update(const Armor & armor)
   update_count_++;
 
   update_filter(armor, id);
+  locked_armor_ = armor;
   if (reprojection_mode_) constrain_reprojection_state();
 }
 
@@ -326,6 +332,7 @@ bool Target::update_outpost(const std::vector<Armor> & armors)
     mark_armor_id(id);
     ++update_count_;
   }
+  locked_armor_ = armors.back();
   return true;
 }
 
@@ -461,6 +468,10 @@ bool Target::update_reprojection_impl(
     }
     update_count_ += static_cast<int>(measurements.size() + (observed_depth_diff ? 1 : 0));
     if (last_id != 0) jumped = true;
+    const auto observed = std::find_if(
+      armor_measurements.begin(), armor_measurements.end(),
+      [this](const auto & measurement) { return measurement.armor_id == last_id; });
+    if (observed != armor_measurements.end()) locked_armor_ = observed->armor;
     constrain_reprojection_state();
   }
 
@@ -651,6 +662,8 @@ std::vector<PredictedArmorPose> Target::armor_pose_list() const
   }
   return poses;
 }
+
+const std::optional<Armor> & Target::locked_armor() const { return locked_armor_; }
 
 bool Target::diverged() const
 {

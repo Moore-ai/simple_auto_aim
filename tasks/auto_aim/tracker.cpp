@@ -170,6 +170,7 @@ std::list<Target> Tracker::track(
 std::list<Target> Tracker::track(
   DetectionResult & detections, std::chrono::steady_clock::time_point t, bool use_enemy_color)
 {
+  debug_data_ = {};
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
 
@@ -216,6 +217,8 @@ std::list<Target> Tracker::track(
   }
 
   if (state_ == "lost") return {};
+
+  update_debug_data();
 
   std::list<Target> targets = {target_};
   return targets;
@@ -378,6 +381,19 @@ void Tracker::update_geometry_cache()
     target_.name,
     GeometryCacheEntry{
       target_.armor_type, {state.radius(), state.radius_diff(), state.height_diff()}});
+}
+
+void Tracker::update_debug_data()
+{
+  debug_data_.locked_armor = target_.locked_armor();
+  debug_data_.predicted_world_armors = target_.armor_pose_list();
+  debug_data_.target_state = target_.state();
+  debug_data_.armor_type = target_.armor_type;
+  debug_data_.predicted_image_armors.reserve(debug_data_.predicted_world_armors.size());
+  for (const auto & pose : debug_data_.predicted_world_armors) {
+    debug_data_.predicted_image_armors.push_back(
+      solver_.reproject_armor(pose.center, pose.yaw, pose.pitch, target_.armor_type));
+  }
 }
 
 void Tracker::sort_armors(std::list<Armor> & armors) const
