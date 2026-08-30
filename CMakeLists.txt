@@ -9,6 +9,28 @@ set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}--------------------")
 
+option(ENABLE_FOXGLOVE "Enable Foxglove SDK integration" OFF)
+
+if(ENABLE_FOXGLOVE)
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+    set(DEFAULT_FOXGLOVE_PLATFORM arm64)
+  else()
+    set(DEFAULT_FOXGLOVE_PLATFORM x64)
+  endif()
+
+  set(FOXGLOVE_PLATFORM "${DEFAULT_FOXGLOVE_PLATFORM}" CACHE STRING
+      "Foxglove SDK platform: x64 or arm64")
+  set_property(CACHE FOXGLOVE_PLATFORM PROPERTY STRINGS x64 arm64)
+  set(FOXGLOVE_SDK_DIR "${PROJECT_SOURCE_DIR}/thirdparty/foxglove_${FOXGLOVE_PLATFORM}")
+
+  if(NOT EXISTS "${FOXGLOVE_SDK_DIR}/include" OR
+     NOT EXISTS "${FOXGLOVE_SDK_DIR}/lib/libfoxglove.a")
+    message(FATAL_ERROR "Foxglove SDK is incomplete: ${FOXGLOVE_SDK_DIR}")
+  endif()
+
+  message(STATUS "Foxglove SDK available at: ${FOXGLOVE_SDK_DIR}")
+endif()
+
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Eigen3 REQUIRED)
