@@ -10,6 +10,11 @@
 
 namespace tools
 {
+namespace detail
+{
+cv::Mat prepare_image_for_publish(const cv::Mat & image);
+}
+
 class FoxgloveVisualizer
 {
 public:

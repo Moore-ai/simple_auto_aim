@@ -81,6 +81,11 @@ bool create(
 }
 }  // namespace
 
+cv::Mat detail::prepare_image_for_publish(const cv::Mat & image)
+{
+  return image;
+}
+
 class FoxgloveVisualizer::Impl
 {
 public:
@@ -150,11 +155,8 @@ void FoxgloveVisualizer::publish(
   if (target_data.locked_armor) draw_polygon(image, target_data.locked_armor->points, {0, 0, 255});
   for (const auto & polygon : target_data.predicted_image_armors) draw_polygon(image, polygon, {255, 0, 0});
 
-  cv::Mat raw_flipped, image_flipped;
-  cv::flip(raw, raw_flipped, 1);
-  cv::flip(image, image_flipped, 1);
-  if (impl_->image_raw) impl_->image_raw->log(compressed_image(raw_flipped));
-  if (impl_->image) impl_->image->log(compressed_image(image_flipped));
+  if (impl_->image_raw) impl_->image_raw->log(compressed_image(detail::prepare_image_for_publish(raw)));
+  if (impl_->image) impl_->image->log(compressed_image(detail::prepare_image_for_publish(image)));
 
   if (!impl_->target) return;
   foxglove::schemas::SceneUpdate update;
