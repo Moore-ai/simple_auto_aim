@@ -4,6 +4,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "calibration/image_sequence.hpp"
+#include "calibration/pattern.hpp"
 
 const std::string keys =
   "{help h usage ? |                          | 输出命令行参数说明}"
@@ -44,12 +45,12 @@ void load(
     img_size = img.size();
 
     // 识别标定板
-    std::vector<cv::Point2f> centers_2d;
-    auto success = cv::findCirclesGrid(img, pattern_size, centers_2d, cv::CALIB_CB_SYMMETRIC_GRID);
+    std::vector<cv::Point2f> corners_2d;
+    auto success = calibration::find_chessboard_pattern(img, pattern_size, corners_2d);
 
     // 显示识别结果
     auto drawing = img.clone();
-    cv::drawChessboardCorners(drawing, pattern_size, centers_2d, success);
+    cv::drawChessboardCorners(drawing, pattern_size, corners_2d, success);
     cv::resize(drawing, drawing, {}, 0.5, 0.5);  // 缩小图片尺寸便于显示完全
     cv::imshow("Press any to continue", drawing);
     cv::waitKey(0);
@@ -59,7 +60,7 @@ void load(
     if (!success) continue;
 
     // 记录所需的数据
-    img_points.emplace_back(centers_2d);
+    img_points.emplace_back(corners_2d);
     obj_points.emplace_back(centers_3d(pattern_size, center_distance_mm));
   }
 }
@@ -100,6 +101,10 @@ int main(int argc, char * argv[])
   std::vector<std::vector<cv::Point3f>> obj_points;
   std::vector<std::vector<cv::Point2f>> img_points;
   load(input_folder, config_path, img_size, obj_points, img_points);
+  if (img_points.size() < 3) {
+    fmt::print("[failure] camera calibration needs at least 3 valid chessboard images\n");
+    return 1;
+  }
 
   // 相机标定
   cv::Mat camera_matrix, distort_coeffs;

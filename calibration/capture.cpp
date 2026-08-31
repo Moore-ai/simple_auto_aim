@@ -5,6 +5,7 @@
 #include <opencv2/opencv.hpp>
 #include <yaml-cpp/yaml.h>
 
+#include "calibration/pattern.hpp"
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tools/img_tools.hpp"
@@ -56,9 +57,9 @@ void capture_loop(const std::string & config_path, const std::string & output_fo
     tools::draw_text(img_with_ypr, fmt::format("Y {:.2f}", zyx[1]), {40, 80}, {0, 0, 255});
     tools::draw_text(img_with_ypr, fmt::format("X {:.2f}", zyx[2]), {40, 120}, {0, 0, 255});
 
-    std::vector<cv::Point2f> centers_2d;
-    auto success = cv::findCirclesGrid(img, pattern_size, centers_2d);  // 默认是对称圆点图案
-    cv::drawChessboardCorners(img_with_ypr, pattern_size, centers_2d, success);  // 显示识别结果
+    std::vector<cv::Point2f> corners_2d;
+    auto success = calibration::find_chessboard_pattern(img, pattern_size, corners_2d);
+    cv::drawChessboardCorners(img_with_ypr, pattern_size, corners_2d, success);  // 显示识别结果
     cv::resize(img_with_ypr, img_with_ypr, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
 
     // 按“s”或左键点击窗口保存图片和对应四元数，按“q”退出程序

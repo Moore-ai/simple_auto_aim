@@ -7,6 +7,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "calibration/image_sequence.hpp"
+#include "calibration/pattern.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/math_tools.hpp"
 
@@ -80,11 +81,11 @@ void load(
     tools::draw_text(drawing, fmt::format("roll  {:.2f}", ypr[2]), {40, 120}, {0, 0, 255});
 
     // 识别标定板
-    std::vector<cv::Point2f> centers_2d;
-    auto success = cv::findCirclesGrid(img, pattern_size, centers_2d);  // 默认是对称圆点图案
+    std::vector<cv::Point2f> corners_2d;
+    auto success = calibration::find_chessboard_pattern(img, pattern_size, corners_2d);
 
     // 显示识别结果
-    cv::drawChessboardCorners(drawing, pattern_size, centers_2d, success);
+    cv::drawChessboardCorners(drawing, pattern_size, corners_2d, success);
     cv::resize(drawing, drawing, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
     cv::imshow("Press any to continue", drawing);
     cv::waitKey(0);
@@ -100,7 +101,7 @@ void load(
     cv::Mat rvec, tvec;
     auto centers_3d_ = centers_3d(pattern_size, center_distance_mm);
     cv::solvePnP(
-      centers_3d_, centers_2d, camera_matrix, distort_coeffs, rvec, tvec, false, cv::SOLVEPNP_IPPE);
+      centers_3d_, corners_2d, camera_matrix, distort_coeffs, rvec, tvec, false, cv::SOLVEPNP_IPPE);
 
     // 记录所需的数据
     R_gimbal2world_list.emplace_back(R_gimbal2world_cv);
@@ -155,6 +156,10 @@ int main(int argc, char * argv[])
   load(
     input_folder, config_path, R_gimbal2imubody_data, R_gimbal2world_list, t_gimbal2world_list,
     rvecs, tvecs);
+  if (rvecs.size() < 3) {
+    fmt::print("[failure] hand-eye calibration needs at least 3 valid chessboard images\n");
+    return 1;
+  }
 
   // 手眼标定
   cv::Mat R_camera2gimbal, t_camera2gimbal;

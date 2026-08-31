@@ -89,6 +89,7 @@ target_link_libraries(uav_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools 
 ##################calibration################
 add_executable(capture calibration/capture.cpp)
 add_executable(capture_input_test tests/capture_input_test.cpp calibration/capture.cpp)
+add_executable(calibration_pattern_test tests/calibration_pattern_test.cpp)
 add_executable(calibrate_camera calibration/calibrate_camera.cpp)
 add_executable(calibrate_handeye calibration/calibrate_handeye.cpp)
 add_executable(calibrate_robotworld_handeye calibration/calibrate_robotworld_handeye.cpp)
@@ -96,8 +97,10 @@ add_executable(split_video calibration/split_video.cpp)
 
 target_link_libraries(capture ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(capture_input_test ${OpenCV_LIBS} fmt::fmt tools io)
+target_link_libraries(calibration_pattern_test ${OpenCV_LIBS})
 target_compile_definitions(capture_input_test PRIVATE CAPTURE_INPUT_TEST)
 add_test(NAME capture_input_test COMMAND capture_input_test)
+add_test(NAME calibration_pattern_test COMMAND calibration_pattern_test)
 target_link_libraries(calibrate_camera ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
 target_link_libraries(calibrate_handeye ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
 target_link_libraries(calibrate_robotworld_handeye ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
