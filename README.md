@@ -9,7 +9,6 @@
 - 下位机型号：RoboMaster 开发板 C 型（STM32F407）
 - IMU 型号：C 板内置 BMI088
 - 通信方式：USB2CAN 或 MicroUSB 虚拟串口
-- 辅助工具：NoMachine（远程桌面）、PlotJuggler（曲线绘制）
 
 ## 2 依赖安装
 
@@ -168,4 +167,17 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="1234", ATTRS{idProduct}=="1234", ATTRS{seria
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ls -l /dev/gimbal
+```
+
+## 8 手眼标定
+
+本机
+```powershell
+$env:DISPLAY = "127.0.0.1:0.0"
+ssh -Y hfut@192.168.xxx.xx
+```
+进入远程后
+```bash
+cd ~/simple_auto_aim
+./build/capture
 ```
