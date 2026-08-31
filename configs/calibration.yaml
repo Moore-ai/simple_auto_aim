@@ -1,29 +1,22 @@
-pattern_cols: 10
-pattern_rows: 7
-center_distance_mm: 40
+# 对称圆点阵标定板
+pattern_cols: 11
+pattern_rows: 8
+center_distance_mm: 20
 
+# 云台坐标系到 IMU 本体坐标系
 R_gimbal2imubody: [1, 0, 0, 0, 1, 0,  0, 0, 1]
 
+# 海康相机
 camera_name: "hikrobot"
-exposure_ms: 3
-gain: 10.0
-vid_pid: "2bdf:0001"
-image_width: 1440
-image_height: 1080
+exposure_ms: 5.5
+gain: 16.0
+image_width: 1280
+image_height: 1024
 camera_index: 0
-fps: 150
+fps: 120
+image_rotation: -90
 
-auto_exposure:
-  enable: false
-  target_brightness: 25.0
-  tolerance: 3.0
-  step_gain: 15.0
-  decay_step: 1.0
-  exposure_min: 200.0
-  exposure_max: 3500.0
-  control_interval_ms: 300
-
-#####-----gimbal串口参数-----#####
+# 云台串口
 com_port: "/dev/ttyACM0"
 baudrate: 115200
 bytesize: 8

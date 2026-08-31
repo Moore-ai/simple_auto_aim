@@ -175,7 +175,7 @@ gain: 16.0
 vid_pid: "2bdf:0001"
 camera_index: 0
 fps: 120
-image_rotation: 0 # 图像旋转角度：-90、90、180（-180 等同 180）
+image_rotation: -90 # 图像旋转角度：-90、90、180（-180 等同 180）
 
 virtual_camera:
   enable: false

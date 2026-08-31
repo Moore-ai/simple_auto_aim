@@ -1,19 +1,7 @@
-camera_name: "mindvision"
-exposure_ms: 2
-gamma: 0.5
-vid_pid: "f622:d13a"
-
-auto_exposure:
-  enable: false
-  target_brightness: 25.0
-  tolerance: 3.0
-  step_gain: 15.0
-  decay_step: 1.0
-  exposure_min: 200.0
-  exposure_max: 3500.0
-  control_interval_ms: 300
-
-# camera_name: "hikrobot"
-# exposure_ms: 3
-# gain: 10.0
-# vid_pid: "2bdf:0001"
+# 海康相机
+camera_name: "hikrobot"
+exposure_ms: 5.5
+gain: 16.0
+camera_index: 0
+fps: 120
+image_rotation: -90
