@@ -1,12 +1,16 @@
 image_width: 1280
 image_height: 1024
+
+# ==================== 前哨站专用滤波器配置 ====================
+# outpost_model 决定实际使用 current 还是 v2；两个配置段都需要保留，
+# 因为 Tracker 启动时会同时读取两段配置。
 outpost_model: current # 模型选择：current=固定低/中/高板高度模型，v2=相位编号与高度差在线估计模型
-outpost_current: # current 模型专用配置；id=0/1/2 固定对应低/中/高装甲板
+outpost_current: # current 专用配置；id=0/1/2 固定对应低/中/高装甲板
   P0: [1, 64, 1, 64, 1, 81, 0.4, 0] # 初始协方差对角线，状态顺序为[x,vx,y,vy,z,vz,yaw,yaw_rate]
   accel_var: 10 # 平移加速度过程噪声方差，单位 m²/s⁴
-  yaw_var: 4e-3 # 装甲板观测方位角 yaw 方差，单位 rad²
-  pitch_var: 4e-3 # 装甲板观测俯仰角 pitch 方差，单位 rad²
-  armor_yaw_base: 9e-2 # 装甲板自身朝向 yaw 的基础观测方差，单位 rad²
+  yaw_var: 4e-3 # 单块装甲板视线方位角观测方差，单位 rad²
+  pitch_var: 4e-3 # 单块装甲板视线俯仰角观测方差，单位 rad²
+  armor_yaw_base: 9e-2 # 单块装甲板自身朝向观测的基础方差，单位 rad²
   velocity_clamp_enabled: false # 是否限制 x/y/z 三轴线速度
   max_linear_speed: 5.0 # current 模型线速度限幅，单位 m/s
 outpost_v2: # v2 模型专用配置；id=0/1/2 表示初始化相位及其后两个 120° 相位
@@ -80,7 +84,8 @@ max_temp_lost_count: 15           # 帧 短暂丢失上限，超过则状态从 
 outpost_max_temp_lost_count: 75   # 帧 前哨站短暂丢失上限，高于普通值（前哨站旋转时遮挡时间长）
 
 #####-----滤波器配置-----#####
-filter_method: "ekf"                  # 滤波器类型："ekf"(标准EKF), "inekf"(左不变误差EKF), "ukf"(无迹卡尔曼滤波)
+# 以下 filter / *_obs 配置仅用于普通目标；前哨站使用上面的专用配置。
+filter_method: "ekf"                  # 普通目标滤波器类型："ekf"(标准EKF), "inekf"(左不变误差EKF), "ukf"(无迹卡尔曼滤波)
 
 reprojection_obs:
   angle_var: 0.01
@@ -103,11 +108,11 @@ reprojection_obs:
 
 #####-----滤波器共用参数（EKF/InEKF 共用）-----#####
 filter:
-  # 过程噪声（Piecewise White Noise Model）
+  # 普通目标过程噪声（Piecewise White Noise Model）
   accel_var: 100                  # 加速度方差 v1（前哨站除外）
   angular_accel_var: 400          # 角加速度方差 v2（前哨站除外）
 
-  # 初始协方差 P0 对角线（按兵种分）
+  # 普通目标初始协方差 P0 对角线（按兵种分）
   P0:
     default: [1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1]
     balance: [1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1]
@@ -118,10 +123,11 @@ filter:
     default: 0.2
     base: 0.3205
 
-#####-----EKF 特有观测噪声（ypd 空间，仅 filter_method="ekf" 时使用）-----#####
+# 普通目标 EKF 的观测噪声；outpost current/v2 不读取这里。
+#####-----EKF 特有观测噪声（ypd 空间，仅普通目标 filter_method="ekf" 时使用）-----#####
 ekf_obs:
-  yaw_var: 4e-3               # yaw 观测方差
-  pitch_var: 4e-3             # pitch 观测方差
+  yaw_var: 4e-3               # 视线中 yaw 观测方差
+  pitch_var: 4e-3             # 视线中 pitch 观测方差
   armor_yaw_base: 9e-2        # armor_yaw 基础方差
 
 #####-----InEKF 特有观测噪声（xyz 空间，仅 filter_method="inekf" 时使用）-----#####
