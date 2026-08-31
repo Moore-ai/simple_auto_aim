@@ -8,7 +8,7 @@ R_gimbal2imubody: [1, 0, 0, 0, 1, 0,  0, 0, 1]
 
 # 海康相机
 camera_name: "hikrobot"
-exposure_ms: 5.5
+exposure_ms: 0.2
 gain: 16.0
 image_width: 1280
 image_height: 1024
@@ -20,3 +20,6 @@ image_rotation: -90
 com_port: "/dev/ttyACM0"
 baudrate: 115200
 bytesize: 8
+
+camera_matrix: [2403.1136316935917, 0, 567.74249348659885, 0, 2407.3896390299665, 570.25063710517975, 0, 0, 1]
+distort_coeffs: [-0.038237229814716757, 0.20323363149030885, 0.00076583801074767502, 0.000425404346006584, 0]
