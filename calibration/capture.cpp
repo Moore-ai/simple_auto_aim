@@ -16,6 +16,8 @@ const std::string keys =
   "{@config-path c  | configs/calibration.yaml | yaml配置文件路径 }"
   "{output-folder o |      assets/img_with_q   | 输出文件夹路径   }";
 
+bool should_save_capture(int event) { return event == cv::EVENT_LBUTTONDOWN; }
+
 void write_q(const std::string q_path, const Eigen::Quaterniond & q)
 {
   std::ofstream q_file(q_path);
@@ -35,6 +37,14 @@ void capture_loop(const std::string & config_path, const std::string & output_fo
   std::chrono::steady_clock::time_point timestamp;
 
   int count = 0;
+  bool save_requested = false;
+  cv::namedWindow("Press s to save, q to quit");
+  cv::setMouseCallback(
+    "Press s to save, q to quit",
+    [](int event, int, int, int, void * userdata) {
+      if (should_save_capture(event)) *static_cast<bool *>(userdata) = true;
+    },
+    &save_requested);
   while (true) {
     camera.read(img, timestamp);
     Eigen::Quaterniond q = gimbal.q(timestamp);
@@ -51,12 +61,13 @@ void capture_loop(const std::string & config_path, const std::string & output_fo
     cv::drawChessboardCorners(img_with_ypr, pattern_size, centers_2d, success);  // 显示识别结果
     cv::resize(img_with_ypr, img_with_ypr, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
 
-    // 按“s”保存图片和对应四元数，按“q”退出程序
+    // 按“s”或左键点击窗口保存图片和对应四元数，按“q”退出程序
+    save_requested = false;
     cv::imshow("Press s to save, q to quit", img_with_ypr);
     auto key = cv::waitKey(1);
     if (key == 'q')
       break;
-    else if (key != 's')
+    else if (key != 's' && !save_requested)
       continue;
 
     // 保存图片和四元数
@@ -71,6 +82,7 @@ void capture_loop(const std::string & config_path, const std::string & output_fo
   // 离开该作用域时，camera和gimbal会自动关闭
 }
 
+#ifndef CAPTURE_INPUT_TEST
 int main(int argc, char * argv[])
 {
   // 读取命令行参数
@@ -95,3 +107,4 @@ int main(int argc, char * argv[])
 
   return 0;
 }
+#endif
