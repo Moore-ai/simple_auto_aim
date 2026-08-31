@@ -52,6 +52,7 @@ int main()
     tracker.track(observed_armors, timestamp + std::chrono::milliseconds(frame * 10));
   }
   assert(tracker.state() == "tracking");
+  assert(tracker.debug_data().ekf_converged);
 
   std::list<auto_aim::Armor> missing_armors;
   tracker.track(missing_armors, timestamp + std::chrono::milliseconds(50));

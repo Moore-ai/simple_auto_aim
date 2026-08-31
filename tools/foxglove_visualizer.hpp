@@ -15,11 +15,17 @@ namespace tools
 {
 namespace detail
 {
+enum class FoxgloveTargetTopic { normal, outpost_current, outpost_v2 };
+
 cv::Mat prepare_image_for_publish(const cv::Mat & image);
 foxglove::schemas::CubePrimitive armor_cube(
   const Eigen::Vector3d & center, double yaw, double pitch, auto_aim::ArmorType armor_type);
 void draw_detected_armors(
   cv::Mat & image, const std::list<auto_aim::Armor> & armors, auto_aim::Color target_color);
+FoxgloveTargetTopic target_topic(const auto_aim::TrackerDebugData & target_data);
+const char * target_topic_name(FoxgloveTargetTopic topic);
+foxglove::schemas::SceneUpdate target_scene_update(
+  const auto_aim::TrackerDebugData & target_data);
 }
 
 class FoxgloveVisualizer

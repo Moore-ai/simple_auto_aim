@@ -27,7 +27,12 @@ struct TrackerDebugData
   std::optional<Armor> locked_armor;
   std::vector<std::vector<cv::Point2f>> predicted_image_armors;
   std::vector<PredictedArmorPose> predicted_world_armors;
+  // Only one of these state fields is set for a live target. Keeping the model-specific
+  // state separate lets visualizers distinguish the two outpost filters from normal targets.
   std::optional<TargetState> target_state;
+  std::optional<OutpostState> outpost_state;
+  std::optional<OutpostStateV2> outpost_state_v2;
+  bool ekf_converged = false;
   ArmorType armor_type = ArmorType::small;
 };
 

@@ -1,6 +1,8 @@
 #include <cassert>
 #include <cmath>
+#include <cstring>
 #include <list>
+#include <string>
 #include <vector>
 
 #include <Eigen/Geometry>
@@ -47,5 +49,55 @@ int main()
   assert(std::abs(cube.size->x - 0.020) < 1e-12);
   assert(std::abs(cube.size->y - 0.230) < 1e-12);
   assert(std::abs(cube.size->z - 0.130) < 1e-12);
+
+  auto_aim::TrackerDebugData normal_target;
+  normal_target.target_state = auto_aim::TargetState(Eigen::VectorXd::Zero(11));
+  normal_target.ekf_converged = true;
+  assert(
+    tools::detail::target_topic(normal_target) == tools::detail::FoxgloveTargetTopic::normal);
+  assert(
+    std::strcmp(
+      tools::detail::target_topic_name(tools::detail::FoxgloveTargetTopic::normal), "/target") ==
+    0);
+  const auto normal_scene = tools::detail::target_scene_update(normal_target);
+  assert(normal_scene.entities.size() == 1);
+  assert(normal_scene.entities.front().metadata.front().key == "model");
+  assert(normal_scene.entities.front().metadata.front().value == "normal");
+
+  auto_aim::TrackerDebugData current_outpost;
+  current_outpost.outpost_state = auto_aim::OutpostState(Eigen::VectorXd::Zero(8));
+  assert(
+    tools::detail::target_topic(current_outpost) ==
+    tools::detail::FoxgloveTargetTopic::outpost_current);
+  assert(
+    std::strcmp(
+      tools::detail::target_topic_name(tools::detail::FoxgloveTargetTopic::outpost_current),
+      "/outpost/current") == 0);
+
+  auto_aim::TrackerDebugData v2_outpost;
+  v2_outpost.outpost_state_v2 = auto_aim::OutpostStateV2(Eigen::VectorXd::Zero(10));
+  v2_outpost.ekf_converged = true;
+  const auto v2_scene = tools::detail::target_scene_update(v2_outpost);
+  assert(
+    tools::detail::target_topic(v2_outpost) == tools::detail::FoxgloveTargetTopic::outpost_v2);
+  assert(
+    std::strcmp(
+      tools::detail::target_topic_name(tools::detail::FoxgloveTargetTopic::outpost_v2),
+      "/outpost/v2") == 0);
+  assert(v2_scene.entities.size() == 1);
+  const auto has_convergence_metadata = [](const auto & metadata) {
+    for (const auto & [key, value] : metadata) {
+      if (key == "ekf_converged") return value == "true";
+    }
+    return false;
+  };
+  assert(has_convergence_metadata(v2_scene.entities.front().metadata));
+  const auto has_height_offset = [](const auto & metadata) {
+    for (const auto & item : metadata) {
+      if (item.key == "height_offset_2") return true;
+    }
+    return false;
+  };
+  assert(has_height_offset(v2_scene.entities.front().metadata));
   return 0;
 }

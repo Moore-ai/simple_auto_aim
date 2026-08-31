@@ -93,6 +93,146 @@ foxglove::schemas::CubePrimitive detail::armor_cube(
   return cube;
 }
 
+detail::FoxgloveTargetTopic detail::target_topic(const auto_aim::TrackerDebugData & target_data)
+{
+  if (target_data.outpost_state_v2) return FoxgloveTargetTopic::outpost_v2;
+  if (target_data.outpost_state) return FoxgloveTargetTopic::outpost_current;
+  return FoxgloveTargetTopic::normal;
+}
+
+const char * detail::target_topic_name(FoxgloveTargetTopic topic)
+{
+  switch (topic) {
+    case FoxgloveTargetTopic::normal: return "/target";
+    case FoxgloveTargetTopic::outpost_current: return "/outpost/current";
+    case FoxgloveTargetTopic::outpost_v2: return "/outpost/v2";
+  }
+  return "/target";
+}
+
+foxglove::schemas::SceneUpdate detail::target_scene_update(
+  const auto_aim::TrackerDebugData & target_data)
+{
+  foxglove::schemas::SceneUpdate update;
+  update.deletions.push_back({std::nullopt,
+                              foxglove::schemas::SceneEntityDeletion::SceneEntityDeletionType::ALL,
+                              ""});
+
+  if (target_data.locked_armor) {
+    foxglove::schemas::SceneEntity detected;
+    detected.id = "locked_armor";
+    detected.frame_id = "world";
+    auto cube = detail::armor_cube(
+      target_data.locked_armor->xyz_in_world, target_data.locked_armor->ypr_in_world[0],
+      target_data.locked_armor->ypr_in_world[1], target_data.locked_armor->type);
+    cube.color = color(1.0, 0.0, 0.0);
+    detected.cubes.push_back(std::move(cube));
+    update.entities.push_back(std::move(detected));
+  }
+
+  for (size_t i = 0; i < target_data.predicted_world_armors.size(); ++i) {
+    const auto & armor = target_data.predicted_world_armors[i];
+    foxglove::schemas::SceneEntity predicted;
+    predicted.id = "predicted_armor_" + std::to_string(i);
+    predicted.frame_id = "world";
+    auto cube = detail::armor_cube(armor.center, armor.yaw, armor.pitch, target_data.armor_type);
+    cube.color = color(0.0, 0.0, 1.0);
+    predicted.cubes.push_back(std::move(cube));
+    update.entities.push_back(std::move(predicted));
+  }
+
+  foxglove::schemas::SceneEntity state;
+  state.id = "target_state";
+  state.frame_id = "world";
+  Eigen::Vector3d center = Eigen::Vector3d::Zero();
+  double vehicle_yaw = 0.0;
+  double yaw_rate = 0.0;
+  bool has_state = false;
+
+  if (target_data.target_state) {
+    const auto & target = *target_data.target_state;
+    center = {target.center_x(), target.center_y(), target.center_z()};
+    vehicle_yaw = target.yaw();
+    yaw_rate = target.yaw_rate();
+    state.metadata = {{"model", "normal"}};
+    state.metadata.insert(state.metadata.end(),
+                          {{"center_x", std::to_string(target.center_x())},
+                           {"velocity_x", std::to_string(target.velocity_x())},
+                           {"center_y", std::to_string(target.center_y())},
+                           {"velocity_y", std::to_string(target.velocity_y())},
+                           {"center_z", std::to_string(target.center_z())},
+                           {"velocity_z", std::to_string(target.velocity_z())},
+                           {"vehicle_yaw", std::to_string(target.yaw())},
+                           {"yaw_rate", std::to_string(target.yaw_rate())},
+                           {"radius", std::to_string(target.radius())},
+                           {"radius_diff", std::to_string(target.radius_diff())},
+                           {"height_diff", std::to_string(target.height_diff())}});
+    has_state = true;
+  } else if (target_data.outpost_state) {
+    const auto & target = *target_data.outpost_state;
+    center = {target.center_x(), target.center_y(), target.center_z()};
+    vehicle_yaw = target.yaw();
+    yaw_rate = target.yaw_rate();
+    state.metadata = {{"model", "current"}};
+    state.metadata.insert(state.metadata.end(),
+                          {{"center_x", std::to_string(target.center_x())},
+                           {"velocity_x", std::to_string(target.velocity_x())},
+                           {"center_y", std::to_string(target.center_y())},
+                           {"velocity_y", std::to_string(target.velocity_y())},
+                           {"center_z", std::to_string(target.center_z())},
+                           {"velocity_z", std::to_string(target.velocity_z())},
+                           {"vehicle_yaw", std::to_string(target.yaw())},
+                           {"yaw_rate", std::to_string(target.yaw_rate())}});
+    has_state = true;
+  } else if (target_data.outpost_state_v2) {
+    const auto & target = *target_data.outpost_state_v2;
+    center = {target.center_x(), target.center_y(), target.center_z()};
+    vehicle_yaw = target.yaw();
+    yaw_rate = target.yaw_rate();
+    state.metadata = {{"model", "v2"}};
+    state.metadata.insert(state.metadata.end(),
+                          {{"center_x", std::to_string(target.center_x())},
+                           {"velocity_x", std::to_string(target.velocity_x())},
+                           {"center_y", std::to_string(target.center_y())},
+                           {"velocity_y", std::to_string(target.velocity_y())},
+                           {"center_z", std::to_string(target.center_z())},
+                           {"velocity_z", std::to_string(target.velocity_z())},
+                           {"vehicle_yaw", std::to_string(target.yaw())},
+                           {"yaw_rate", std::to_string(target.yaw_rate())},
+                           {"height_offset_1", std::to_string(target.height_offset_1())},
+                           {"height_offset_2", std::to_string(target.height_offset_2())}});
+    has_state = true;
+  }
+
+  if (!has_state) return update;
+
+  const auto vehicle_pitch = -std::atan2(center.z(), std::hypot(center.x(), center.y()));
+  state.metadata.push_back({"vehicle_pitch", std::to_string(vehicle_pitch)});
+  state.metadata.push_back({"ekf_converged", target_data.ekf_converged ? "true" : "false"});
+  if (target_data.locked_armor) {
+    state.metadata.push_back(
+      {"selected_armor_yaw", std::to_string(target_data.locked_armor->ypr_in_world[0])});
+    state.metadata.push_back(
+      {"selected_armor_pitch", std::to_string(target_data.locked_armor->ypr_in_world[1])});
+  }
+  foxglove::schemas::TextPrimitive text;
+  text.billboard = true;
+  text.scale_invariant = true;
+  text.font_size = 18;
+  text.color = color(1.0, 1.0, 1.0);
+  text.pose = pose(center, 0, 0);
+  text.text = "vehicle yaw=" + std::to_string(vehicle_yaw) +
+    " pitch=" + std::to_string(vehicle_pitch) + " yaw_rate=" + std::to_string(yaw_rate) +
+    "\nekf converged=" + (target_data.ekf_converged ? "true" : "false");
+  if (target_data.locked_armor) {
+    text.text += "\narmor yaw=" + std::to_string(target_data.locked_armor->ypr_in_world[0]) +
+      " pitch=" + std::to_string(target_data.locked_armor->ypr_in_world[1]);
+  }
+  state.texts.push_back(std::move(text));
+  update.entities.push_back(std::move(state));
+  return update;
+}
+
 void detail::draw_detected_armors(
   cv::Mat & image, const std::list<auto_aim::Armor> & armors, auto_aim::Color target_color)
 {
@@ -119,6 +259,8 @@ public:
   std::optional<foxglove::schemas::CompressedImageChannel> image;
   std::optional<foxglove::schemas::CompressedImageChannel> image_detection;
   std::optional<foxglove::schemas::SceneUpdateChannel> target;
+  std::optional<foxglove::schemas::SceneUpdateChannel> outpost_current;
+  std::optional<foxglove::schemas::SceneUpdateChannel> outpost_v2;
   const std::chrono::steady_clock::time_point steady_origin = std::chrono::steady_clock::now();
   const std::chrono::system_clock::time_point system_origin = std::chrono::system_clock::now();
 
@@ -154,7 +296,21 @@ FoxgloveVisualizer::FoxgloveVisualizer() : impl_(std::make_unique<Impl>())
   create(
     impl_->image_detection,
     foxglove::schemas::CompressedImageChannel::create("/image_detection"), "/image_detection");
-  create(impl_->target, foxglove::schemas::SceneUpdateChannel::create("/target"), "/target");
+  create(
+    impl_->target,
+    foxglove::schemas::SceneUpdateChannel::create(
+      detail::target_topic_name(detail::FoxgloveTargetTopic::normal)),
+    detail::target_topic_name(detail::FoxgloveTargetTopic::normal));
+  create(
+    impl_->outpost_current,
+    foxglove::schemas::SceneUpdateChannel::create(
+      detail::target_topic_name(detail::FoxgloveTargetTopic::outpost_current)),
+    detail::target_topic_name(detail::FoxgloveTargetTopic::outpost_current));
+  create(
+    impl_->outpost_v2,
+    foxglove::schemas::SceneUpdateChannel::create(
+      detail::target_topic_name(detail::FoxgloveTargetTopic::outpost_v2)),
+    detail::target_topic_name(detail::FoxgloveTargetTopic::outpost_v2));
 
   std::cout << "Foxglove server listening at ws://127.0.0.1:" << impl_->server->port() << '\n';
 }
@@ -213,75 +369,22 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
       compressed_image(detail::prepare_image_for_publish(detection_image)), log_time);
   }
 
-  if (!impl_->target) return;
-  foxglove::schemas::SceneUpdate update;
-  update.deletions.push_back({std::nullopt,
-                              foxglove::schemas::SceneEntityDeletion::SceneEntityDeletionType::ALL,
-                              ""});
-  if (locked_armor) {
-    foxglove::schemas::SceneEntity detected;
-    detected.id = "locked_armor";
-    detected.frame_id = "world";
-    auto cube = detail::armor_cube(
-      locked_armor->xyz_in_world, locked_armor->ypr_in_world[0], locked_armor->ypr_in_world[1],
-      locked_armor->type);
-    cube.color = color(1.0, 0.0, 0.0);
-    detected.cubes.push_back(std::move(cube));
-    update.entities.push_back(std::move(detected));
+  const auto active_topic = detail::target_topic(target_data);
+  const auto active_update = detail::target_scene_update(target_data);
+  const auto clear_update = detail::target_scene_update({});
+  if (impl_->target) {
+    impl_->target->log(
+      active_topic == detail::FoxgloveTargetTopic::normal ? active_update : clear_update, log_time);
   }
-
-  for (size_t i = 0; i < target_data.predicted_world_armors.size(); ++i) {
-    const auto & armor = target_data.predicted_world_armors[i];
-    foxglove::schemas::SceneEntity predicted;
-    predicted.id = "predicted_armor_" + std::to_string(i);
-    predicted.frame_id = "world";
-    auto cube = detail::armor_cube(armor.center, armor.yaw, armor.pitch, target_data.armor_type);
-    cube.color = color(0.0, 0.0, 1.0);
-    predicted.cubes.push_back(std::move(cube));
-    update.entities.push_back(std::move(predicted));
+  if (impl_->outpost_current) {
+    impl_->outpost_current->log(
+      active_topic == detail::FoxgloveTargetTopic::outpost_current ? active_update : clear_update,
+      log_time);
   }
-
-  if (target_data.target_state) {
-    const auto & target_state = *target_data.target_state;
-    foxglove::schemas::SceneEntity state;
-    state.id = "target_state";
-    state.frame_id = "world";
-    const Eigen::Vector3d center(
-      target_state.center_x(), target_state.center_y(), target_state.center_z());
-    const auto vehicle_pitch = -std::atan2(center.z(), std::hypot(center.x(), center.y()));
-    state.metadata = {{"center_x", std::to_string(target_state.center_x())},
-                      {"velocity_x", std::to_string(target_state.velocity_x())},
-                      {"center_y", std::to_string(target_state.center_y())},
-                      {"velocity_y", std::to_string(target_state.velocity_y())},
-                      {"center_z", std::to_string(target_state.center_z())},
-                      {"velocity_z", std::to_string(target_state.velocity_z())},
-                      {"vehicle_yaw", std::to_string(target_state.yaw())},
-                      {"vehicle_pitch", std::to_string(vehicle_pitch)},
-                      {"yaw_rate", std::to_string(target_state.yaw_rate())},
-                      {"radius", std::to_string(target_state.radius())},
-                      {"radius_diff", std::to_string(target_state.radius_diff())},
-                      {"height_diff", std::to_string(target_state.height_diff())}};
-    if (locked_armor) {
-      state.metadata.push_back(
-        {"selected_armor_yaw", std::to_string(locked_armor->ypr_in_world[0])});
-      state.metadata.push_back(
-        {"selected_armor_pitch", std::to_string(locked_armor->ypr_in_world[1])});
-    }
-    foxglove::schemas::TextPrimitive text;
-    text.billboard = true;
-    text.scale_invariant = true;
-    text.font_size = 18;
-    text.color = color(1.0, 1.0, 1.0);
-    text.pose = pose(center, 0, 0);
-    text.text = "vehicle yaw=" + std::to_string(target_state.yaw()) +
-      " pitch=" + std::to_string(vehicle_pitch);
-    if (locked_armor) {
-      text.text += "\narmor yaw=" + std::to_string(locked_armor->ypr_in_world[0]) +
-        " pitch=" + std::to_string(locked_armor->ypr_in_world[1]);
-    }
-    state.texts.push_back(std::move(text));
-    update.entities.push_back(std::move(state));
+  if (impl_->outpost_v2) {
+    impl_->outpost_v2->log(
+      active_topic == detail::FoxgloveTargetTopic::outpost_v2 ? active_update : clear_update,
+      log_time);
   }
-  impl_->target->log(update, log_time);
 }
 }  // namespace tools
