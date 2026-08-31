@@ -1,10 +1,9 @@
 #include <fmt/core.h>
 #include <yaml-cpp/yaml.h>
 
-#include <fstream>
 #include <opencv2/opencv.hpp>
 
-#include "tools/img_tools.hpp"
+#include "calibration/image_sequence.hpp"
 
 const std::string keys =
   "{help h usage ? |                          | 输出命令行参数说明}"
@@ -34,11 +33,12 @@ void load(
   auto center_distance_mm = yaml["center_distance_mm"].as<double>();
   cv::Size pattern_size(pattern_cols, pattern_rows);
 
-  for (int i = 1; true; i++) {
+  const auto last_index = calibration::last_image_index(input_folder);
+  for (int i = 1; i <= last_index; i++) {
     // 读取图片
     auto img_path = fmt::format("{}/{}.jpg", input_folder, i);
     auto img = cv::imread(img_path);
-    if (img.empty()) break;
+    if (img.empty()) continue;
 
     // 设置图片尺寸
     img_size = img.size();

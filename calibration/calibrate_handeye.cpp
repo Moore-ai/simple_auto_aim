@@ -6,6 +6,7 @@
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/opencv.hpp>
 
+#include "calibration/image_sequence.hpp"
 #include "tools/img_tools.hpp"
 #include "tools/math_tools.hpp"
 
@@ -53,13 +54,18 @@ void load(
   cv::Matx33d camera_matrix(camera_matrix_data.data());
   cv::Mat distort_coeffs(distort_coeffs_data);
 
-  for (int i = 1; true; i++) {
+  const auto last_index = calibration::last_image_index(input_folder);
+  for (int i = 1; i <= last_index; i++) {
     // 读取图片和对应四元数
     auto img_path = fmt::format("{}/{}.jpg", input_folder, i);
     auto q_path = fmt::format("{}/{}.txt", input_folder, i);
     auto img = cv::imread(img_path);
+    if (img.empty()) continue;
+    if (!std::filesystem::exists(q_path)) {
+      fmt::print("[failure] missing quaternion {}\n", q_path);
+      continue;
+    }
     Eigen::Quaterniond q = read_q(q_path);
-    if (img.empty()) break;
 
     // 计算云台的欧拉角
     Eigen::Matrix3d R_imubody2imuabs = q.toRotationMatrix();

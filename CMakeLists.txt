@@ -117,6 +117,7 @@ add_executable(dm_test tests/dm_test.cpp)
 add_executable(minimum_vision_system tests/minimum_vision_system.cpp)
 add_executable(video_camera_test tests/video_camera_test.cpp)
 add_executable(hikrobot_config_test tests/hikrobot_config_test.cpp)
+add_executable(calibration_image_sequence_test tests/calibration_image_sequence_test.cpp)
 add_executable(http_sender_test tests/http_sender_test.cpp)
 
 target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
