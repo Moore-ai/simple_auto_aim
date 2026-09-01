@@ -48,7 +48,7 @@ private:
 };
 }  // namespace
 
-std::unique_ptr<DetectionBackend> create_detector_result(const std::string & config_path)
+std::unique_ptr<DetectionBackend> create_detector(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
   auto detect_method = yaml["detect_method"] ? yaml["detect_method"].as<std::string>() : "yolo";

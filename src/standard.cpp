@@ -4,9 +4,9 @@
 #include <thread>
 
 #include "io/camera.hpp"
+#include "tasks/auto_aim/planner/planner.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
-#include "tools/aim_factory.hpp"
 #include "tools/detect_factory.hpp"
 #include "tools/exiter.hpp"
 #include "tools/foxglove_visualizer.hpp"
@@ -37,9 +37,9 @@ int main(int argc, char * argv[])
 
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
+  auto_aim::Planner planner(config_path);
 
-  auto detector = tools::create_detector_result(config_path);
-  auto aim_fn = create_aim_fn(config_path);
+  auto detector = tools::create_detector(config_path);
   tools::FrameRuntime runtime(camera, gimbal, solver, tracker, *detector);
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
@@ -52,7 +52,7 @@ int main(int argc, char * argv[])
       if (!target_queue.empty()) {
         auto target = target_queue.front();
         auto gs = gimbal.state();
-        auto plan = aim_fn(target, gs.bullet_speed, std::chrono::steady_clock::now());
+        auto plan = planner.plan(target, gs.bullet_speed);
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
           plan.pitch_acc,

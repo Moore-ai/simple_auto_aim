@@ -17,7 +17,7 @@ public:
   virtual auto_aim::DetectionResult detect(const cv::Mat & image, int frame_count) = 0;
 };
 
-std::unique_ptr<DetectionBackend> create_detector_result(const std::string & config_path);
+std::unique_ptr<DetectionBackend> create_detector(const std::string & config_path);
 
 bool detector_debug_window_enabled(const YAML::Node & yaml);
 

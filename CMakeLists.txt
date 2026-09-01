@@ -53,7 +53,6 @@ add_subdirectory(tasks/auto_buff)
 
 add_executable(standard
   src/standard.cpp
-  tools/aim_factory.cpp
   tools/detect_factory.cpp
   tools/foxglove_visualizer.cpp)
 target_link_libraries(standard PRIVATE
