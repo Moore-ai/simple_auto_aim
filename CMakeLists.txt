@@ -194,6 +194,12 @@ target_link_libraries(frame_snapshot_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_
 target_compile_options(frame_snapshot_test PRIVATE -UNDEBUG)
 add_test(NAME frame_snapshot_test COMMAND frame_snapshot_test)
 
+add_executable(camera2gimbal_extrinsic_test tests/camera2gimbal_extrinsic_test.cpp)
+target_link_libraries(camera2gimbal_extrinsic_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
+target_compile_options(camera2gimbal_extrinsic_test PRIVATE -UNDEBUG)
+add_test(NAME camera2gimbal_extrinsic_test COMMAND camera2gimbal_extrinsic_test)
+set_tests_properties(camera2gimbal_extrinsic_test PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
 add_executable(foxglove_visualizer_image_test
   tests/foxglove_visualizer_image_test.cpp tools/foxglove_visualizer.cpp)
 target_link_libraries(foxglove_visualizer_image_test

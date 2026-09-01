@@ -1,4 +1,6 @@
 #include "buff_solver.hpp"
+
+#include "tools/camera2gimbal_extrinsic.hpp"
 namespace auto_buff
 {
 cv::Matx33f Solver::rotation_matrix(double angle) const
@@ -28,11 +30,10 @@ Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3
   auto yaml = YAML::LoadFile(config_path);
 
   auto R_gimbal2imubody_data = yaml["R_gimbal2imubody"].as<std::vector<double>>();
-  auto R_camera2gimbal_data = yaml["R_camera2gimbal"].as<std::vector<double>>();
-  auto t_camera2gimbal_data = yaml["t_camera2gimbal"].as<std::vector<double>>();
   R_gimbal2imubody_ = Eigen::Matrix<double, 3, 3, Eigen::RowMajor>(R_gimbal2imubody_data.data());
-  R_camera2gimbal_ = Eigen::Matrix<double, 3, 3, Eigen::RowMajor>(R_camera2gimbal_data.data());
-  t_camera2gimbal_ = Eigen::Matrix<double, 3, 1>(t_camera2gimbal_data.data());
+  const auto extrinsic = tools::load_camera2gimbal_extrinsic(yaml);
+  R_camera2gimbal_ = extrinsic.rotation;
+  t_camera2gimbal_ = extrinsic.translation;
 
   auto camera_matrix_data = yaml["camera_matrix"].as<std::vector<double>>();
   auto distort_coeffs_data = yaml["distort_coeffs"].as<std::vector<double>>();

@@ -202,6 +202,11 @@ distort_coeffs: [-0.038237229814716757, 0.20323363149030885, 0.00076583801074767
 
 R_camera2gimbal: [0, -0.136571843168, 0.99063016896, -1, 0, 0, 0, -0.99063016896, -0.136571843168]
 t_camera2gimbal: [0.100, 0.0075, 0.000]
+# 切换为 matrix 时使用上方矩阵；xyz_ypr 的 xyz 是云台系位置（m），ypr 是相对相机光轴
+# 默认朝向的机械安装偏角（rad，旋转顺序 ZYX）。
+camera2gimbal_mode: xyz_ypr
+camera2gimbal_xyz: [0.100, 0.0075, 0.000]
+camera2gimbal_ypr: [0.0, 0.137, 0.0]
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x100
