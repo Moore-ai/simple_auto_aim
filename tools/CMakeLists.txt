@@ -11,13 +11,9 @@ add_library(tools OBJECT
     ransac_sine_fitter.cpp
     img_tools.cpp
     math_tools.cpp
-    plotter.cpp
     trajectory.cpp
     recorder.cpp
     logger.cpp
-    pid.cpp
-    crc.cpp
-    web_debug.cpp
 )
 
 target_include_directories(tools PRIVATE ${PROJECT_SOURCE_DIR}/io/serial/include)

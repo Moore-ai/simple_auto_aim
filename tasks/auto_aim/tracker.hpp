@@ -15,7 +15,6 @@
 #include "outpost_target_v2.hpp"
 #include "solver.hpp"
 #include "target.hpp"
-#include "tasks/omniperception/perceptron.hpp"
 
 namespace auto_aim
 {
@@ -55,15 +54,6 @@ public:
   std::list<Target> track(
     DetectionResult & detections, std::chrono::steady_clock::time_point t,
     bool use_enemy_color = true);
-
-  std::tuple<omniperception::DetectionResult, std::list<Target>> track(
-    const std::vector<omniperception::DetectionResult> &,
-    DetectionResult & detections, std::chrono::steady_clock::time_point t,
-    bool use_enemy_color = true);
-
-  std::tuple<omniperception::DetectionResult, std::list<Target>> track(
-    const std::vector<omniperception::DetectionResult> & detection_queue, std::list<Armor> & armors,
-    std::chrono::steady_clock::time_point t, bool use_enemy_color = true);
 
 private:
   Solver & solver_;

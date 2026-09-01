@@ -9,7 +9,6 @@
 
 #include "tools/extended_kalman_filter.hpp"
 #include "tools/img_tools.hpp"
-#include "tools/plotter.hpp"
 const double SMALL_W = CV_PI / 3;
 
 // Predictor 基类
@@ -115,11 +114,6 @@ public:
     lasttime = nowtime;
     lastangle = angle;
 
-#ifdef PLOTJUGGLER
-    nlohmann::json json_obj;
-    json_obj["angle"] = X_best[0] * 180 / CV_PI;
-    tools::Plotter().plot(json_obj);
-#endif
     unsolvable = false;
     return;
   }
@@ -250,15 +244,6 @@ public:
     lastangle = angle;
     unsolvable = false;
 
-#ifndef PLOTJUGGLER
-    nlohmann::json json_obj;
-    json_obj["angle"] = X_best[0] * 180 / CV_PI;
-    json_obj["spd"] = X_best[1] * 180 / CV_PI;
-    json_obj["a"] = X_best[2];
-    json_obj["w"] = X_best[3];
-    json_obj["theta"] = X_best[4];
-    tools::Plotter().plot(json_obj);
-#endif
   }
 
   virtual double predict(double delta_time) override
@@ -328,13 +313,6 @@ public:
     z << XYZ[0], XYZ[1], XYZ[2];
     X_best = ekf.update(z, H, R);
 
-#ifdef PLOTJUGGLER
-    nlohmann::json json_obj;
-    json_obj["x"] = X_best[0];
-    json_obj["y"] = X_best[1];
-    json_obj["z"] = X_best[2];
-    tools::Plotter().plot(json_obj);
-#endif
     XYZ = X_best;
   }
 

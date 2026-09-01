@@ -2,12 +2,9 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(simple_auto_aim)
 
-enable_testing()
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}--------------------")
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
   set(DEFAULT_FOXGLOVE_PLATFORM arm64)
@@ -25,22 +22,7 @@ if(NOT EXISTS "${FOXGLOVE_SDK_DIR}/include" OR
   message(FATAL_ERROR "Foxglove SDK is incomplete: ${FOXGLOVE_SDK_DIR}")
 endif()
 
-message(STATUS "Foxglove SDK available at: ${FOXGLOVE_SDK_DIR}")
-
 find_package(Threads REQUIRED)
-file(GLOB FOXGLOVE_SDK_SOURCES CONFIGURE_DEPENDS
-  "${FOXGLOVE_SDK_DIR}/src/*.cpp"
-  "${FOXGLOVE_SDK_DIR}/src/server/*.cpp")
-
-add_library(foxglove_sdk STATIC ${FOXGLOVE_SDK_SOURCES})
-target_compile_features(foxglove_sdk PUBLIC cxx_std_20)
-target_include_directories(foxglove_sdk PUBLIC "${FOXGLOVE_SDK_DIR}/include")
-target_link_libraries(foxglove_sdk PUBLIC
-  "${FOXGLOVE_SDK_DIR}/lib/libfoxglove.a"
-  Threads::Threads)
-
-add_executable(foxglove_sine_test tests/foxglove_sine_test.cpp)
-target_link_libraries(foxglove_sine_test PRIVATE foxglove_sdk)
 find_package(OpenCV REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -50,210 +32,43 @@ find_package(nlohmann_json REQUIRED)
 set(OpenVINO_DIR "/usr/local/runtime/cmake/")
 find_package(OpenVINO REQUIRED)
 
+file(GLOB FOXGLOVE_SDK_SOURCES CONFIGURE_DEPENDS
+  "${FOXGLOVE_SDK_DIR}/src/*.cpp"
+  "${FOXGLOVE_SDK_DIR}/src/server/*.cpp")
+add_library(foxglove_sdk STATIC ${FOXGLOVE_SDK_SOURCES})
+target_compile_features(foxglove_sdk PUBLIC cxx_std_20)
+target_include_directories(foxglove_sdk PUBLIC "${FOXGLOVE_SDK_DIR}/include")
+target_link_libraries(foxglove_sdk PUBLIC
+  "${FOXGLOVE_SDK_DIR}/lib/libfoxglove.a"
+  Threads::Threads)
+
 include_directories(${EIGEN3_INCLUDE_DIR})
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR})
-
 
 add_subdirectory(tools)
 add_subdirectory(io)
 add_subdirectory(tasks/auto_aim)
 add_subdirectory(tasks/auto_buff)
-add_subdirectory(tasks/omniperception)
 
-####################src###################
-add_executable(standard src/standard.cpp)
-add_executable(mt_standard src/mt_standard.cpp)
-add_executable(standard_mpc src/standard_mpc.cpp tools/detect_factory.cpp tools/aim_factory.cpp)
-add_executable(virtual_gimbal tools/virtual_gimbal.cpp)
-add_executable(auto_aim_debug_mpc src/auto_aim_debug_mpc.cpp)
-add_executable(mt_auto_aim_debug src/mt_auto_aim_debug.cpp)
-add_executable(auto_buff_debug src/auto_buff_debug.cpp)
-add_executable(auto_buff_debug_mpc src/auto_buff_debug_mpc.cpp)
-add_executable(uav src/uav.cpp)
-add_executable(uav_debug src/uav_debug.cpp)
+add_executable(standard
+  src/standard.cpp
+  tools/aim_factory.cpp
+  tools/detect_factory.cpp
+  tools/foxglove_visualizer.cpp)
+target_link_libraries(standard PRIVATE
+  ${OpenCV_LIBS}
+  fmt::fmt
+  yaml-cpp
+  auto_aim
+  tools
+  io
+  foxglove_sdk)
 
-target_link_libraries(standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(mt_standard ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(standard_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_sources(standard_mpc PRIVATE tools/foxglove_visualizer.cpp)
-target_link_libraries(standard_mpc foxglove_sdk)
-target_link_libraries(virtual_gimbal util)
-target_link_libraries(auto_aim_debug_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(mt_auto_aim_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(auto_buff_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io ${CERES_LIBRARIES})
-target_link_libraries(auto_buff_debug_mpc ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io ${CERES_LIBRARIES})
-target_link_libraries(uav ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-target_link_libraries(uav_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-
-##################calibration################
+# 相机与手眼标定工具。
 add_executable(capture calibration/capture.cpp)
-add_executable(capture_input_test tests/capture_input_test.cpp calibration/capture.cpp)
-add_executable(calibration_pattern_test tests/calibration_pattern_test.cpp)
 add_executable(calibrate_camera calibration/calibrate_camera.cpp)
 add_executable(calibrate_handeye calibration/calibrate_handeye.cpp)
-add_executable(calibrate_robotworld_handeye calibration/calibrate_robotworld_handeye.cpp)
-add_executable(split_video calibration/split_video.cpp)
-
-target_link_libraries(capture ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(capture_input_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(calibration_pattern_test ${OpenCV_LIBS})
-target_compile_definitions(capture_input_test PRIVATE CAPTURE_INPUT_TEST)
-add_test(NAME capture_input_test COMMAND capture_input_test)
-add_test(NAME calibration_pattern_test COMMAND calibration_pattern_test)
-target_link_libraries(calibrate_camera ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
-target_link_libraries(calibrate_handeye ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
-target_link_libraries(calibrate_robotworld_handeye ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
-target_link_libraries(split_video ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
-
-##################tests##################
-add_executable(auto_aim_test tests/auto_aim_test.cpp)
-add_executable(auto_buff_test tests/auto_buff_test.cpp)
-add_executable(camera_detect_test tests/camera_detect_test.cpp)
-add_executable(camera_test tests/camera_test.cpp)
-add_executable(camera_thread_test tests/camera_thread_test.cpp)
-add_executable(cboard_test tests/cboard_test.cpp)
-add_executable(fire_test tests/fire_test.cpp)
-add_executable(detector_video_test tests/detector_video_test.cpp)
-add_executable(gimbal_response_test tests/gimbal_response_test.cpp)
-add_executable(multi_usbcamera_test tests/multi_usbcamera_test.cpp)
-add_executable(usbcamera_detect_test tests/usbcamera_detect_test.cpp)
-add_executable(usbcamera_test tests/usbcamera_test.cpp)
-add_executable(handeye_test tests/handeye_test.cpp)
-add_executable(dm_test tests/dm_test.cpp)
-add_executable(minimum_vision_system tests/minimum_vision_system.cpp)
-add_executable(video_camera_test tests/video_camera_test.cpp)
-add_executable(hikrobot_config_test tests/hikrobot_config_test.cpp)
-add_executable(calibration_image_sequence_test tests/calibration_image_sequence_test.cpp)
-add_executable(http_sender_test tests/http_sender_test.cpp)
-
-target_link_libraries(auto_aim_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-target_link_libraries(auto_buff_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_buff tools io)
-target_link_libraries(camera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim io)
-target_link_libraries(camera_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(camera_thread_test ${OpenCV_LIBS} fmt::fmt auto_aim tools io)
-target_link_libraries(cboard_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(fire_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(detector_video_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools auto_aim)
-target_link_libraries(gimbal_response_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-target_link_libraries(multi_usbcamera_test ${OpenCV_LIBS} fmt::fmt tools io)
-target_link_libraries(usbcamera_detect_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-target_link_libraries(usbcamera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-target_link_libraries(handeye_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-target_link_libraries(dm_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-target_link_libraries(minimum_vision_system ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io auto_aim)
-target_link_libraries(video_camera_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-target_link_libraries(hikrobot_config_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
-target_compile_options(hikrobot_config_test PRIVATE -UNDEBUG)
-target_link_libraries(http_sender_test ${OpenCV_LIBS} io tools fmt::fmt yaml-cpp)
-target_compile_options(http_sender_test PRIVATE -UNDEBUG)
-add_test(NAME http_sender_test COMMAND http_sender_test)
-
-add_executable(gimbal_test tests/gimbal_test.cpp)
-target_link_libraries(gimbal_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-
-add_executable(gimbal_protocol_test tests/gimbal_protocol_test.cpp)
-target_compile_options(gimbal_protocol_test PRIVATE -UNDEBUG)
-add_test(NAME gimbal_protocol_test COMMAND gimbal_protocol_test)
-
-add_executable(armor_type_test tests/armor_type_test.cpp)
-target_compile_options(armor_type_test PRIVATE -UNDEBUG)
-add_test(NAME armor_type_test COMMAND armor_type_test)
-
-add_executable(detector_config_test tests/detector_config_test.cpp tools/detect_factory.cpp)
-target_link_libraries(detector_config_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-target_compile_options(detector_config_test PRIVATE -UNDEBUG)
-add_test(NAME detector_config_test COMMAND detector_config_test)
-add_executable(detection_backend_test tests/detection_backend_test.cpp)
-target_link_libraries(detection_backend_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-target_compile_options(detection_backend_test PRIVATE -UNDEBUG)
-add_test(NAME detection_backend_test COMMAND detection_backend_test)
-
-add_executable(classifier_backend_test tests/classifier_backend_test.cpp)
-target_link_libraries(classifier_backend_test ${OpenCV_LIBS} openvino::runtime)
-target_compile_options(classifier_backend_test PRIVATE -UNDEBUG)
-add_test(NAME classifier_backend_test COMMAND classifier_backend_test)
-
-add_executable(planner_test tests/planner_test.cpp)
-target_link_libraries(planner_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-
-add_executable(planner_debug_test tests/planner_debug_test.cpp)
-target_link_libraries(planner_debug_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-target_compile_options(planner_debug_test PRIVATE -UNDEBUG)
-add_test(NAME planner_debug_test COMMAND planner_debug_test)
-
-add_executable(web_debug_test tests/web_debug_test.cpp)
-target_link_libraries(web_debug_test ${OpenCV_LIBS} fmt::fmt tools io auto_aim)
-target_compile_options(web_debug_test PRIVATE -UNDEBUG)
-
-add_executable(standard_mpc_foxglove_compile_test tests/standard_mpc_foxglove_compile_test.cpp)
-target_link_libraries(standard_mpc_foxglove_compile_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io)
-
-add_executable(frame_snapshot_test tests/frame_snapshot_test.cpp)
-target_link_libraries(frame_snapshot_test ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-target_compile_options(frame_snapshot_test PRIVATE -UNDEBUG)
-add_test(NAME frame_snapshot_test COMMAND frame_snapshot_test)
-
-add_executable(camera2gimbal_extrinsic_test tests/camera2gimbal_extrinsic_test.cpp)
-target_link_libraries(camera2gimbal_extrinsic_test ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
-target_compile_options(camera2gimbal_extrinsic_test PRIVATE -UNDEBUG)
-add_test(NAME camera2gimbal_extrinsic_test COMMAND camera2gimbal_extrinsic_test)
-set_tests_properties(camera2gimbal_extrinsic_test PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-
-add_executable(foxglove_visualizer_image_test
-  tests/foxglove_visualizer_image_test.cpp tools/foxglove_visualizer.cpp)
-target_link_libraries(foxglove_visualizer_image_test
-  ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff tools io foxglove_sdk)
-target_compile_options(foxglove_visualizer_image_test PRIVATE -UNDEBUG)
-add_test(NAME foxglove_visualizer_image_test COMMAND foxglove_visualizer_image_test)
-
-add_executable(planner_test_offline tests/planner_test_offline.cpp)
-target_link_libraries(planner_test_offline ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
-
-add_executable(auto_exposure_test tests/auto_exposure_test.cpp io/auto_exposure.cpp)
-target_link_libraries(auto_exposure_test ${OpenCV_LIBS})
-
-add_executable(reprojection_observation_test tests/reprojection_observation_test.cpp)
-target_link_libraries(reprojection_observation_test ${OpenCV_LIBS} fmt::fmt tools auto_aim)
-target_compile_options(reprojection_observation_test PRIVATE -UNDEBUG)
-add_test(NAME reprojection_observation_test COMMAND reprojection_observation_test)
-add_executable(observation_matcher_test tests/observation_matcher_test.cpp)
-target_link_libraries(observation_matcher_test ${OpenCV_LIBS} fmt::fmt tools auto_aim)
-target_compile_options(observation_matcher_test PRIVATE -UNDEBUG)
-add_test(NAME observation_matcher_test COMMAND observation_matcher_test)
-set_tests_properties(observation_matcher_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-add_executable(outpost_target_test tests/outpost_target_test.cpp)
-target_link_libraries(outpost_target_test ${OpenCV_LIBS} fmt::fmt tools auto_aim)
-target_compile_options(outpost_target_test PRIVATE -UNDEBUG)
-add_test(NAME outpost_target_test COMMAND outpost_target_test)
-add_executable(armor_layout_test tests/armor_layout_test.cpp)
-target_link_libraries(armor_layout_test ${OpenCV_LIBS} fmt::fmt tools auto_aim)
-target_compile_options(armor_layout_test PRIVATE -UNDEBUG)
-add_test(NAME armor_layout_test COMMAND armor_layout_test)
-set_tests_properties(armor_layout_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-add_executable(tracker_test tests/tracker_test.cpp)
-target_link_libraries(tracker_test ${OpenCV_LIBS} fmt::fmt tools auto_aim)
-target_compile_options(tracker_test PRIVATE -UNDEBUG)
-add_test(NAME tracker_test COMMAND tracker_test)
-add_test(NAME video_camera_test COMMAND video_camera_test)
-add_test(NAME hikrobot_config_test COMMAND hikrobot_config_test)
-set_tests_properties(reprojection_observation_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-set_tests_properties(outpost_target_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-set_tests_properties(tracker_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-set_tests_properties(hikrobot_config_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-set_tests_properties(planner_debug_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-set_tests_properties(gimbal_protocol_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-set_tests_properties(armor_type_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-set_tests_properties(detector_config_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-
-add_executable(sentry src/sentry.cpp)
-add_executable(sentry_bp src/sentry_bp.cpp)
-add_executable(sentry_debug src/sentry_debug.cpp)
-add_executable(sentry_multithread src/sentry_multithread.cpp)
-add_executable(publish_test tests/publish_test.cpp)
-
-target_link_libraries(sentry ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
-target_link_libraries(sentry_bp ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
-target_link_libraries(sentry_debug ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
-target_link_libraries(sentry_multithread ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim omniperception tools io)
-target_link_libraries(publish_test ${OpenCV_LIBS} fmt::fmt tools io auto_aim)
+target_link_libraries(capture PRIVATE ${OpenCV_LIBS} fmt::fmt tools io)
+target_link_libraries(calibrate_camera PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
+target_link_libraries(calibrate_handeye PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)

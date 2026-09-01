@@ -1,7 +1,0 @@
-# 海康相机
-camera_name: "hikrobot"
-exposure_ms: 5.5
-gain: 16.0
-camera_index: 0
-fps: 120
-image_rotation: -90

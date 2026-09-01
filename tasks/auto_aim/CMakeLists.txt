@@ -13,7 +13,6 @@ add_library(auto_aim OBJECT
     detector.cpp
     lightbar_detector.cpp
     solver.cpp
-    aimer.cpp
     detection_result.cpp
     observation_geometry.cpp
     observation_matcher.cpp
@@ -25,13 +24,10 @@ add_library(auto_aim OBJECT
     target.cpp
     tracker.cpp
     voter.cpp
-    shooter.cpp
     yolo.cpp
     yolos/yolov5.cpp
     yolos/yolov8.cpp
     yolos/yolo11.cpp
-    multithread/commandgener.cpp
-    multithread/mt_detector.cpp
     planner/planner.cpp
 )
 

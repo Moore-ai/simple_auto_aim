@@ -279,7 +279,7 @@ FoxgloveVisualizer::FoxgloveVisualizer() : impl_(std::make_unique<Impl>())
   foxglove::WebSocketServerOptions options;
   options.host = "0.0.0.0";
   options.port = 8765;
-  options.name = "simple_auto_aim standard_mpc";
+  options.name = "simple_auto_aim standard";
   auto server = foxglove::WebSocketServer::create(std::move(options));
   if (!server) {
     std::cerr << "Failed to start Foxglove server: " << foxglove::strerror(server.error()) << '\n';

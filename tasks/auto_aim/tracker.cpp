@@ -1,7 +1,6 @@
 #include "tracker.hpp"
 
 #include <cmath>
-#include <tuple>
 
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
@@ -222,24 +221,6 @@ std::list<Target> Tracker::track(
 
   std::list<Target> targets = {target_};
   return targets;
-}
-
-std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
-  const std::vector<omniperception::DetectionResult> & detection_queue, std::list<Armor> & armors,
-  std::chrono::steady_clock::time_point t, bool use_enemy_color)
-{
-  DetectionResult detections{armors, {}};
-  auto result = track(detection_queue, detections, t, use_enemy_color);
-  armors = std::move(detections.armors);
-  return result;
-}
-
-std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
-  const std::vector<omniperception::DetectionResult> &, DetectionResult & detections,
-  std::chrono::steady_clock::time_point t, bool use_enemy_color)
-{
-  omniperception::DetectionResult switch_target{std::list<Armor>(), t, 0, 0};
-  return {switch_target, track(detections, t, use_enemy_color)};
 }
 
 void Tracker::state_machine(bool found)

@@ -1,83 +1,84 @@
-#include <fmt/core.h>
-
 #include <chrono>
-#include <nlohmann/json.hpp>
+#include <cmath>
 #include <opencv2/opencv.hpp>
+#include <thread>
 
 #include "io/camera.hpp"
-#include "io/cboard.hpp"
-#include "tasks/auto_aim/aimer.hpp"
-#include "tasks/auto_aim/multithread/commandgener.hpp"
-#include "tasks/auto_aim/shooter.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_aim/yolo.hpp"
+#include "tools/aim_factory.hpp"
+#include "tools/detect_factory.hpp"
 #include "tools/exiter.hpp"
-#include "tools/img_tools.hpp"
-#include "tools/logger.hpp"
-#include "tools/math_tools.hpp"
-#include "tools/plotter.hpp"
+#include "tools/foxglove_visualizer.hpp"
+#include "tools/frame_runtime.hpp"
 #include "tools/recorder.hpp"
 
-using namespace std::chrono;
-
 const std::string keys =
-  "{help h usage ? |      | 输出命令行参数说明}"
-  "{@config-path   | configs/standard3.yaml | 位置参数，yaml配置文件路径 }";
+  "{help h usage ? | | 输出命令行参数说明}"
+  "{@config-path   | | yaml配置文件路径 }";
+
+using namespace std::chrono_literals;
 
 int main(int argc, char * argv[])
 {
   cv::CommandLineParser cli(argc, argv, keys);
-  auto config_path = cli.get<std::string>(0);
-  if (cli.has("help") || config_path.empty()) {
+  auto config_path = cli.get<std::string>("@config-path");
+  if (cli.has("help") || !cli.has("@config-path")) {
     cli.printMessage();
     return 0;
   }
 
   tools::Exiter exiter;
-  tools::Plotter plotter;
   tools::Recorder recorder;
+  tools::FoxgloveVisualizer foxglove;
 
-  io::CBoard cboard(config_path);
+  io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
-  auto_aim::YOLO detector(config_path, false);
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
-  auto_aim::Aimer aimer(config_path);
-  auto_aim::Shooter shooter(config_path);
 
-  cv::Mat img;
-  Eigen::Quaterniond q;
-  std::chrono::steady_clock::time_point t;
+  auto detector = tools::create_detector_result(config_path);
+  auto aim_fn = create_aim_fn(config_path);
+  tools::FrameRuntime runtime(camera, gimbal, solver, tracker, *detector);
 
-  auto mode = io::Mode::idle;
-  auto last_mode = io::Mode::idle;
+  tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
+  target_queue.push(std::nullopt);
+
+  std::atomic<bool> quit = false;
+
+  auto plan_thread = std::thread([&]() {
+    while (!quit) {
+      if (!target_queue.empty()) {
+        auto target = target_queue.front();
+        auto gs = gimbal.state();
+        auto plan = aim_fn(target, gs.bullet_speed, std::chrono::steady_clock::now());
+        gimbal.send(
+          plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
+          plan.pitch_acc,
+          plan.debug_valid ? static_cast<float>(std::hypot(plan.debug_xyza.x(), plan.debug_xyza.y()))
+                           : 0.0F);
+
+        std::this_thread::sleep_for(10ms);
+      } else {
+        std::this_thread::sleep_for(200ms);
+      }
+    }
+  });
 
   while (!exiter.exit()) {
-    camera.read(img, t);
-    q = cboard.imu_at(t - 1ms);
-    mode = cboard.mode;
+    tools::ProcessedFrame processed;
+    if (!runtime.next(processed)) break;
 
-    if (last_mode != mode) {
-      tools::logger()->info("Switch to {}", io::MODES[mode]);
-      last_mode = mode;
-    }
+    target_queue.push(
+      processed.targets.empty() ? std::nullopt : std::optional<auto_aim::Target>(processed.targets.front()));
 
-    // recorder.record(img, q, t);
-
-    solver.set_R_gimbal2world(q);
-
-    Eigen::Vector3d ypr = tools::eulers(solver.R_gimbal2world(), 2, 1, 0);
-
-    auto detections = detector.detect_result(img);
-
-    auto targets = tracker.track(detections, t);
-
-    auto command = aimer.aim(targets, t, cboard.bullet_speed);
-
-    cboard.send(command);
+    recorder.record(processed.snapshot);
+    foxglove.publish(processed.snapshot);
   }
+
+  quit = true;
+  if (plan_thread.joinable()) plan_thread.join();
 
   return 0;
 }
