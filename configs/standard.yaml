@@ -88,23 +88,23 @@ outpost_max_temp_lost_count: 75   # 帧 前哨站短暂丢失上限，高于普�
 filter_method: "ekf"                  # 普通目标滤波器类型："ekf"(标准EKF), "inekf"(左不变误差EKF), "ukf"(无迹卡尔曼滤波)
 
 reprojection_obs:
-  angle_var: 0.01
-  pixel_var: 16.0
-  length_var: 25.0
-  r_sigma_px_by_length_ratio: 0.2
-  r_sigma_length_by_length_ratio: 0.5
-  r_sigma_angle: 0.1
-  r_sigma_armor_lights_depth_diff: 0.1
-  armor_match_gate: 200.0
-  armor_match_gate_not_all_init: 1000.0
-  armor_match_w_center_err: 5.0
-  armor_match_w_angle_err: 10.0
-  armor_match_w_side_length_err: 1.0
-  light_match_length_ratio_gate: 0.2
-  light_match_angle_gate: 0.2
-  light_match_pos_gate_by_length_ratio: 5.0
-  radius_min: 0.05
-  radius_max: 1.0
+  angle_var: 0.01 # 固定角度观测方差（rad²）；仅未启用自适应噪声时使用，增大则减弱角度更新。
+  pixel_var: 16.0 # 固定中心像素观测方差（px²）；仅未启用自适应噪声时使用，增大则减弱位置更新。
+  length_var: 25.0 # 固定灯条长度观测方差（px²）；仅未启用自适应噪声时使用，增大则减弱尺度更新。
+  r_sigma_px_by_length_ratio: 0.2 # 自适应中心像素 sigma 系数：sigma = 系数 × 灯条像素长度；与下两项同时存在时启用。
+  r_sigma_length_by_length_ratio: 0.5 # 自适应灯条长度 sigma 系数：sigma = 系数 × 灯条像素长度。
+  r_sigma_angle: 0.1 # 自适应角度 sigma（rad）；增大则降低角度观测权重。
+  r_sigma_armor_lights_depth_diff: 0.1 # 装甲板与相邻灯条深度差的 sigma（m）；增大则减弱该补充约束。
+  armor_match_gate: 200.0 # 全部装甲板编号已见过时的装甲板匹配代价上限；超限检测不参与关联。
+  armor_match_gate_not_all_init: 1000.0 # 编号尚未全部初始化时的宽松匹配代价上限。
+  armor_match_w_center_err: 5.0 # 装甲板匹配代价中中心像素距离误差（px）的权重。
+  armor_match_w_angle_err: 10.0 # 装甲板匹配代价中四边方向误差（rad）的权重。
+  armor_match_w_side_length_err: 1.0 # 装甲板匹配代价中周长相对误差（无量纲）的权重。
+  light_match_length_ratio_gate: 0.2 # 灯条长度相对预测值的最大允许偏差；超限则拒绝匹配。
+  light_match_angle_gate: 0.2 # 灯条方向与预测方向的最大允许偏差（rad）；超限则拒绝匹配。
+  light_match_pos_gate_by_length_ratio: 5.0 # 灯条两端总像素误差上限 = 该系数 × 预测灯条长度。
+  radius_min: 0.05 # 重投影模式目标旋转半径下限（m），避免滤波结果退化。
+  radius_max: 1.0 # 重投影模式目标旋转半径上限（m），防止滤波结果发散。
 
 #####-----滤波器共用参数（EKF/InEKF 共用）-----#####
 filter:
@@ -147,32 +147,19 @@ ukf_obs:
   sigma_beta: 2.0             # UKF 先验分布参数 (2.0=高斯)
   sigma_kappa: 0.0            # UKF 次级缩放参数
 
-#####-----瞄准决策器-----#####
-aim_method: "mpc"                 # 决策方法："mpc"（轨迹规划器，默认）或 "aimer"（传统决策器）
-
-#####-----aimer参数-----#####
-yaw_offset: 2 # degree（Planner/Aimer 共用）瞄准 yaw 修正量，-2.5 was previous
-pitch_offset: 6.5 # degree（Planner/Aimer 共用）瞄准 pitch 修正量，2 was previous
-comming_angle: 55 # degree（仅 Aimer 使用）小陀螺迎向角度阈值
-leaving_angle: 20 # degree（仅 Aimer 使用）小陀螺离去角度阈值
-# ------
+#####-----MPC 参数-----#####
+yaw_offset: 2 # degree，瞄准 yaw 修正量
+pitch_offset: 6.5 # degree，瞄准 pitch 修正量
 decision_speed_enable: true # 启用 decision_speed 高低速阈值（影响开火延迟）
 speed_hysteresis: 0.0 # rad/s 滞回半宽，防临界抖动
 extra_delay: 0.0 # s 关闭高低速阈值时使用的固定延迟
-decision_speed: 7 # rad/s（Planner/Aimer 共用）转速阈值，高于此值用高速延迟
-high_speed_delay_time: 0.0 # s（Planner/Aimer 共用）高转速目标发弹延迟
-low_speed_delay_time: 0.0 # s（Planner/Aimer 共用）低转速目标发弹延迟
-
-#####-----shooter参数-----#####
-first_tolerance: 3 # 近距离射击容差，degree
-second_tolerance: 2 # 远距离射击容差，degree
-judge_distance: 2 #距离判断阈值
-auto_fire: true # 是否由自瞄控制射击
+decision_speed: 7 # rad/s，转速阈值，高于此值用高速延迟
+high_speed_delay_time: 0.0 # s，高转速目标发弹延迟
+low_speed_delay_time: 0.0 # s，低转速目标发弹延迟
 
 camera_name: "hikrobot"
 exposure_ms: 5.5
 gain: 16.0
-vid_pid: "2bdf:0001"
 camera_index: 0
 fps: 120
 image_rotation: -90 # 图像旋转角度：-90、90、180（-180 等同 180）
@@ -196,23 +183,14 @@ auto_exposure:
 #  0  0  1
 R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]
 
-# 海康标定参数
+# 相机标定参数
 camera_matrix: [2403.1136316935917, 0, 567.74249348659885, 0, 2407.3896390299665, 570.25063710517975, 0, 0, 1]
 distort_coeffs: [-0.038237229814716757, 0.20323363149030885, 0.00076583801074767502, 0.000425404346006584, 0]
 
-R_camera2gimbal: [0, -0.136571843168, 0.99063016896, -1, 0, 0, 0, -0.99063016896, -0.136571843168]
-t_camera2gimbal: [0.100, 0.0075, 0.000]
-# 切换为 matrix 时使用上方矩阵；xyz_ypr 的 xyz 是云台系位置（m），ypr 是相对相机光轴
-# 默认朝向的机械安装偏角（rad，旋转顺序 ZYX）。
+# 手眼标定参数；xyz 是云台系位置（m），ypr 是相对相机光轴的 ZYX 旋转（rad）。
 camera2gimbal_mode: xyz_ypr
 camera2gimbal_xyz: [0.11593, -0.06429, 0.03250]
 camera2gimbal_ypr: [0.0, 0.0, 0.0]
-
-#####-----cboard参数-----#####
-quaternion_canid: 0x100
-bullet_speed_canid: 0x101
-send_canid: 0xff
-can_interface: "can0"
 
 #####-----gimbal参数-----#####
 com_port: "/dev/ttyACM0"           # 串口路径
