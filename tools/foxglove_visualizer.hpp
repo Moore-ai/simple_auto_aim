@@ -8,6 +8,7 @@
 #include <opencv2/opencv.hpp>
 
 #include <foxglove/schemas.hpp>
+#include <nlohmann/json.hpp>
 
 #include "tools/frame_snapshot.hpp"
 
@@ -26,6 +27,7 @@ FoxgloveTargetTopic target_topic(const auto_aim::TrackerDebugData & target_data)
 const char * target_topic_name(FoxgloveTargetTopic topic);
 foxglove::schemas::SceneUpdate target_scene_update(
   const auto_aim::TrackerDebugData & target_data);
+nlohmann::json target_values(const auto_aim::TrackerDebugData & target_data);
 }
 
 class FoxgloveVisualizer

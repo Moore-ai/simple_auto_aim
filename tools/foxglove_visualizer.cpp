@@ -103,11 +103,57 @@ detail::FoxgloveTargetTopic detail::target_topic(const auto_aim::TrackerDebugDat
 const char * detail::target_topic_name(FoxgloveTargetTopic topic)
 {
   switch (topic) {
-    case FoxgloveTargetTopic::normal: return "/target";
-    case FoxgloveTargetTopic::outpost_current: return "/outpost/current";
-    case FoxgloveTargetTopic::outpost_v2: return "/outpost/v2";
+    case FoxgloveTargetTopic::normal: return "/target/scene";
+    case FoxgloveTargetTopic::outpost_current: return "/outpost/current/scene";
+    case FoxgloveTargetTopic::outpost_v2: return "/outpost/v2/scene";
   }
-  return "/target";
+  return "/target/scene";
+}
+
+Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
+{
+  Json values = Json::object();
+  Eigen::Vector3d center = Eigen::Vector3d::Zero();
+  double vehicle_yaw = 0.0;
+  double yaw_rate = 0.0;
+
+  if (target_data.target_state) {
+    const auto & target = *target_data.target_state;
+    center = {target.center_x(), target.center_y(), target.center_z()};
+    vehicle_yaw = target.yaw();
+    yaw_rate = target.yaw_rate();
+    values = {{"center_x", target.center_x()}, {"velocity_x", target.velocity_x()},
+              {"center_y", target.center_y()}, {"velocity_y", target.velocity_y()},
+              {"center_z", target.center_z()}, {"velocity_z", target.velocity_z()},
+              {"vehicle_yaw", vehicle_yaw},       {"yaw_rate", yaw_rate},
+              {"radius", target.radius()},         {"radius_diff", target.radius_diff()},
+              {"height_diff", target.height_diff()}};
+  } else if (target_data.outpost_state) {
+    const auto & target = *target_data.outpost_state;
+    center = {target.center_x(), target.center_y(), target.center_z()};
+    vehicle_yaw = target.yaw();
+    yaw_rate = target.yaw_rate();
+    values = {{"center_x", target.center_x()}, {"velocity_x", target.velocity_x()},
+              {"center_y", target.center_y()}, {"velocity_y", target.velocity_y()},
+              {"center_z", target.center_z()}, {"velocity_z", target.velocity_z()},
+              {"vehicle_yaw", vehicle_yaw},       {"yaw_rate", yaw_rate}};
+  } else if (target_data.outpost_state_v2) {
+    const auto & target = *target_data.outpost_state_v2;
+    center = {target.center_x(), target.center_y(), target.center_z()};
+    vehicle_yaw = target.yaw();
+    yaw_rate = target.yaw_rate();
+    values = {{"center_x", target.center_x()}, {"velocity_x", target.velocity_x()},
+              {"center_y", target.center_y()}, {"velocity_y", target.velocity_y()},
+              {"center_z", target.center_z()}, {"velocity_z", target.velocity_z()},
+              {"vehicle_yaw", vehicle_yaw},       {"yaw_rate", yaw_rate},
+              {"height_offset_1", target.height_offset_1()},
+              {"height_offset_2", target.height_offset_2()}};
+  } else {
+    return values;
+  }
+
+  values["vehicle_pitch"] = -std::atan2(center.z(), std::hypot(center.x(), center.y()));
+  return values;
 }
 
 foxglove::schemas::SceneUpdate detail::target_scene_update(
@@ -258,6 +304,9 @@ public:
   std::optional<foxglove::schemas::CompressedImageChannel> image_raw;
   std::optional<foxglove::schemas::CompressedImageChannel> image;
   std::optional<foxglove::schemas::CompressedImageChannel> image_detection;
+  std::optional<foxglove::RawChannel> target_values;
+  std::optional<foxglove::RawChannel> outpost_current_values;
+  std::optional<foxglove::RawChannel> outpost_v2_values;
   std::optional<foxglove::schemas::SceneUpdateChannel> target;
   std::optional<foxglove::schemas::SceneUpdateChannel> outpost_current;
   std::optional<foxglove::schemas::SceneUpdateChannel> outpost_v2;
@@ -296,6 +345,11 @@ FoxgloveVisualizer::FoxgloveVisualizer() : impl_(std::make_unique<Impl>())
   create(
     impl_->image_detection,
     foxglove::schemas::CompressedImageChannel::create("/image_detection"), "/image_detection");
+  create(impl_->target_values, foxglove::RawChannel::create("/target", "json"), "/target");
+  create(impl_->outpost_current_values,
+         foxglove::RawChannel::create("/outpost/current", "json"), "/outpost/current");
+  create(impl_->outpost_v2_values,
+         foxglove::RawChannel::create("/outpost/v2", "json"), "/outpost/v2");
   create(
     impl_->target,
     foxglove::schemas::SceneUpdateChannel::create(
@@ -370,6 +424,18 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
   }
 
   const auto active_topic = detail::target_topic(target_data);
+  const auto active_values = detail::target_values(target_data);
+  const Json empty_values = Json::object();
+  log_json(impl_->target_values,
+           active_topic == detail::FoxgloveTargetTopic::normal ? active_values : empty_values,
+           log_time);
+  log_json(impl_->outpost_current_values,
+           active_topic == detail::FoxgloveTargetTopic::outpost_current ? active_values :
+                                                                         empty_values,
+           log_time);
+  log_json(impl_->outpost_v2_values,
+           active_topic == detail::FoxgloveTargetTopic::outpost_v2 ? active_values : empty_values,
+           log_time);
   const auto active_update = detail::target_scene_update(target_data);
   const auto clear_update = detail::target_scene_update({});
   if (impl_->target) {

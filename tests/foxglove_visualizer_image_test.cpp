@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <Eigen/Geometry>
+#include <nlohmann/json.hpp>
 #include <opencv2/core.hpp>
 
 #include "tools/foxglove_visualizer.hpp"
@@ -57,12 +58,27 @@ int main()
     tools::detail::target_topic(normal_target) == tools::detail::FoxgloveTargetTopic::normal);
   assert(
     std::strcmp(
-      tools::detail::target_topic_name(tools::detail::FoxgloveTargetTopic::normal), "/target") ==
-    0);
+      tools::detail::target_topic_name(tools::detail::FoxgloveTargetTopic::normal),
+      "/target/scene") == 0);
   const auto normal_scene = tools::detail::target_scene_update(normal_target);
   assert(normal_scene.entities.size() == 1);
   assert(normal_scene.entities.front().metadata.front().key == "model");
   assert(normal_scene.entities.front().metadata.front().value == "normal");
+  const auto normal_values = tools::detail::target_values(normal_target);
+  assert(normal_values.is_object());
+  assert(normal_values.size() == 12);
+  assert(normal_values.at("center_x").is_number());
+  assert(normal_values.at("velocity_x").is_number());
+  assert(normal_values.at("center_y").is_number());
+  assert(normal_values.at("velocity_y").is_number());
+  assert(normal_values.at("center_z").is_number());
+  assert(normal_values.at("velocity_z").is_number());
+  assert(normal_values.at("vehicle_yaw").is_number());
+  assert(normal_values.at("vehicle_pitch").is_number());
+  assert(normal_values.at("yaw_rate").is_number());
+  assert(normal_values.at("radius").is_number());
+  assert(normal_values.at("radius_diff").is_number());
+  assert(normal_values.at("height_diff").is_number());
 
   auto_aim::TrackerDebugData current_outpost;
   current_outpost.outpost_state = auto_aim::OutpostState(Eigen::VectorXd::Zero(8));
@@ -72,7 +88,7 @@ int main()
   assert(
     std::strcmp(
       tools::detail::target_topic_name(tools::detail::FoxgloveTargetTopic::outpost_current),
-      "/outpost/current") == 0);
+      "/outpost/current/scene") == 0);
 
   auto_aim::TrackerDebugData v2_outpost;
   v2_outpost.outpost_state_v2 = auto_aim::OutpostStateV2(Eigen::VectorXd::Zero(10));
@@ -83,7 +99,7 @@ int main()
   assert(
     std::strcmp(
       tools::detail::target_topic_name(tools::detail::FoxgloveTargetTopic::outpost_v2),
-      "/outpost/v2") == 0);
+      "/outpost/v2/scene") == 0);
   assert(v2_scene.entities.size() == 1);
   const auto has_convergence_metadata = [](const auto & metadata) {
     for (const auto & [key, value] : metadata) {
