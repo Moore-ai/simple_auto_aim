@@ -205,8 +205,8 @@ t_camera2gimbal: [0.100, 0.0075, 0.000]
 # 切换为 matrix 时使用上方矩阵；xyz_ypr 的 xyz 是云台系位置（m），ypr 是相对相机光轴
 # 默认朝向的机械安装偏角（rad，旋转顺序 ZYX）。
 camera2gimbal_mode: xyz_ypr
-camera2gimbal_xyz: [0.100, 0.0075, 0.000]
-camera2gimbal_ypr: [0.0, 0.137, 0.0]
+camera2gimbal_xyz: [0.11593, -0.06429, 0.03250]
+camera2gimbal_ypr: [0.0, 0.0, 0.0]
 
 #####-----cboard参数-----#####
 quaternion_canid: 0x100

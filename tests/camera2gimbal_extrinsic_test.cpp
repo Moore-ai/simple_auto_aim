@@ -58,18 +58,18 @@ camera2gimbal_ypr: [1.5707963267948966, 0, 0]
   expect_near(extrinsic.translation.z(), 0.3);
 }
 
-void test_standard3_xyz_ypr_matches_legacy_matrix_extrinsic()
+void test_standard3_xyz_ypr_matches_hfut_camera_to_barrel_extrinsic()
 {
   const auto extrinsic = tools::load_camera2gimbal_extrinsic(YAML::LoadFile("configs/standard3.yaml"));
   const Eigen::Matrix3d expected_rotation{
-    {0, -0.136571843168, 0.99063016896},
+    {0, 0, 1},
     {-1, 0, 0},
-    {0, -0.99063016896, -0.136571843168}};
+    {0, -1, 0}};
 
   expect_rotation(extrinsic.rotation, expected_rotation, 1e-10);
-  expect_near(extrinsic.translation.x(), 0.1);
-  expect_near(extrinsic.translation.y(), 0.0075);
-  expect_near(extrinsic.translation.z(), 0.0);
+  expect_near(extrinsic.translation.x(), 0.11593);
+  expect_near(extrinsic.translation.y(), -0.06429);
+  expect_near(extrinsic.translation.z(), 0.03250);
 }
 }  // namespace
 
@@ -77,5 +77,5 @@ int main()
 {
   test_loads_legacy_matrix_extrinsic_by_default();
   test_loads_xyz_ypr_extrinsic_when_selected();
-  test_standard3_xyz_ypr_matches_legacy_matrix_extrinsic();
+  test_standard3_xyz_ypr_matches_hfut_camera_to_barrel_extrinsic();
 }
