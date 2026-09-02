@@ -214,6 +214,11 @@ max_pitch_acc: 100               # pitch 最大角加速度约束 (rad/s²)
 Q_pitch: [9e6, 0]                # pitch MPC 跟踪权重 [角度误差权重, 角速度误差权重]
 R_pitch: [1]                     # pitch MPC 控制量惩罚
 
+armor_selection_hysteresis:
+  enable: false # 是否锁定当前瞄准装甲板，抑制相邻板在交界处来回切换
+  switch_margin: 0.02 # m，候选板比当前板至少近此距离才算有效优势
+  switch_confirm_frames: 3 # 帧，候选板连续领先此帧数后才切换；当前板失效时立即切换
+
 bullet_speed_min: 10             # 弹速下限 (m/s)，低于此值视为无效
 bullet_speed_max: 25             # 弹速上限 (m/s)，高于此值视为无效
 bullet_speed_default: 22         # 弹速默认回退值 (m/s)，弹速无效时使用

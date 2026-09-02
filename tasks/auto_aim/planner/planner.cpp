@@ -49,6 +49,15 @@ Planner::Planner(const std::string & config_path)
   if (yaml["decision_speed_enable"]) decision_speed_enable_ = yaml["decision_speed_enable"].as<bool>();
   if (yaml["extra_delay"]) extra_delay_ = yaml["extra_delay"].as<double>();
   if (yaml["speed_hysteresis"]) speed_hysteresis_ = yaml["speed_hysteresis"].as<double>();
+  if (const auto selection_yaml = yaml["armor_selection_hysteresis"]; selection_yaml) {
+    ArmorSelectionHysteresisConfig selection_config;
+    selection_config.enable = tools::read<bool>(selection_yaml, "enable");
+    selection_config.switch_margin = tools::read<double>(selection_yaml, "switch_margin");
+    selection_config.switch_confirm_frames =
+      tools::read<int>(selection_yaml, "switch_confirm_frames");
+    armor_selection_hysteresis_enabled_ = selection_config.enable;
+    armor_selector_ = ArmorSelectionHysteresis(selection_config);
+  }
   if (decision_speed_enable_) {
     tools::logger()->info("[Planner] decision speed delay: enable=true, center={:.1f}, hyst={:.1f}, low={:.3f}, high={:.3f}",
                           decision_speed_, speed_hysteresis_, low_speed_delay_time_, high_speed_delay_time_);
@@ -120,13 +129,15 @@ Plan Planner::plan(Target target, double bullet_speed)
   }
   auto fly_time = bullet_traj.fly_time;
   target.predict(bullet_traj.fly_time);
+  const auto selected_armor =
+    armor_selection_hysteresis_enabled_ ? select_armor(target) : -1;
 
   // 2. Get trajectory
   double yaw0;
   Trajectory traj;
   try {
-    yaw0 = aim(target, bullet_speed)(0);
-    traj = get_trajectory(target, yaw0, bullet_speed);
+    yaw0 = aim(target, bullet_speed, selected_armor)(0);
+    traj = get_trajectory(target, yaw0, bullet_speed, selected_armor);
   } catch (const std::exception & e) {
     tools::logger()->warn("[Planner] Unsolvable target at bullet speed {:.2f}: {}", bullet_speed, e.what());
     return {};
@@ -220,6 +231,7 @@ Plan Planner::plan(Target target, double bullet_speed)
 Plan Planner::plan(std::optional<Target> target, double bullet_speed)
 {
   if (!target.has_value()) {
+    armor_selector_.clear();
     aimd_ctrl_.reset();
     last_fire_advice_ = false;
     nis_avg_ = 0.0;
@@ -322,18 +334,34 @@ void Planner::setup_pitch_solver(const std::string & config_path)
   pitch_solver_->settings->max_iter = max_iter_;
 }
 
-Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double bullet_speed)
+int Planner::select_armor(const Target & target)
+{
+  std::vector<double> scores;
+  for (const auto & xyza : target.armor_xyza_list()) scores.push_back(xyza.head<2>().norm());
+  return armor_selector_.select(scores);
+}
+
+Eigen::Matrix<double, 2, 1> Planner::aim(
+  const Target & target, double bullet_speed, int selected_armor)
 {
   Eigen::Vector3d xyz;
   double yaw;
   auto min_dist = 1e10;
 
-  for (auto & xyza : target.armor_xyza_list()) {
-    auto dist = xyza.head<2>().norm();
-    if (dist < min_dist) {
-      min_dist = dist;
-      xyz = xyza.head<3>();
-      yaw = xyza[3];
+  const auto armors = target.armor_xyza_list();
+  if (selected_armor >= 0 && selected_armor < static_cast<int>(armors.size())) {
+    const auto & xyza = armors[selected_armor];
+    xyz = xyza.head<3>();
+    yaw = xyza[3];
+    min_dist = xyza.head<2>().norm();
+  } else {
+    for (const auto & xyza : armors) {
+      auto dist = xyza.head<2>().norm();
+      if (dist < min_dist) {
+        min_dist = dist;
+        xyz = xyza.head<3>();
+        yaw = xyza[3];
+      }
     }
   }
   debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), yaw);
@@ -345,19 +373,20 @@ Eigen::Matrix<double, 2, 1> Planner::aim(const Target & target, double bullet_sp
   return {tools::limit_rad(azim + yaw_offset_), -bullet_traj.pitch - pitch_offset_};
 }
 
-Trajectory Planner::get_trajectory(Target & target, double yaw0, double bullet_speed)
+Trajectory Planner::get_trajectory(
+  Target & target, double yaw0, double bullet_speed, int selected_armor)
 {
   Trajectory traj;
 
   target.predict(-DT * (HALF_HORIZON + 1));
-  auto yaw_pitch_last = aim(target, bullet_speed);
+  auto yaw_pitch_last = aim(target, bullet_speed, selected_armor);
 
   target.predict(DT);  // [0] = -HALF_HORIZON * DT -> [HHALF_HORIZON] = 0
-  auto yaw_pitch = aim(target, bullet_speed);
+  auto yaw_pitch = aim(target, bullet_speed, selected_armor);
 
   for (int i = 0; i < HORIZON; i++) {
     target.predict(DT);
-    auto yaw_pitch_next = aim(target, bullet_speed);
+    auto yaw_pitch_next = aim(target, bullet_speed, selected_armor);
 
     auto yaw_vel = tools::limit_rad(yaw_pitch_next(0) - yaw_pitch_last(0)) / (2 * DT);
     auto pitch_vel = (yaw_pitch_next(1) - yaw_pitch_last(1)) / (2 * DT);

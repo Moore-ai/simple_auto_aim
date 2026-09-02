@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <optional>
 
+#include "armor_selection_hysteresis.hpp"
 #include "tasks/auto_aim/target.hpp"
 #include "tinympc/tiny_api.hpp"
 #include "tools/adaptive_delay_controller.hpp"
@@ -51,6 +52,8 @@ private:
   double speed_hysteresis_{0.0};
   bool decision_speed_enable_{true};
   bool high_speed_state_{false};
+  bool armor_selection_hysteresis_enabled_{false};
+  ArmorSelectionHysteresis armor_selector_{{}};
 
   double rho_;
   int max_iter_;
@@ -79,8 +82,11 @@ private:
   void setup_yaw_solver(const std::string & config_path);
   void setup_pitch_solver(const std::string & config_path);
 
-  Eigen::Matrix<double, 2, 1> aim(const Target & target, double bullet_speed);
-  Trajectory get_trajectory(Target & target, double yaw0, double bullet_speed);
+  int select_armor(const Target & target);
+  Eigen::Matrix<double, 2, 1> aim(
+    const Target & target, double bullet_speed, int selected_armor = -1);
+  Trajectory get_trajectory(
+    Target & target, double yaw0, double bullet_speed, int selected_armor);
 };
 
 }  // namespace auto_aim
