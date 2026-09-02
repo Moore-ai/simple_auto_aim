@@ -299,6 +299,18 @@ int main()
   }
   assert(!unlocked_target.convergened());
 
+  // V2 defaults reproduce the reference project's deployed OutpostModel parameters.
+  const auto reference_v2_config = auto_aim::OutpostTargetV2Config{};
+  assert(std::abs(reference_v2_config.q_xy - 0.01) < 1e-12);
+  assert(std::abs(reference_v2_config.q_z - 0.001) < 1e-12);
+  assert(std::abs(reference_v2_config.q_dz - 0.001) < 1e-12);
+  assert(std::abs(reference_v2_config.r_yaw - 0.01) < 1e-12);
+  assert(std::abs(reference_v2_config.r_pitch - 0.003) < 1e-12);
+  assert(std::abs(reference_v2_config.r_distance - 0.0125) < 1e-12);
+  assert(std::abs(reference_v2_config.r_armor_yaw - 0.08) < 1e-12);
+  assert(std::abs(reference_v2_config.yaw_match_gate - 0.8) < 1e-12);
+  assert(std::abs(reference_v2_config.position_match_gate - 0.8) < 1e-12);
+
   // A V2 model keeps the RPS-style phase geometry and its two height offsets.
   auto_aim::OutpostTargetV2Config v2_config;
   auto_aim::OutpostTargetV2 v2_target(

@@ -18,18 +18,18 @@ outpost_v2: # v2 模型专用配置；id=0/1/2 表示初始化相位及其后两
   radius: 0.2765 # 前哨站旋转半径，单位 m
   yaw_rate_magnitude: 2.5132741229 # 已知角速度幅值 0.8π，单位 rad/s
   is_fit_yaw_rate: false # true=由 EKF 估计角速度，false=方向确定后使用固定 ±yaw_rate_magnitude
-  q_xy: 10.0 # x/y 平移过程噪声强度
-  q_z: 10.0 # z 平移过程噪声强度
+  q_xy: 0.01 # x/y 平移过程噪声强度
+  q_z: 0.001 # z 平移过程噪声强度
   q_yaw: 10.0 # yaw 过程噪声强度
   q_yaw_rate: 10.0 # yaw_rate 过程噪声强度
-  q_dz: 10.0 # dz1/dz2 高度差过程噪声强度
-  r_yaw: 0.001 # 相机方位角 yaw 观测噪声方差，单位 rad²
-  r_pitch: 0.001 # 相机俯仰角 pitch 观测噪声方差，单位 rad²
-  r_distance: 0.001 # 距离观测噪声基数，实际随距离和夹角自适应
-  r_armor_yaw: 0.001 # 装甲板自身朝向 yaw 观测噪声方差，单位 rad²
+  q_dz: 0.001 # dz1/dz2 高度差过程噪声强度
+  r_yaw: 0.01 # 相机方位角 yaw 观测噪声方差，单位 rad²
+  r_pitch: 0.003 # 相机俯仰角 pitch 观测噪声方差，单位 rad²
+  r_distance: 0.0125 # 距离观测噪声基数，实际随距离和夹角自适应
+  r_armor_yaw: 0.08 # 装甲板自身朝向 yaw 观测噪声方差，单位 rad²
   frontal_angle_gate: 0.6108652382 # 前向可匹配角门限 35°，单位 rad
-  yaw_match_gate: 1.5 # 装甲板朝向匹配门限，单位 rad
-  position_match_gate: 0.05 # 装甲板三维位置匹配门限，单位 m
+  yaw_match_gate: 0.8 # 装甲板朝向匹配门限，单位 rad
+  position_match_gate: 0.8 # 装甲板三维位置匹配门限，单位 m
   mismatch_reset_count: 5 # 连续失配超过此次数后重置方向与角速度
   direction_sample_count: 30 # 方向判定所需的有效观测数量
   direction_compare_interval: 3 # 方向判定时比较的帧间隔
@@ -158,8 +158,8 @@ high_speed_delay_time: 0.0 # s，高转速目标发弹延迟
 low_speed_delay_time: 0.0 # s，低转速目标发弹延迟
 
 camera_name: "hikrobot"
-exposure_ms: 5.5
-gain: 16.0
+exposure_ms: 1.5
+gain: 12.0
 camera_index: 0
 fps: 120
 image_rotation: -90 # 图像旋转角度：-90、90、180（-180 等同 180）
