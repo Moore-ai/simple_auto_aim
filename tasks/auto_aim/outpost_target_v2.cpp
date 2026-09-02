@@ -135,7 +135,7 @@ OutpostUpdateResult OutpostTargetV2::update(const std::vector<Armor> & armors)
   return {true, id, {id}};
 }
 
-TargetState OutpostTargetV2::compatibility_state() const
+OutpostSnapshot OutpostTargetV2::snapshot() const
 {
   const auto outpost_state = state();
   TargetState result;
@@ -148,38 +148,36 @@ TargetState OutpostTargetV2::compatibility_state() const
   result.set_yaw(outpost_state.yaw());
   result.set_yaw_rate(outpost_state.yaw_rate());
   result.set_radius(config_.radius);
-  return result;
+  return {
+    result,
+    outpost_state,
+    state_vector(),
+    armor_pose_list(),
+    estimator_.diagnostics(),
+    estimator_.last_nis(),
+    direction_ == Direction::anticlockwise || direction_ == Direction::clockwise,
+    estimator_.state_vector().allFinite()};
 }
 
-std::optional<OutpostState> OutpostTargetV2::outpost_state() const { return std::nullopt; }
-std::optional<OutpostStateV2> OutpostTargetV2::outpost_state_v2() const { return state(); }
 OutpostStateV2 OutpostTargetV2::state() const { return OutpostStateV2(estimator_.state_vector()); }
+
 Eigen::VectorXd OutpostTargetV2::state_vector() const { return estimator_.state_vector(); }
 
 std::vector<PredictedArmorPose> OutpostTargetV2::armor_pose_list() const
 {
-  std::vector<PredictedArmorPose> poses;
-  const auto values = state();
-  poses.reserve(OUTPOST_ARMOR_COUNT);
+  std::vector<PredictedArmorPose> armor_poses;
+  const auto outpost_state = state();
+  armor_poses.reserve(OUTPOST_ARMOR_COUNT);
   for (int id = 0; id < OUTPOST_ARMOR_COUNT; ++id) {
-    poses.push_back({
-      armor_center(values, id), tools::limit_rad(values.yaw() + id * 2.0 * CV_PI / 3.0),
+    armor_poses.push_back({
+      armor_center(outpost_state, id),
+      tools::limit_rad(outpost_state.yaw() + id * 2.0 * CV_PI / 3.0),
       OUTPOST_MOUNT_PITCH});
   }
-  return poses;
+  return armor_poses;
 }
 
-double OutpostTargetV2::last_nis() const { return estimator_.last_nis(); }
 const TargetEstimatorDiagnostics & OutpostTargetV2::diagnostics() const { return estimator_.diagnostics(); }
-bool OutpostTargetV2::has_bad_nis_convergence(double failure_rate) const
-{
-  return estimator_.has_bad_nis_convergence(failure_rate);
-}
-bool OutpostTargetV2::direction_locked() const
-{
-  return direction_ == Direction::anticlockwise || direction_ == Direction::clockwise;
-}
-bool OutpostTargetV2::all_finite() const { return state_vector().allFinite(); }
 
 Eigen::Vector3d OutpostTargetV2::armor_center(const OutpostStateV2 & state, int id) const
 {

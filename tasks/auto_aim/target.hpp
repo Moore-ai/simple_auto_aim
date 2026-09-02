@@ -142,6 +142,7 @@ public:
   TargetState state() const;
   std::optional<OutpostState> outpost_state() const;
   std::optional<OutpostStateV2> outpost_state_v2() const;
+  std::optional<OutpostSnapshot> outpost_snapshot() const;
   Eigen::VectorXd state_vector() const;
   Eigen::VectorXd ekf_x() const;
   double last_nis() const;
@@ -195,6 +196,7 @@ private:
   Eigen::MatrixXd h_jacobian(const TargetState & state, int id) const;
   Eigen::MatrixXd h_jacobian_xyza(const TargetState & state, int id) const;
   void constrain_velocity();
+  OutpostSnapshot model_snapshot() const;
 };
 
 }  // namespace auto_aim

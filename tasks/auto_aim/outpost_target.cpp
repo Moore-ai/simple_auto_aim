@@ -118,14 +118,10 @@ void OutpostTarget::update(const Armor & armor, int id)
 
 OutpostState OutpostTarget::state() const { return OutpostState(estimator_.state_vector()); }
 
-std::optional<OutpostState> OutpostTarget::outpost_state() const { return state(); }
-
-std::optional<OutpostStateV2> OutpostTarget::outpost_state_v2() const { return std::nullopt; }
-
-TargetState OutpostTarget::compatibility_state() const
+OutpostSnapshot OutpostTarget::snapshot() const
 {
-  TargetState result;
   const auto outpost_state = state();
+  TargetState result;
   result.set_center_x(outpost_state.center_x());
   result.set_velocity_x(outpost_state.velocity_x());
   result.set_center_y(outpost_state.center_y());
@@ -137,43 +133,32 @@ TargetState OutpostTarget::compatibility_state() const
   result.set_radius(OUTPOST_RADIUS);
   result.set_radius_diff(0.0);
   result.set_height_diff(0.0);
-  return result;
-}
-
-Eigen::VectorXd OutpostTarget::state_vector() const { return estimator_.state_vector(); }
-
-std::vector<PredictedArmorPose> OutpostTarget::armor_pose_list() const
-{
-  std::vector<PredictedArmorPose> result;
-  result.reserve(OUTPOST_ARMOR_COUNT);
-  const auto current_state = state();
+  std::vector<PredictedArmorPose> armor_poses;
+  armor_poses.reserve(OUTPOST_ARMOR_COUNT);
   for (int id = 0; id < OUTPOST_ARMOR_COUNT; ++id) {
     const auto yaw =
-      tools::limit_rad(current_state.yaw() + id * 2.0 * CV_PI / OUTPOST_ARMOR_COUNT);
-    result.push_back({armor_center(current_state, id), yaw, OUTPOST_MOUNT_PITCH});
+      tools::limit_rad(outpost_state.yaw() + id * 2.0 * CV_PI / OUTPOST_ARMOR_COUNT);
+    armor_poses.push_back({armor_center(outpost_state, id), yaw, OUTPOST_MOUNT_PITCH});
   }
-  return result;
+  return {
+    result,
+    outpost_state,
+    estimator_.state_vector(),
+    std::move(armor_poses),
+    estimator_.diagnostics(),
+    estimator_.last_nis(),
+    direction_ != 0,
+    estimator_.state_vector().allFinite()};
 }
-
-double OutpostTarget::last_nis() const { return estimator_.last_nis(); }
 
 const TargetEstimatorDiagnostics & OutpostTarget::diagnostics() const
 {
   return estimator_.diagnostics();
 }
 
-bool OutpostTarget::has_bad_nis_convergence(double failure_rate) const
-{
-  return estimator_.has_bad_nis_convergence(failure_rate);
-}
-
-bool OutpostTarget::direction_locked() const { return direction_ != 0; }
-
-bool OutpostTarget::all_finite() const { return estimator_.state_vector().allFinite(); }
-
 int OutpostTarget::match_armor(const Armor & armor) const
 {
-  const auto poses = armor_pose_list();
+  const auto poses = snapshot().armor_poses;
   auto best_id = 0;
   auto min_error = std::numeric_limits<double>::infinity();
   for (int id = 0; id < static_cast<int>(poses.size()); ++id) {

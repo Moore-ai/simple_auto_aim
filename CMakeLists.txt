@@ -71,3 +71,9 @@ add_executable(calibrate_handeye calibration/calibrate_handeye.cpp)
 target_link_libraries(capture PRIVATE ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(calibrate_camera PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
 target_link_libraries(calibrate_handeye PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
+
+add_executable(outpost_snapshot_test tests/outpost_snapshot_test.cpp)
+target_link_libraries(outpost_snapshot_test PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+
+add_executable(outpost_target_test tests/outpost_target_test.cpp)
+target_link_libraries(outpost_target_test PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)

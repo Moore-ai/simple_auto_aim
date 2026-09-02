@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 
 #include <memory>
-#include <optional>
+#include <variant>
 #include <vector>
 
 #include "armor.hpp"
@@ -22,6 +22,20 @@ struct OutpostUpdateResult
   std::vector<int> armor_ids;
 };
 
+using OutpostDebugState = std::variant<OutpostState, OutpostStateV2>;
+
+struct OutpostSnapshot
+{
+  TargetState compatibility_state;
+  OutpostDebugState debug_state;
+  Eigen::VectorXd state_vector;
+  std::vector<PredictedArmorPose> armor_poses;
+  TargetEstimatorDiagnostics diagnostics;
+  double last_nis = 0.0;
+  bool direction_locked = false;
+  bool all_finite = false;
+};
+
 class OutpostModel
 {
 public:
@@ -32,16 +46,8 @@ public:
   virtual void predict(double dt) = 0;
   virtual OutpostUpdateResult update(const std::vector<Armor> & armors) = 0;
 
-  virtual TargetState compatibility_state() const = 0;
-  virtual std::optional<OutpostState> outpost_state() const = 0;
-  virtual std::optional<OutpostStateV2> outpost_state_v2() const = 0;
-  virtual Eigen::VectorXd state_vector() const = 0;
-  virtual std::vector<PredictedArmorPose> armor_pose_list() const = 0;
-  virtual double last_nis() const = 0;
+  virtual OutpostSnapshot snapshot() const = 0;
   virtual const TargetEstimatorDiagnostics & diagnostics() const = 0;
-  virtual bool has_bad_nis_convergence(double failure_rate) const = 0;
-  virtual bool direction_locked() const = 0;
-  virtual bool all_finite() const = 0;
 };
 
 }  // namespace auto_aim

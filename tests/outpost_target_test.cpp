@@ -41,7 +41,7 @@ auto_aim::Armor make_outpost_measurement(
 
 int main()
 {
-  auto_aim::Solver solver("configs/demo.yaml");
+  auto_aim::Solver solver("configs/standard.yaml");
   auto armor = make_outpost_armor(solver, {2.0, 0.0, 0.3}, 0.0);
   assert(armor.points.size() == 4);
   assert(solver.solve(armor));
@@ -372,7 +372,7 @@ int main()
   assert(named_state.height_offset_2() == -0.06);
 
   // YAML selection constructs V2 through the real Tracker path.
-  std::ifstream demo_input("configs/demo.yaml");
+  std::ifstream demo_input("configs/standard.yaml");
   std::stringstream demo_text;
   demo_text << demo_input.rdbuf();
   auto v2_yaml = demo_text.str();

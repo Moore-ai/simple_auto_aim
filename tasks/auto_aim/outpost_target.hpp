@@ -37,17 +37,8 @@ public:
   void update(const Armor & armor, int id);
 
   OutpostState state() const;
-  TargetState compatibility_state() const override;
-  std::optional<OutpostState> outpost_state() const override;
-  std::optional<OutpostStateV2> outpost_state_v2() const override;
-  Eigen::VectorXd state_vector() const override;
-  std::vector<PredictedArmorPose> armor_pose_list() const override;
-
-  double last_nis() const override;
+  OutpostSnapshot snapshot() const override;
   const TargetEstimatorDiagnostics & diagnostics() const override;
-  bool has_bad_nis_convergence(double failure_rate) const override;
-  bool direction_locked() const override;
-  bool all_finite() const override;
 
 private:
   OutpostFilterConfig config_;

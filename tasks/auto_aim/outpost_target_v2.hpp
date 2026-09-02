@@ -1,7 +1,6 @@
 #ifndef AUTO_AIM__OUTPOST_TARGET_V2_HPP
 #define AUTO_AIM__OUTPOST_TARGET_V2_HPP
 
-#include <optional>
 #include <vector>
 
 #include "outpost_model.hpp"
@@ -48,16 +47,10 @@ public:
   void predict(double dt) override;
   OutpostUpdateResult update(const std::vector<Armor> & armors) override;
   OutpostStateV2 state() const;
-  TargetState compatibility_state() const override;
-  std::optional<OutpostState> outpost_state() const override;
-  std::optional<OutpostStateV2> outpost_state_v2() const override;
-  Eigen::VectorXd state_vector() const override;
-  std::vector<PredictedArmorPose> armor_pose_list() const override;
-  double last_nis() const override;
+  Eigen::VectorXd state_vector() const;
+  std::vector<PredictedArmorPose> armor_pose_list() const;
+  OutpostSnapshot snapshot() const override;
   const TargetEstimatorDiagnostics & diagnostics() const override;
-  bool has_bad_nis_convergence(double failure_rate) const override;
-  bool direction_locked() const override;
-  bool all_finite() const override;
 
 private:
   enum class Direction { unknown, stable, anticlockwise, clockwise };

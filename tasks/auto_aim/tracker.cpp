@@ -369,10 +369,10 @@ void Tracker::update_debug_data(bool has_current_observation)
   debug_data_.predicted_world_armors = target_.armor_pose_list();
   debug_data_.ekf_converged = target_.convergened();
   if (target_.name == ArmorName::outpost) {
-    debug_data_.outpost_state = target_.outpost_state();
-    debug_data_.outpost_state_v2 = target_.outpost_state_v2();
+    debug_data_.outpost_snapshot = target_.outpost_snapshot();
   } else {
     debug_data_.target_state = target_.state();
+    debug_data_.outpost_snapshot = std::nullopt;
   }
   debug_data_.armor_type = target_.armor_type;
   debug_data_.predicted_image_armors.reserve(debug_data_.predicted_world_armors.size());

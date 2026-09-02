@@ -95,9 +95,12 @@ foxglove::schemas::CubePrimitive detail::armor_cube(
 
 detail::FoxgloveTargetTopic detail::target_topic(const auto_aim::TrackerDebugData & target_data)
 {
-  if (target_data.outpost_state_v2) return FoxgloveTargetTopic::outpost_v2;
-  if (target_data.outpost_state) return FoxgloveTargetTopic::outpost_current;
-  return FoxgloveTargetTopic::normal;
+  if (!target_data.outpost_snapshot) return FoxgloveTargetTopic::normal;
+  if (std::holds_alternative<auto_aim::OutpostStateV2>(
+        target_data.outpost_snapshot->debug_state)) {
+    return FoxgloveTargetTopic::outpost_v2;
+  }
+  return FoxgloveTargetTopic::outpost_current;
 }
 
 const char * detail::target_topic_name(FoxgloveTargetTopic topic)
@@ -128,8 +131,10 @@ Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
               {"vehicle_yaw", vehicle_yaw},       {"yaw_rate", yaw_rate},
               {"radius", target.radius()},         {"radius_diff", target.radius_diff()},
               {"height_diff", target.height_diff()}};
-  } else if (target_data.outpost_state) {
-    const auto & target = *target_data.outpost_state;
+  } else if (
+    target_data.outpost_snapshot &&
+    std::holds_alternative<auto_aim::OutpostState>(target_data.outpost_snapshot->debug_state)) {
+    const auto & target = std::get<auto_aim::OutpostState>(target_data.outpost_snapshot->debug_state);
     center = {target.center_x(), target.center_y(), target.center_z()};
     vehicle_yaw = target.yaw();
     yaw_rate = target.yaw_rate();
@@ -137,8 +142,11 @@ Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
               {"center_y", target.center_y()}, {"velocity_y", target.velocity_y()},
               {"center_z", target.center_z()}, {"velocity_z", target.velocity_z()},
               {"vehicle_yaw", vehicle_yaw},       {"yaw_rate", yaw_rate}};
-  } else if (target_data.outpost_state_v2) {
-    const auto & target = *target_data.outpost_state_v2;
+  } else if (
+    target_data.outpost_snapshot && std::holds_alternative<auto_aim::OutpostStateV2>(
+                                     target_data.outpost_snapshot->debug_state)) {
+    const auto & target =
+      std::get<auto_aim::OutpostStateV2>(target_data.outpost_snapshot->debug_state);
     center = {target.center_x(), target.center_y(), target.center_z()};
     vehicle_yaw = target.yaw();
     yaw_rate = target.yaw_rate();
@@ -214,8 +222,10 @@ foxglove::schemas::SceneUpdate detail::target_scene_update(
                            {"radius_diff", std::to_string(target.radius_diff())},
                            {"height_diff", std::to_string(target.height_diff())}});
     has_state = true;
-  } else if (target_data.outpost_state) {
-    const auto & target = *target_data.outpost_state;
+  } else if (
+    target_data.outpost_snapshot &&
+    std::holds_alternative<auto_aim::OutpostState>(target_data.outpost_snapshot->debug_state)) {
+    const auto & target = std::get<auto_aim::OutpostState>(target_data.outpost_snapshot->debug_state);
     center = {target.center_x(), target.center_y(), target.center_z()};
     vehicle_yaw = target.yaw();
     yaw_rate = target.yaw_rate();
@@ -230,8 +240,11 @@ foxglove::schemas::SceneUpdate detail::target_scene_update(
                            {"vehicle_yaw", std::to_string(target.yaw())},
                            {"yaw_rate", std::to_string(target.yaw_rate())}});
     has_state = true;
-  } else if (target_data.outpost_state_v2) {
-    const auto & target = *target_data.outpost_state_v2;
+  } else if (
+    target_data.outpost_snapshot && std::holds_alternative<auto_aim::OutpostStateV2>(
+                                     target_data.outpost_snapshot->debug_state)) {
+    const auto & target =
+      std::get<auto_aim::OutpostStateV2>(target_data.outpost_snapshot->debug_state);
     center = {target.center_x(), target.center_y(), target.center_z()};
     vehicle_yaw = target.yaw();
     yaw_rate = target.yaw_rate();

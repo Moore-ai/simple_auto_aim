@@ -589,29 +589,35 @@ void Target::update_filter(const Armor & armor, int id)
 
 TargetState Target::state() const
 {
-  return outpost_model_ ? outpost_model_->compatibility_state() : estimator_.state();
+  return outpost_model_ ? model_snapshot().compatibility_state : estimator_.state();
 }
 
 std::optional<OutpostState> Target::outpost_state() const
 {
-  return outpost_model_ ? outpost_model_->outpost_state() : std::nullopt;
+  if (!outpost_model_) return std::nullopt;
+  const auto state = model_snapshot().debug_state;
+  if (const auto * current = std::get_if<OutpostState>(&state)) return *current;
+  return std::nullopt;
 }
 
 std::optional<OutpostStateV2> Target::outpost_state_v2() const
 {
-  return outpost_model_ ? outpost_model_->outpost_state_v2() : std::nullopt;
+  if (!outpost_model_) return std::nullopt;
+  const auto state = model_snapshot().debug_state;
+  if (const auto * v2 = std::get_if<OutpostStateV2>(&state)) return *v2;
+  return std::nullopt;
 }
 
 Eigen::VectorXd Target::state_vector() const
 {
-  return outpost_model_ ? outpost_model_->state_vector() : estimator_.state_vector();
+  return outpost_model_ ? model_snapshot().state_vector : estimator_.state_vector();
 }
 
 Eigen::VectorXd Target::ekf_x() const { return state_vector(); }
 
 double Target::last_nis() const
 {
-  return outpost_model_ ? outpost_model_->last_nis() : estimator_.last_nis();
+  return outpost_model_ ? model_snapshot().last_nis : estimator_.last_nis();
 }
 
 const TargetEstimatorDiagnostics & Target::diagnostics() const
@@ -621,8 +627,8 @@ const TargetEstimatorDiagnostics & Target::diagnostics() const
 
 bool Target::has_bad_nis_convergence(double failure_rate) const
 {
-  return outpost_model_ ? outpost_model_->has_bad_nis_convergence(failure_rate) :
-                           estimator_.has_bad_nis_convergence(failure_rate);
+  const auto & target_diagnostics = diagnostics();
+  return target_diagnostics.recent_nis_failures >= failure_rate;
 }
 
 bool Target::geometry_cache_ready() const
@@ -639,7 +645,7 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 {
   if (outpost_model_) {
     std::vector<Eigen::Vector4d> result;
-    for (const auto & pose : outpost_model_->armor_pose_list()) {
+    for (const auto & pose : model_snapshot().armor_poses) {
       result.push_back({pose.center.x(), pose.center.y(), pose.center.z(), pose.yaw});
     }
     return result;
@@ -650,7 +656,7 @@ std::vector<Eigen::Vector4d> Target::armor_xyza_list() const
 
 std::vector<PredictedArmorPose> Target::armor_pose_list() const
 {
-  if (outpost_model_) return outpost_model_->armor_pose_list();
+  if (outpost_model_) return model_snapshot().armor_poses;
   return armor_layout_.armor_pose_list(estimator_.state());
 }
 
@@ -658,7 +664,7 @@ const std::optional<Armor> & Target::locked_armor() const { return locked_armor_
 
 bool Target::diverged() const
 {
-  if (outpost_model_) return !outpost_model_->all_finite();
+  if (outpost_model_) return !model_snapshot().all_finite;
   const auto min_radius = reprojection_mode_ ? reprojection_config_.radius_min : 0.05;
   const auto max_radius = reprojection_mode_ ? reprojection_config_.radius_max : 0.5;
   const auto state = estimator_.state();
@@ -697,13 +703,21 @@ bool Target::convergened()
 
   //前哨站特殊判断
   if (
-    outpost_model_ && outpost_model_->direction_locked() && update_count_ > 10 &&
+    outpost_model_ && model_snapshot().direction_locked && update_count_ > 10 &&
     !this->diverged()) {
     is_converged_ = true;
   }
 
   return is_converged_;
 }
+
+std::optional<OutpostSnapshot> Target::outpost_snapshot() const
+{
+  if (!outpost_model_) return std::nullopt;
+  return model_snapshot();
+}
+
+OutpostSnapshot Target::model_snapshot() const { return outpost_model_->snapshot(); }
 
 // 计算出装甲板中心的坐标（考虑长短轴）
 Eigen::Vector3d Target::h_armor_xyz(const TargetState & state, int id) const
