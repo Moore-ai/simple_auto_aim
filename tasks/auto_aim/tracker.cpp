@@ -369,6 +369,7 @@ void Tracker::update_debug_data(bool has_current_observation)
   debug_data_.predicted_world_armors = target_.armor_pose_list();
   debug_data_.ekf_converged = target_.convergened();
   if (target_.name == ArmorName::outpost) {
+    debug_data_.target_state = std::nullopt;
     debug_data_.outpost_snapshot = target_.outpost_snapshot();
   } else {
     debug_data_.target_state = target_.state();

@@ -1,6 +1,7 @@
 #include "foxglove_visualizer.hpp"
 
 #include <Eigen/Geometry>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -77,6 +78,55 @@ void log_json(std::optional<Channel> & channel, const Json & message, uint64_t l
   const auto payload = message.dump();
   channel->log(reinterpret_cast<const std::byte *>(payload.data()), payload.size(), log_time);
 }
+
+const char * target_values_topic_name(detail::FoxgloveTargetTopic topic)
+{
+  switch (topic) {
+    case detail::FoxgloveTargetTopic::normal: return "/target";
+    case detail::FoxgloveTargetTopic::outpost_current: return "/outpost/current";
+    case detail::FoxgloveTargetTopic::outpost_v2: return "/outpost/v2";
+  }
+  return "/target";
+}
+
+const char * target_values_schema_name(detail::FoxgloveTargetTopic topic)
+{
+  switch (topic) {
+    case detail::FoxgloveTargetTopic::normal: return "simple_auto_aim.TargetState";
+    case detail::FoxgloveTargetTopic::outpost_current:
+      return "simple_auto_aim.OutpostState";
+    case detail::FoxgloveTargetTopic::outpost_v2: return "simple_auto_aim.OutpostStateV2";
+  }
+  return "simple_auto_aim.TargetState";
+}
+
+const std::string & target_values_schema_data(detail::FoxgloveTargetTopic topic)
+{
+  static const std::array<std::string, 3> schemas = [] {
+    const auto number = Json{{"type", "number"}};
+    Json common_properties = {
+      {"center_x", number},       {"velocity_x", number}, {"center_y", number},
+      {"velocity_y", number},    {"center_z", number},   {"velocity_z", number},
+      {"vehicle_yaw", number},   {"vehicle_pitch", number},
+      {"yaw_rate", number}};
+    auto make_schema = [](const Json & properties) {
+      return Json{{"$schema", "http://json-schema.org/draft-07/schema#"},
+                  {"type", "object"},
+                  {"properties", properties},
+                  {"additionalProperties", false}}
+        .dump();
+    };
+
+    Json normal_properties = common_properties;
+    normal_properties.update(
+      {{"radius", number}, {"radius_diff", number}, {"height_diff", number}});
+    Json v2_properties = common_properties;
+    v2_properties.update({{"height_offset_1", number}, {"height_offset_2", number}});
+    return std::array<std::string, 3>{
+      make_schema(normal_properties), make_schema(common_properties), make_schema(v2_properties)};
+  }();
+  return schemas[static_cast<std::size_t>(topic)];
+}
 }  // namespace
 
 cv::Mat detail::prepare_image_for_publish(const cv::Mat & image)
@@ -113,6 +163,16 @@ const char * detail::target_topic_name(FoxgloveTargetTopic topic)
   return "/target/scene";
 }
 
+foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_target_values_channel(
+  FoxgloveTargetTopic topic)
+{
+  const auto & schema_data = target_values_schema_data(topic);
+  foxglove::Schema schema{
+    target_values_schema_name(topic), "jsonschema",
+    reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
+  return foxglove::RawChannel::create(target_values_topic_name(topic), "json", std::move(schema));
+}
+
 Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
 {
   Json values = Json::object();
@@ -120,7 +180,8 @@ Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
   double vehicle_yaw = 0.0;
   double yaw_rate = 0.0;
 
-  if (target_data.target_state) {
+  const auto topic = detail::target_topic(target_data);
+  if (topic == FoxgloveTargetTopic::normal && target_data.target_state) {
     const auto & target = *target_data.target_state;
     center = {target.center_x(), target.center_y(), target.center_z()};
     vehicle_yaw = target.yaw();
@@ -132,9 +193,10 @@ Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
               {"radius", target.radius()},         {"radius_diff", target.radius_diff()},
               {"height_diff", target.height_diff()}};
   } else if (
-    target_data.outpost_snapshot &&
+    topic == FoxgloveTargetTopic::outpost_current && target_data.outpost_snapshot &&
     std::holds_alternative<auto_aim::OutpostState>(target_data.outpost_snapshot->debug_state)) {
-    const auto & target = std::get<auto_aim::OutpostState>(target_data.outpost_snapshot->debug_state);
+    const auto & target =
+      std::get<auto_aim::OutpostState>(target_data.outpost_snapshot->debug_state);
     center = {target.center_x(), target.center_y(), target.center_z()};
     vehicle_yaw = target.yaw();
     yaw_rate = target.yaw_rate();
@@ -143,8 +205,8 @@ Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
               {"center_z", target.center_z()}, {"velocity_z", target.velocity_z()},
               {"vehicle_yaw", vehicle_yaw},       {"yaw_rate", yaw_rate}};
   } else if (
-    target_data.outpost_snapshot && std::holds_alternative<auto_aim::OutpostStateV2>(
-                                     target_data.outpost_snapshot->debug_state)) {
+    topic == FoxgloveTargetTopic::outpost_v2 && target_data.outpost_snapshot &&
+    std::holds_alternative<auto_aim::OutpostStateV2>(target_data.outpost_snapshot->debug_state)) {
     const auto & target =
       std::get<auto_aim::OutpostStateV2>(target_data.outpost_snapshot->debug_state);
     center = {target.center_x(), target.center_y(), target.center_z()};
@@ -203,7 +265,8 @@ foxglove::schemas::SceneUpdate detail::target_scene_update(
   double yaw_rate = 0.0;
   bool has_state = false;
 
-  if (target_data.target_state) {
+  const auto topic = detail::target_topic(target_data);
+  if (topic == FoxgloveTargetTopic::normal && target_data.target_state) {
     const auto & target = *target_data.target_state;
     center = {target.center_x(), target.center_y(), target.center_z()};
     vehicle_yaw = target.yaw();
@@ -223,7 +286,7 @@ foxglove::schemas::SceneUpdate detail::target_scene_update(
                            {"height_diff", std::to_string(target.height_diff())}});
     has_state = true;
   } else if (
-    target_data.outpost_snapshot &&
+    topic == FoxgloveTargetTopic::outpost_current && target_data.outpost_snapshot &&
     std::holds_alternative<auto_aim::OutpostState>(target_data.outpost_snapshot->debug_state)) {
     const auto & target = std::get<auto_aim::OutpostState>(target_data.outpost_snapshot->debug_state);
     center = {target.center_x(), target.center_y(), target.center_z()};
@@ -241,8 +304,8 @@ foxglove::schemas::SceneUpdate detail::target_scene_update(
                            {"yaw_rate", std::to_string(target.yaw_rate())}});
     has_state = true;
   } else if (
-    target_data.outpost_snapshot && std::holds_alternative<auto_aim::OutpostStateV2>(
-                                     target_data.outpost_snapshot->debug_state)) {
+    topic == FoxgloveTargetTopic::outpost_v2 && target_data.outpost_snapshot &&
+    std::holds_alternative<auto_aim::OutpostStateV2>(target_data.outpost_snapshot->debug_state)) {
     const auto & target =
       std::get<auto_aim::OutpostStateV2>(target_data.outpost_snapshot->debug_state);
     center = {target.center_x(), target.center_y(), target.center_z()};
@@ -358,11 +421,14 @@ FoxgloveVisualizer::FoxgloveVisualizer() : impl_(std::make_unique<Impl>())
   create(
     impl_->image_detection,
     foxglove::schemas::CompressedImageChannel::create("/image_detection"), "/image_detection");
-  create(impl_->target_values, foxglove::RawChannel::create("/target", "json"), "/target");
+  create(impl_->target_values,
+         detail::create_target_values_channel(detail::FoxgloveTargetTopic::normal), "/target");
   create(impl_->outpost_current_values,
-         foxglove::RawChannel::create("/outpost/current", "json"), "/outpost/current");
+         detail::create_target_values_channel(detail::FoxgloveTargetTopic::outpost_current),
+         "/outpost/current");
   create(impl_->outpost_v2_values,
-         foxglove::RawChannel::create("/outpost/v2", "json"), "/outpost/v2");
+         detail::create_target_values_channel(detail::FoxgloveTargetTopic::outpost_v2),
+         "/outpost/v2");
   create(
     impl_->target,
     foxglove::schemas::SceneUpdateChannel::create(

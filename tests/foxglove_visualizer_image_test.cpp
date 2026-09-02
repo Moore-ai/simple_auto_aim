@@ -81,7 +81,10 @@ int main()
   assert(normal_values.at("height_diff").is_number());
 
   auto_aim::TrackerDebugData current_outpost;
-  current_outpost.outpost_state = auto_aim::OutpostState(Eigen::VectorXd::Zero(8));
+  current_outpost.outpost_snapshot = auto_aim::OutpostSnapshot{
+    auto_aim::TargetState(Eigen::VectorXd::Zero(11)),
+    auto_aim::OutpostState(Eigen::VectorXd::Zero(8)), Eigen::VectorXd::Zero(8), {}, {}, 0.0,
+    false, true};
   assert(
     tools::detail::target_topic(current_outpost) ==
     tools::detail::FoxgloveTargetTopic::outpost_current);
@@ -91,7 +94,11 @@ int main()
       "/outpost/current/scene") == 0);
 
   auto_aim::TrackerDebugData v2_outpost;
-  v2_outpost.outpost_state_v2 = auto_aim::OutpostStateV2(Eigen::VectorXd::Zero(10));
+  v2_outpost.target_state = auto_aim::TargetState(Eigen::VectorXd::Ones(11));
+  v2_outpost.outpost_snapshot = auto_aim::OutpostSnapshot{
+    auto_aim::TargetState(Eigen::VectorXd::Zero(11)),
+    auto_aim::OutpostStateV2(Eigen::VectorXd::Zero(10)), Eigen::VectorXd::Zero(10), {}, {}, 0.0,
+    false, true};
   v2_outpost.ekf_converged = true;
   const auto v2_scene = tools::detail::target_scene_update(v2_outpost);
   assert(
@@ -115,5 +122,39 @@ int main()
     return false;
   };
   assert(has_height_offset(v2_scene.entities.front().metadata));
+
+  const auto v2_values = tools::detail::target_values(v2_outpost);
+  assert(v2_values.at("center_x") == 0.0);
+  assert(v2_values.at("height_offset_1").is_number());
+  assert(v2_values.at("height_offset_2").is_number());
+
+  auto normal_channel_result =
+    tools::detail::create_target_values_channel(tools::detail::FoxgloveTargetTopic::normal);
+  assert(normal_channel_result.has_value());
+  auto normal_channel = std::move(normal_channel_result.value());
+  assert(normal_channel.topic() == "/target");
+  assert(normal_channel.message_encoding() == "json");
+  const auto normal_schema = normal_channel.schema();
+  assert(normal_schema.has_value());
+  assert(normal_schema->encoding == "jsonschema");
+  const auto normal_schema_json = nlohmann::json::parse(
+    reinterpret_cast<const char *>(normal_schema->data),
+    reinterpret_cast<const char *>(normal_schema->data) + normal_schema->data_len);
+  assert(normal_schema_json.at("properties").contains("center_x"));
+  assert(normal_schema_json.at("properties").contains("radius"));
+
+  auto v2_channel_result =
+    tools::detail::create_target_values_channel(tools::detail::FoxgloveTargetTopic::outpost_v2);
+  assert(v2_channel_result.has_value());
+  auto v2_channel = std::move(v2_channel_result.value());
+  assert(v2_channel.topic() == "/outpost/v2");
+  const auto v2_schema = v2_channel.schema();
+  assert(v2_schema.has_value());
+  assert(v2_schema->encoding == "jsonschema");
+  const auto v2_schema_json = nlohmann::json::parse(
+    reinterpret_cast<const char *>(v2_schema->data),
+    reinterpret_cast<const char *>(v2_schema->data) + v2_schema->data_len);
+  assert(v2_schema_json.at("properties").contains("height_offset_1"));
+  assert(v2_schema_json.at("properties").contains("height_offset_2"));
   return 0;
 }

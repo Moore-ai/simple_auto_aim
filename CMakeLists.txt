@@ -77,3 +77,16 @@ target_link_libraries(outpost_snapshot_test PRIVATE ${OpenCV_LIBS} fmt::fmt yaml
 
 add_executable(outpost_target_test tests/outpost_target_test.cpp)
 target_link_libraries(outpost_target_test PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+
+add_executable(foxglove_visualizer_image_test
+  tests/foxglove_visualizer_image_test.cpp
+  tools/foxglove_visualizer.cpp)
+target_compile_options(foxglove_visualizer_image_test PRIVATE -UNDEBUG)
+target_link_libraries(foxglove_visualizer_image_test PRIVATE
+  ${OpenCV_LIBS}
+  fmt::fmt
+  yaml-cpp
+  auto_aim
+  tools
+  io
+  foxglove_sdk)
