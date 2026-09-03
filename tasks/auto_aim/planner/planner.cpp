@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "tinympc/tiny_api.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
 #include "tools/trajectory.hpp"
@@ -49,6 +50,17 @@ Planner::Planner(const std::string & config_path)
   if (yaml["decision_speed_enable"]) decision_speed_enable_ = yaml["decision_speed_enable"].as<bool>();
   if (yaml["extra_delay"]) extra_delay_ = yaml["extra_delay"].as<double>();
   if (yaml["speed_hysteresis"]) speed_hysteresis_ = yaml["speed_hysteresis"].as<double>();
+  if (const auto iteration_yaml = yaml["fly_time_iteration"]; iteration_yaml) {
+    fly_time_iteration_enabled_ = tools::read<bool>(iteration_yaml, "enable");
+    if (iteration_yaml["max_iteration"]) {
+      fly_time_iteration_max_iteration_ =
+        std::max(tools::read<int>(iteration_yaml, "max_iteration"), 1);
+    }
+    if (iteration_yaml["convergence_threshold"]) {
+      fly_time_iteration_convergence_threshold_ =
+        std::max(tools::read<double>(iteration_yaml, "convergence_threshold"), 0.0);
+    }
+  }
   if (const auto selection_yaml = yaml["armor_selection_hysteresis"]; selection_yaml) {
     ArmorSelectionHysteresisConfig selection_config;
     selection_config.enable = tools::read<bool>(selection_yaml, "enable");
@@ -128,7 +140,34 @@ Plan Planner::plan(Target target, double bullet_speed)
     return invalid_plan("invalid bullet trajectory");
   }
   auto fly_time = bullet_traj.fly_time;
-  target.predict(bullet_traj.fly_time);
+  if (fly_time_iteration_enabled_) {
+    for (int i = 0; i < fly_time_iteration_max_iteration_; ++i) {
+      auto future_target = target;
+      future_target.predict(fly_time);
+
+      Eigen::Vector3d future_xyz;
+      auto future_min_dist = 1e10;
+      for (const auto & xyza : future_target.armor_xyza_list()) {
+        const auto dist = xyza.head<2>().norm();
+        if (dist < future_min_dist) {
+          future_min_dist = dist;
+          future_xyz = xyza.head<3>();
+        }
+      }
+      const auto future_bullet_traj =
+        tools::Trajectory(bullet_speed, future_min_dist, future_xyz.z());
+      if (future_bullet_traj.unsolvable || !std::isfinite(future_bullet_traj.fly_time)) {
+        return invalid_plan("invalid iterative bullet trajectory");
+      }
+
+      const auto next_fly_time = future_bullet_traj.fly_time;
+      const auto converged =
+        std::abs(next_fly_time - fly_time) < fly_time_iteration_convergence_threshold_;
+      fly_time = next_fly_time;
+      if (converged) break;
+    }
+  }
+  target.predict(fly_time);
   const auto selected_armor =
     armor_selection_hysteresis_enabled_ ? select_armor(target) : -1;
 

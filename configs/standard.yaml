@@ -206,6 +206,11 @@ fire_thresh: 0.0035              # 开火阈值（rad）：参考轨迹与规划
 rho: 1.0                         # ADMM 惩罚参数，影响收敛速度
 max_iter: 10                     # ADMM 最大迭代次数，越大求解越精确但耗时更长
 
+fly_time_iteration:
+  enable: false                  # 是否迭代求解预瞄点与弹丸飞行时间，关闭时保持单次预测
+  max_iteration: 3               # 最大固定点迭代次数
+  convergence_threshold: 1e-3    # s，相邻两次飞行时间差小于此值时停止迭代
+
 max_yaw_acc: 50                  # yaw 最大角加速度约束 (rad/s²)，越大云台越激进
 Q_yaw: [9e6, 0]                  # yaw MPC 跟踪权重 [角度误差权重, 角速度误差权重]
 R_yaw: [1]                       # yaw MPC 控制量惩罚，越大运动越平滑

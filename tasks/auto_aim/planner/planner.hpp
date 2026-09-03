@@ -6,7 +6,7 @@
 
 #include "armor_selection_hysteresis.hpp"
 #include "tasks/auto_aim/target.hpp"
-#include "tinympc/tiny_api.hpp"
+#include "tinympc/types.hpp"
 #include "tools/adaptive_delay_controller.hpp"
 
 namespace auto_aim
@@ -52,6 +52,9 @@ private:
   double speed_hysteresis_{0.0};
   bool decision_speed_enable_{true};
   bool high_speed_state_{false};
+  bool fly_time_iteration_enabled_{false};
+  int fly_time_iteration_max_iteration_{3};
+  double fly_time_iteration_convergence_threshold_{1e-3};
   bool armor_selection_hysteresis_enabled_{false};
   ArmorSelectionHysteresis armor_selector_{{}};
 
