@@ -187,7 +187,17 @@ Target Target::make_outpost_v2(
 }
 
 Target::Target(double x, double vyaw, double radius, double h)
-: armor_num_(4), filter_method_(FilterMethod::EKF)
+: name(ArmorName::not_armor),
+  armor_type(ArmorType::small),
+  jumped(false),
+  last_id(0),
+  armor_num_(4),
+  switch_count_(0),
+  update_count_(0),
+  seen_armor_ids_(4, false),
+  is_switch_(false),
+  is_converged_(false),
+  filter_method_(FilterMethod::EKF)
 {
   Eigen::VectorXd P0_dig{{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
   TargetState initial_state;

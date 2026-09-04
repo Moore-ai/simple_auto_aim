@@ -50,6 +50,19 @@ Planner::Planner(const std::string & config_path)
   if (yaml["decision_speed_enable"]) decision_speed_enable_ = yaml["decision_speed_enable"].as<bool>();
   if (yaml["extra_delay"]) extra_delay_ = yaml["extra_delay"].as<double>();
   if (yaml["speed_hysteresis"]) speed_hysteresis_ = yaml["speed_hysteresis"].as<double>();
+  const auto anti_spin_requested =
+    yaml["anti_spin_enable"] && yaml["anti_spin_enable"].as<bool>();
+  anti_spin_enable_ = decision_speed_enable_ && anti_spin_requested;
+  if (anti_spin_enable_) {
+    const auto wait_armor = tools::read<std::string>(yaml, "anti_spin_wait_armor");
+    if (wait_armor == "low") {
+      anti_spin_wait_armor_ = WaitArmorHeight::low;
+    } else if (wait_armor == "high") {
+      anti_spin_wait_armor_ = WaitArmorHeight::high;
+    } else {
+      throw std::runtime_error("anti_spin_wait_armor must be 'low' or 'high'");
+    }
+  }
   if (const auto iteration_yaml = yaml["fly_time_iteration"]; iteration_yaml) {
     fly_time_iteration_enabled_ = tools::read<bool>(iteration_yaml, "enable");
     if (iteration_yaml["max_iteration"]) {
@@ -75,6 +88,10 @@ Planner::Planner(const std::string & config_path)
                           decision_speed_, speed_hysteresis_, low_speed_delay_time_, high_speed_delay_time_);
   } else {
     tools::logger()->info("[Planner] decision speed delay: enable=false, fixed delay={:.3f}", extra_delay_);
+  }
+  if (anti_spin_requested && !anti_spin_enable_) {
+    tools::logger()->warn(
+      "[Planner] anti-spin disabled because decision_speed_enable=false");
   }
   rho_ = tools::read<double>(yaml, "rho");
   max_iter_ = tools::read<int>(yaml, "max_iter");
@@ -125,14 +142,22 @@ Plan Planner::plan(Target target, double bullet_speed)
     bullet_speed = bullet_speed_default_;
   }
 
+  update_high_speed_state(target.state());
+  const auto anti_spin = anti_spin_enable_ && high_speed_state_;
+
   // 1. Predict fly_time
   Eigen::Vector3d xyz;
   auto min_dist = 1e10;
-  for (auto & xyza : target.armor_xyza_list()) {
-    auto dist = xyza.head<2>().norm();
-    if (dist < min_dist) {
-      min_dist = dist;
-      xyz = xyza.head<3>();
+  if (anti_spin) {
+    xyz = anti_spin_aim_point(target);
+    min_dist = xyz.head<2>().norm();
+  } else {
+    for (auto & xyza : target.armor_xyza_list()) {
+      auto dist = xyza.head<2>().norm();
+      if (dist < min_dist) {
+        min_dist = dist;
+        xyz = xyza.head<3>();
+      }
     }
   }
   auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
@@ -147,11 +172,16 @@ Plan Planner::plan(Target target, double bullet_speed)
 
       Eigen::Vector3d future_xyz;
       auto future_min_dist = 1e10;
-      for (const auto & xyza : future_target.armor_xyza_list()) {
-        const auto dist = xyza.head<2>().norm();
-        if (dist < future_min_dist) {
-          future_min_dist = dist;
-          future_xyz = xyza.head<3>();
+      if (anti_spin) {
+        future_xyz = anti_spin_aim_point(future_target);
+        future_min_dist = future_xyz.head<2>().norm();
+      } else {
+        for (const auto & xyza : future_target.armor_xyza_list()) {
+          const auto dist = xyza.head<2>().norm();
+          if (dist < future_min_dist) {
+            future_min_dist = dist;
+            future_xyz = xyza.head<3>();
+          }
         }
       }
       const auto future_bullet_traj =
@@ -168,15 +198,17 @@ Plan Planner::plan(Target target, double bullet_speed)
     }
   }
   target.predict(fly_time);
+  auto fire_target = target;
+  const auto anti_spin_target_converged = !anti_spin || fire_target.convergened();
   const auto selected_armor =
-    armor_selection_hysteresis_enabled_ ? select_armor(target) : -1;
+    !anti_spin && armor_selection_hysteresis_enabled_ ? select_armor(target) : -1;
 
   // 2. Get trajectory
   double yaw0;
   Trajectory traj;
   try {
-    yaw0 = aim(target, bullet_speed, selected_armor)(0);
-    traj = get_trajectory(target, yaw0, bullet_speed, selected_armor);
+    yaw0 = aim(target, bullet_speed, selected_armor, anti_spin)(0);
+    traj = get_trajectory(target, yaw0, bullet_speed, selected_armor, anti_spin);
   } catch (const std::exception & e) {
     tools::logger()->warn("[Planner] Unsolvable target at bullet speed {:.2f}: {}", bullet_speed, e.what());
     return {};
@@ -258,11 +290,15 @@ Plan Planner::plan(Target target, double bullet_speed)
   plan.pitch_acc = pitch_solver_->work->u(0, HALF_HORIZON);
 
   auto shoot_offset_ = 2;
+  fire_target.predict(DT * shoot_offset_);
   plan.fire =
     std::hypot(
       traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
       traj(2, HALF_HORIZON + shoot_offset_) -
         pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
+  if (anti_spin) {
+    plan.fire = plan.fire && anti_spin_target_converged && anti_spin_fire_ready(fire_target);
+  }
   if (!valid_plan(plan)) return invalid_plan("non-finite MPC output");
   return plan;
 }
@@ -281,12 +317,7 @@ Plan Planner::plan(std::optional<Target> target, double bullet_speed)
   const auto state = target->state();
   double delay_time;
   if (decision_speed_enable_) {
-    double speed = std::abs(state.yaw_rate());
-    if (high_speed_state_) {
-      if (speed < decision_speed_ - speed_hysteresis_) high_speed_state_ = false;
-    } else {
-      if (speed > decision_speed_ + speed_hysteresis_) high_speed_state_ = true;
-    }
+    update_high_speed_state(state);
     delay_time = high_speed_state_ ? high_speed_delay_time_ : low_speed_delay_time_;
   } else {
     delay_time = extra_delay_;
@@ -380,20 +411,82 @@ int Planner::select_armor(const Target & target)
   return armor_selector_.select(scores);
 }
 
+void Planner::update_high_speed_state(const TargetState & state)
+{
+  if (!decision_speed_enable_) {
+    high_speed_state_ = false;
+    return;
+  }
+
+  const auto speed = std::abs(state.yaw_rate());
+  if (high_speed_state_) {
+    if (speed < decision_speed_ - speed_hysteresis_) high_speed_state_ = false;
+  } else if (speed > decision_speed_ + speed_hysteresis_) {
+    high_speed_state_ = true;
+  }
+}
+
+double Planner::anti_spin_armor_height(const TargetState & state) const
+{
+  return state.armor_height(anti_spin_waits_long_axis(state));
+}
+
+bool Planner::anti_spin_waits_long_axis(const TargetState & state) const
+{
+  if (state.height_diff() == 0.0) return false;
+  const auto long_axis_is_high = state.height_diff() > 0.0;
+  return anti_spin_wait_armor_ == WaitArmorHeight::high ? long_axis_is_high : !long_axis_is_high;
+}
+
+Eigen::Vector3d Planner::anti_spin_aim_point(const Target & target) const
+{
+  const auto state = target.state();
+  const Eigen::Vector2d center(state.center_x(), state.center_y());
+  const auto center_dist = center.norm();
+  const auto radius = state.radius(anti_spin_waits_long_axis(state));
+  const auto passing_dist = std::max(center_dist - radius, 0.0);
+  const auto passing_xy = center_dist > 0.0 ? center * (passing_dist / center_dist) : center;
+  return {passing_xy.x(), passing_xy.y(), anti_spin_armor_height(state)};
+}
+
+bool Planner::anti_spin_fire_ready(const Target & target) const
+{
+  const auto state = target.state();
+  const auto center_xy = Eigen::Vector2d(state.center_x(), state.center_y());
+  const auto center_dist = center_xy.norm();
+  const auto center_yaw = std::atan2(center_xy.y(), center_xy.x());
+  const auto wait_height = anti_spin_armor_height(state);
+
+  for (const auto & armor : target.armor_xyza_list()) {
+    if (std::abs(armor.z() - wait_height) > 1e-6) continue;
+    if (armor.head<2>().norm() > center_dist) continue;
+    const auto armor_yaw = std::atan2(armor.y(), armor.x());
+    if (std::abs(tools::limit_rad(armor_yaw - center_yaw)) < fire_thresh_) return true;
+  }
+  return false;
+}
+
 Eigen::Matrix<double, 2, 1> Planner::aim(
-  const Target & target, double bullet_speed, int selected_armor)
+  const Target & target, double bullet_speed, int selected_armor, bool anti_spin)
 {
   Eigen::Vector3d xyz;
   double yaw;
   auto min_dist = 1e10;
 
+  if (anti_spin) {
+    const auto state = target.state();
+    xyz = anti_spin_aim_point(target);
+    yaw = state.yaw();
+    min_dist = xyz.head<2>().norm();
+  }
+
   const auto armors = target.armor_xyza_list();
-  if (selected_armor >= 0 && selected_armor < static_cast<int>(armors.size())) {
+  if (!anti_spin && selected_armor >= 0 && selected_armor < static_cast<int>(armors.size())) {
     const auto & xyza = armors[selected_armor];
     xyz = xyza.head<3>();
     yaw = xyza[3];
     min_dist = xyza.head<2>().norm();
-  } else {
+  } else if (!anti_spin) {
     for (const auto & xyza : armors) {
       auto dist = xyza.head<2>().norm();
       if (dist < min_dist) {
@@ -413,19 +506,19 @@ Eigen::Matrix<double, 2, 1> Planner::aim(
 }
 
 Trajectory Planner::get_trajectory(
-  Target & target, double yaw0, double bullet_speed, int selected_armor)
+  Target & target, double yaw0, double bullet_speed, int selected_armor, bool anti_spin)
 {
   Trajectory traj;
 
   target.predict(-DT * (HALF_HORIZON + 1));
-  auto yaw_pitch_last = aim(target, bullet_speed, selected_armor);
+  auto yaw_pitch_last = aim(target, bullet_speed, selected_armor, anti_spin);
 
   target.predict(DT);  // [0] = -HALF_HORIZON * DT -> [HHALF_HORIZON] = 0
-  auto yaw_pitch = aim(target, bullet_speed, selected_armor);
+  auto yaw_pitch = aim(target, bullet_speed, selected_armor, anti_spin);
 
   for (int i = 0; i < HORIZON; i++) {
     target.predict(DT);
-    auto yaw_pitch_next = aim(target, bullet_speed, selected_armor);
+    auto yaw_pitch_next = aim(target, bullet_speed, selected_armor, anti_spin);
 
     auto yaw_vel = tools::limit_rad(yaw_pitch_next(0) - yaw_pitch_last(0)) / (2 * DT);
     auto pitch_vel = (yaw_pitch_next(1) - yaw_pitch_last(1)) / (2 * DT);

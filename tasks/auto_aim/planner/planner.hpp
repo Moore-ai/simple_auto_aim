@@ -44,6 +44,8 @@ public:
   Plan plan(std::optional<Target> target, double bullet_speed);
 
 private:
+  enum class WaitArmorHeight { low, high };
+
   double yaw_offset_;
   double pitch_offset_;
   double fire_thresh_;
@@ -52,6 +54,8 @@ private:
   double speed_hysteresis_{0.0};
   bool decision_speed_enable_{true};
   bool high_speed_state_{false};
+  bool anti_spin_enable_{false};
+  WaitArmorHeight anti_spin_wait_armor_{WaitArmorHeight::low};
   bool fly_time_iteration_enabled_{false};
   int fly_time_iteration_max_iteration_{3};
   double fly_time_iteration_convergence_threshold_{1e-3};
@@ -86,10 +90,15 @@ private:
   void setup_pitch_solver(const std::string & config_path);
 
   int select_armor(const Target & target);
+  void update_high_speed_state(const TargetState & state);
+  bool anti_spin_waits_long_axis(const TargetState & state) const;
+  double anti_spin_armor_height(const TargetState & state) const;
+  Eigen::Vector3d anti_spin_aim_point(const Target & target) const;
+  bool anti_spin_fire_ready(const Target & target) const;
   Eigen::Matrix<double, 2, 1> aim(
-    const Target & target, double bullet_speed, int selected_armor = -1);
+    const Target & target, double bullet_speed, int selected_armor, bool anti_spin);
   Trajectory get_trajectory(
-    Target & target, double yaw0, double bullet_speed, int selected_armor);
+    Target & target, double yaw0, double bullet_speed, int selected_armor, bool anti_spin);
 };
 
 }  // namespace auto_aim

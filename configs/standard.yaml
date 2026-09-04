@@ -150,12 +150,14 @@ ukf_obs:
 #####-----MPC 参数-----#####
 yaw_offset: 2 # degree，瞄准 yaw 修正量
 pitch_offset: 6.5 # degree，瞄准 pitch 修正量
-decision_speed_enable: true # 启用 decision_speed 高低速阈值（影响开火延迟）
+decision_speed_enable: true # 启用 decision_speed 高低速阈值（控制发弹延迟与反小陀螺）
 speed_hysteresis: 0.0 # rad/s 滞回半宽，防临界抖动
 extra_delay: 0.0 # s 关闭高低速阈值时使用的固定延迟
 decision_speed: 7 # rad/s，转速阈值，高于此值用高速延迟
 high_speed_delay_time: 0.0 # s，高转速目标发弹延迟
 low_speed_delay_time: 0.0 # s，低转速目标发弹延迟
+anti_spin_enable: false # 高转速时启用反小陀螺策略，仅 decision_speed_enable=true 时生效
+anti_spin_wait_armor: low # 等待板型，只能为 low（低板）或 high（高板）
 
 camera_name: "hikrobot"
 exposure_ms: 1.5
