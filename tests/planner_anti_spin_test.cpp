@@ -62,6 +62,7 @@ int main()
   std::filesystem::remove(low_config);
   const auto low_plan = low_planner.plan(target, bullet_speed);
   assert(low_plan.control);
+  assert(low_plan.anti_spin_active);
   assert(near(low_plan.debug_xyza.x(), 9.0));
   assert(near(low_plan.debug_xyza.y(), 0.0));
   assert(near(low_plan.debug_xyza.z(), 0.0));
@@ -76,12 +77,14 @@ int main()
   assert(near(phase_shifted_plan.fly_time, low_plan.fly_time));
   assert(near(phase_shifted_plan.target_yaw, low_plan.target_yaw));
   assert(near(phase_shifted_plan.target_pitch, low_plan.target_pitch));
+  assert(near(phase_shifted_plan.debug_xyza[3], low_plan.debug_xyza[3]));
 
   const auto high_config = write_test_config("high");
   auto_aim::Planner high_planner(high_config.string());
   std::filesystem::remove(high_config);
   const auto high_plan = high_planner.plan(target, bullet_speed);
   assert(high_plan.control);
+  assert(high_plan.anti_spin_active);
   assert(near(high_plan.debug_xyza.x(), 9.0));
   assert(near(high_plan.debug_xyza.y(), 0.0));
   assert(near(high_plan.debug_xyza.z(), 0.5));
@@ -93,6 +96,7 @@ int main()
   std::filesystem::remove(disabled_config);
   const auto disabled_plan = disabled_planner.plan(target, bullet_speed);
   assert(disabled_plan.control);
+  assert(!disabled_plan.anti_spin_active);
   assert(!near(disabled_plan.debug_xyza.x(), 10.0) || !near(disabled_plan.debug_xyza.y(), 0.0));
 
   auto_aim::Target slow_target(10.0, 0.5, 1.0, 0.5);
@@ -101,6 +105,7 @@ int main()
   std::filesystem::remove(slow_config);
   const auto slow_plan = slow_planner.plan(slow_target, bullet_speed);
   assert(slow_plan.control);
+  assert(!slow_plan.anti_spin_active);
   assert(!near(slow_plan.debug_xyza.x(), 10.0) || !near(slow_plan.debug_xyza.y(), 0.0));
 
   auto_aim::Target passing_low_armor(10.0, 2.0, 0.2, 0.5);

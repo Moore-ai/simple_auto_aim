@@ -275,8 +275,10 @@ Plan Planner::plan(Target target, double bullet_speed)
   Plan plan;
   plan.control = true;
   plan.debug_xyza = debug_xyza;
+  plan.debug_armor_pitch = armor_mount_pitch(target.name);
   plan.fly_time = fly_time;
   plan.debug_valid = true;
+  plan.anti_spin_active = anti_spin;
 
   plan.target_yaw = tools::limit_rad(traj(0, HALF_HORIZON) + yaw0);
   plan.target_pitch = traj(2, HALF_HORIZON);
@@ -476,7 +478,7 @@ Eigen::Matrix<double, 2, 1> Planner::aim(
   if (anti_spin) {
     const auto state = target.state();
     xyz = anti_spin_aim_point(target);
-    yaw = state.yaw();
+    yaw = std::atan2(state.center_y(), state.center_x());
     min_dist = xyz.head<2>().norm();
   }
 

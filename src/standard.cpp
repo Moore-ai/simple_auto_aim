@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cmath>
+#include <mutex>
 #include <opencv2/opencv.hpp>
 #include <thread>
 
@@ -44,6 +45,8 @@ int main(int argc, char * argv[])
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
+  std::mutex latest_plan_mutex;
+  auto_aim::Plan latest_plan;
 
   std::atomic<bool> quit = false;
 
@@ -53,6 +56,10 @@ int main(int argc, char * argv[])
         auto target = target_queue.front();
         auto gs = gimbal.state();
         auto plan = planner.plan(target, gs.bullet_speed);
+        {
+          std::lock_guard<std::mutex> lock(latest_plan_mutex);
+          latest_plan = plan;
+        }
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
           plan.pitch_acc,
@@ -72,6 +79,16 @@ int main(int argc, char * argv[])
 
     target_queue.push(
       processed.targets.empty() ? std::nullopt : std::optional<auto_aim::Target>(processed.targets.front()));
+
+    auto_aim::Plan visualization_plan;
+    {
+      std::lock_guard<std::mutex> lock(latest_plan_mutex);
+      visualization_plan = latest_plan;
+    }
+    if (!processed.targets.empty()) {
+      processed.snapshot.anti_spin_hit_armor = tools::detail::anti_spin_hit_armor(
+        visualization_plan, processed.snapshot.tracker.armor_type, solver);
+    }
 
     recorder.record(processed.snapshot);
     foxglove.publish(processed.snapshot);

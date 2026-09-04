@@ -45,6 +45,17 @@ void draw_polygon(cv::Mat & image, const std::vector<cv::Point2f> & points, cons
   cv::polylines(image, polygon, true, color, 2, cv::LINE_AA);
 }
 
+void draw_cross(cv::Mat & image, const cv::Point2f & center, const cv::Scalar & color)
+{
+  constexpr float half_size = 6.0F;
+  cv::line(
+    image, center + cv::Point2f{-half_size, -half_size},
+    center + cv::Point2f{half_size, half_size}, color, 2, cv::LINE_AA);
+  cv::line(
+    image, center + cv::Point2f{-half_size, half_size},
+    center + cv::Point2f{half_size, -half_size}, color, 2, cv::LINE_AA);
+}
+
 foxglove::schemas::CompressedImage compressed_image(const cv::Mat & image)
 {
   std::vector<uint8_t> encoded;
@@ -355,20 +366,33 @@ foxglove::schemas::SceneUpdate detail::target_scene_update(
   return update;
 }
 
-void detail::draw_detected_armors(
-  cv::Mat & image, const std::list<auto_aim::Armor> & armors, auto_aim::Color target_color)
+void detail::draw_aim_overlay(
+  cv::Mat & image, const std::list<auto_aim::Armor> & armors,
+  const auto_aim::Armor * locked_armor, const std::vector<cv::Point2f> * anti_spin_hit_armor)
 {
   for (const auto & armor : armors) {
-    if (armor.color != target_color) continue;
-
-    const cv::Scalar color =
-      armor.color == auto_aim::red ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0);
-    draw_polygon(image, armor.points, color);
-    cv::putText(
-      image,
-      std::string(auto_aim::ARMOR_NAMES[armor.name]) + cv::format(" %.2f", armor.confidence),
-      armor.box.tl(), cv::FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv::LINE_AA);
+    draw_cross(image, armor.center, {0, 255, 255});
   }
+
+  if (anti_spin_hit_armor) {
+    draw_polygon(image, *anti_spin_hit_armor, {0, 0, 255});
+  } else if (locked_armor) {
+    draw_cross(image, locked_armor->center, {0, 0, 255});
+  }
+}
+
+std::optional<std::vector<cv::Point2f>> detail::anti_spin_hit_armor(
+  const auto_aim::Plan & plan, auto_aim::ArmorType armor_type,
+  const auto_aim::Solver & solver)
+{
+  if (!plan.anti_spin_active || !plan.debug_valid || !plan.debug_xyza.allFinite()) {
+    return std::nullopt;
+  }
+
+  auto points = solver.reproject_armor(
+    plan.debug_xyza.head<3>(), plan.debug_xyza[3], plan.debug_armor_pitch, armor_type);
+  if (points.size() != 4) return std::nullopt;
+  return points;
 }
 
 class FoxgloveVisualizer::Impl
@@ -460,7 +484,6 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
   const auto log_time = impl_->log_time(frame.timestamp);
   const auto & serial_receive = frame.gimbal_state;
   const auto & serial_send = frame.gimbal_command;
-  const auto & target_color = frame.target_color;
   const auto & target_data = frame.tracker;
   cv::Mat image = frame.image.clone();
 
@@ -482,13 +505,18 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
     log_time);
 
   const auto * locked_armor =
-    target_data.locked_armor && target_data.locked_armor->color == target_color ?
-    &target_data.locked_armor.value() : nullptr;
-  if (locked_armor) draw_polygon(image, locked_armor->points, {0, 0, 255});
-  for (const auto & polygon : target_data.predicted_image_armors) draw_polygon(image, polygon, {255, 0, 0});
+    target_data.locked_armor ? &target_data.locked_armor.value() : nullptr;
+  const auto * anti_spin_hit_armor =
+    frame.anti_spin_hit_armor ? &frame.anti_spin_hit_armor.value() : nullptr;
+  for (const auto & polygon : target_data.predicted_image_armors) {
+    draw_polygon(image, polygon, {255, 0, 0});
+  }
+  detail::draw_aim_overlay(
+    image, frame.detections.armors, locked_armor, anti_spin_hit_armor);
 
   cv::Mat detection_image = frame.image.clone();
-  detail::draw_detected_armors(detection_image, frame.detections.armors, target_color);
+  detail::draw_aim_overlay(
+    detection_image, frame.detections.armors, locked_armor, anti_spin_hit_armor);
 
   if (impl_->image_raw) {
     impl_->image_raw->log(

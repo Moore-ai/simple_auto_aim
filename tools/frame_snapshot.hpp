@@ -2,6 +2,7 @@
 #define TOOLS__FRAME_SNAPSHOT_HPP
 
 #include <chrono>
+#include <optional>
 #include <utility>
 
 #include <Eigen/Geometry>
@@ -26,14 +27,13 @@ struct FrameSnapshot
   io::GimbalState gimbal_state{};
   io::GimbalCommand gimbal_command{};
   auto_aim::DetectionResult detections;
-  auto_aim::Color target_color = auto_aim::Color::blue;
   auto_aim::TrackerDebugData tracker;
+  std::optional<std::vector<cv::Point2f>> anti_spin_hit_armor;
 
   static FrameSnapshot capture(
     Timestamp timestamp, const cv::Mat & image, const Eigen::Quaterniond & gimbal_orientation,
     const io::GimbalState & gimbal_state, const io::GimbalCommand & gimbal_command,
-    auto_aim::DetectionResult detections, auto_aim::Color target_color,
-    const auto_aim::TrackerDebugData & tracker)
+    auto_aim::DetectionResult detections, const auto_aim::TrackerDebugData & tracker)
   {
     return {
       timestamp,
@@ -42,7 +42,6 @@ struct FrameSnapshot
       gimbal_state,
       gimbal_command,
       std::move(detections),
-      target_color,
       tracker};
   }
 };

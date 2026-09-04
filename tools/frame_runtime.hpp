@@ -45,11 +45,12 @@ public:
     const auto orientation = gimbal_.q(timestamp);
     solver_.set_R_gimbal2world(orientation);
     auto detections = detector_.detect(image, -1);
-    auto targets = tracker_.track(detections, timestamp);
+    auto tracking_detections = detections;
+    auto targets = tracker_.track(tracking_detections, timestamp);
 
     result.snapshot = FrameSnapshot::capture(
       timestamp, image, orientation, gimbal_state, gimbal_.command(), std::move(detections),
-      tracker_.enemy_color(), tracker_.debug_data());
+      tracker_.debug_data());
     result.targets = std::move(targets);
     return true;
   }

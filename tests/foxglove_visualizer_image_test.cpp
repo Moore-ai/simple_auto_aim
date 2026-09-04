@@ -28,10 +28,54 @@ int main()
   std::list<auto_aim::Armor> armors = {red_armor, blue_armor};
 
   cv::Mat detection_image = cv::Mat::zeros(40, 90, CV_8UC3);
-  tools::detail::draw_detected_armors(detection_image, armors, auto_aim::red);
-  const auto channel_sum = cv::sum(detection_image);
-  assert(channel_sum[2] > 0.0);
-  assert(channel_sum[0] == 0.0);
+  tools::detail::draw_aim_overlay(detection_image, armors, nullptr, nullptr);
+  const auto detected_center = detection_image.at<cv::Vec3b>(20, 20);
+  assert(detected_center[0] == 0);
+  assert(detected_center[1] > 0);
+  assert(detected_center[2] > 0);
+  const auto other_color_center = detection_image.at<cv::Vec3b>(20, 70);
+  assert(other_color_center[1] > 0 && other_color_center[2] > 0);
+  assert(detection_image.at<cv::Vec3b>(30, 20) == cv::Vec3b(0, 0, 0));
+
+  const std::vector<cv::Point2f> second_red_points = {{60, 10}, {80, 10}, {80, 30}, {60, 30}};
+  auto second_red_armor = auto_aim::Armor(1, 0.8F, {60, 10, 20, 20}, second_red_points);
+  std::list<auto_aim::Armor> red_armors = {red_armor, second_red_armor};
+  cv::Mat tracking_image = cv::Mat::zeros(80, 100, CV_8UC3);
+  tools::detail::draw_aim_overlay(
+    tracking_image, red_armors, &red_armors.front(), nullptr);
+  const auto locked_center = tracking_image.at<cv::Vec3b>(20, 20);
+  const auto detected_only_center = tracking_image.at<cv::Vec3b>(20, 70);
+  assert(locked_center[2] > 0 && locked_center[1] == 0);
+  assert(detected_only_center[1] > 0 && detected_only_center[2] > 0);
+
+  const std::vector<cv::Point2f> predicted_hit = {{35, 45}, {65, 45}, {65, 65}, {35, 65}};
+  cv::Mat anti_spin_image = cv::Mat::zeros(80, 100, CV_8UC3);
+  tools::detail::draw_aim_overlay(
+    anti_spin_image, red_armors, &red_armors.front(), &predicted_hit);
+  const auto anti_spin_locked_center = anti_spin_image.at<cv::Vec3b>(20, 20);
+  const auto predicted_hit_edge = anti_spin_image.at<cv::Vec3b>(45, 50);
+  const auto predicted_hit_center = anti_spin_image.at<cv::Vec3b>(55, 50);
+  assert(anti_spin_locked_center[1] > 0 && anti_spin_locked_center[2] > 0);
+  assert(predicted_hit_edge[2] > 0 && predicted_hit_edge[1] == 0);
+  assert(predicted_hit_center == cv::Vec3b(0, 0, 0));
+
+  auto_aim::Solver projection_solver("configs/standard.yaml");
+  auto_aim::Plan inactive_plan;
+  inactive_plan.debug_valid = true;
+  inactive_plan.debug_xyza = {2.0, 0.0, 0.0, 0.2};
+  assert(!tools::detail::anti_spin_hit_armor(
+            inactive_plan, auto_aim::ArmorType::small, projection_solver)
+            .has_value());
+
+  auto active_plan = inactive_plan;
+  active_plan.anti_spin_active = true;
+  const auto small_hit = tools::detail::anti_spin_hit_armor(
+    active_plan, auto_aim::ArmorType::small, projection_solver);
+  const auto big_hit = tools::detail::anti_spin_hit_armor(
+    active_plan, auto_aim::ArmorType::big, projection_solver);
+  assert(small_hit && small_hit->size() == 4);
+  assert(big_hit && big_hit->size() == 4);
+  assert(cv::norm((*big_hit)[0] - (*big_hit)[1]) > cv::norm((*small_hit)[0] - (*small_hit)[1]));
 
   const double yaw = 0.3;
   const double pitch = CV_PI / 12.0;

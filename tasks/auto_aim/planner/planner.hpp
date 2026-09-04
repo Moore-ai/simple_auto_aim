@@ -30,8 +30,10 @@ struct Plan
   float pitch_vel{0.0F};
   float pitch_acc{0.0F};
   Eigen::Vector4d debug_xyza{Eigen::Vector4d::Zero()};
+  double debug_armor_pitch{0.0};
   double fly_time{0.0};
   bool debug_valid{false};
+  bool anti_spin_active{false};
 };
 
 class Planner
