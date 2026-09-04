@@ -198,6 +198,9 @@ Plan Planner::plan(Target target, double bullet_speed)
     }
   }
   target.predict(fly_time);
+  const auto target_state = target.state();
+  const auto target_center_distance =
+    std::hypot(target_state.center_x(), target_state.center_y());
   auto fire_target = target;
   const auto anti_spin_target_converged = !anti_spin || fire_target.convergened();
   const auto selected_armor =
@@ -290,6 +293,7 @@ Plan Planner::plan(Target target, double bullet_speed)
   plan.pitch = pitch_solver_->work->x(0, HALF_HORIZON);
   plan.pitch_vel = pitch_solver_->work->x(1, HALF_HORIZON);
   plan.pitch_acc = pitch_solver_->work->u(0, HALF_HORIZON);
+  plan.distance = std::isfinite(target_center_distance) ? target_center_distance : -1.0;
 
   auto shoot_offset_ = 2;
   fire_target.predict(DT * shoot_offset_);

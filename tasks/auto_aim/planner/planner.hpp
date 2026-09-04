@@ -29,6 +29,7 @@ struct Plan
   float pitch{0.0F};
   float pitch_vel{0.0F};
   float pitch_acc{0.0F};
+  float distance{-1.0F};
   Eigen::Vector4d debug_xyza{Eigen::Vector4d::Zero()};
   double debug_armor_pitch{0.0};
   double fly_time{0.0};

@@ -66,6 +66,7 @@ int main()
   assert(near(low_plan.debug_xyza.x(), 9.0));
   assert(near(low_plan.debug_xyza.y(), 0.0));
   assert(near(low_plan.debug_xyza.z(), 0.0));
+  assert(near(low_plan.distance, 10.0));
 
   auto phase_shifted_target = target;
   phase_shifted_target.predict(0.25);
@@ -146,6 +147,9 @@ int main()
   }
   std::filesystem::remove(invalid_config);
   assert(rejected_multiple_heights);
+
+  const auto idle_plan = passing_planner.plan(std::nullopt, bullet_speed);
+  assert(near(idle_plan.distance, -1.0));
 
   return 0;
 }

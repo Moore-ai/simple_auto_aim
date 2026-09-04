@@ -1,5 +1,4 @@
 #include <chrono>
-#include <cmath>
 #include <cstdint>
 #include <opencv2/opencv.hpp>
 #include <optional>
@@ -60,9 +59,7 @@ int main(int argc, char * argv[])
         foxglove.update_plan(target_generation, plan);
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-          plan.pitch_acc,
-          plan.debug_valid ? static_cast<float>(std::hypot(plan.debug_xyza.x(), plan.debug_xyza.y()))
-                           : 0.0F);
+          plan.pitch_acc, plan.distance);
 
         std::this_thread::sleep_for(10ms);
       } else {
