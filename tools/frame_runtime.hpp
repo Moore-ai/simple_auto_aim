@@ -1,6 +1,7 @@
 #ifndef TOOLS__FRAME_RUNTIME_HPP
 #define TOOLS__FRAME_RUNTIME_HPP
 
+#include <cstdint>
 #include <list>
 #include <utility>
 
@@ -47,10 +48,14 @@ public:
     auto detections = detector_.detect(image, -1);
     auto tracking_detections = detections;
     auto targets = tracker_.track(tracking_detections, timestamp);
+    const auto has_target = !targets.empty();
+    if (has_target && !had_target_) ++target_generation_;
+    had_target_ = has_target;
 
     result.snapshot = FrameSnapshot::capture(
       timestamp, image, orientation, gimbal_state, gimbal_.command(), std::move(detections),
       tracker_.debug_data());
+    result.snapshot.target_generation = target_generation_;
     result.targets = std::move(targets);
     return true;
   }
@@ -61,6 +66,8 @@ private:
   auto_aim::Solver & solver_;
   auto_aim::Tracker & tracker_;
   DetectionBackend & detector_;
+  std::uint64_t target_generation_ = 0;
+  bool had_target_ = false;
 };
 
 }  // namespace tools

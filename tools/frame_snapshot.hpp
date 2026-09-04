@@ -2,7 +2,7 @@
 #define TOOLS__FRAME_SNAPSHOT_HPP
 
 #include <chrono>
-#include <optional>
+#include <cstdint>
 #include <utility>
 
 #include <Eigen/Geometry>
@@ -28,7 +28,7 @@ struct FrameSnapshot
   io::GimbalCommand gimbal_command{};
   auto_aim::DetectionResult detections;
   auto_aim::TrackerDebugData tracker;
-  std::optional<std::vector<cv::Point2f>> anti_spin_hit_armor;
+  std::uint64_t target_generation = 0;
 
   static FrameSnapshot capture(
     Timestamp timestamp, const cv::Mat & image, const Eigen::Quaterniond & gimbal_orientation,

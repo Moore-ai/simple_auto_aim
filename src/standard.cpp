@@ -1,8 +1,10 @@
 #include <chrono>
 #include <cmath>
-#include <mutex>
+#include <cstdint>
 #include <opencv2/opencv.hpp>
+#include <optional>
 #include <thread>
+#include <utility>
 
 #include "io/camera.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
@@ -31,35 +33,31 @@ int main(int argc, char * argv[])
 
   tools::Exiter exiter;
   tools::Recorder recorder;
-  tools::FoxgloveVisualizer foxglove;
 
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
 
   auto_aim::Solver solver(config_path);
+  tools::FoxgloveVisualizer foxglove(solver);
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Planner planner(config_path);
 
   auto detector = tools::create_detector(config_path);
   tools::FrameRuntime runtime(camera, gimbal, solver, tracker, *detector);
 
-  tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
-  target_queue.push(std::nullopt);
-  std::mutex latest_plan_mutex;
-  auto_aim::Plan latest_plan;
+  using PlanRequest = std::pair<std::uint64_t, std::optional<auto_aim::Target>>;
+  tools::ThreadSafeQueue<PlanRequest, true> target_queue(1);
+  target_queue.push({0, std::nullopt});
 
   std::atomic<bool> quit = false;
 
   auto plan_thread = std::thread([&]() {
     while (!quit) {
       if (!target_queue.empty()) {
-        auto target = target_queue.front();
+        const auto [target_generation, target] = target_queue.front();
         auto gs = gimbal.state();
         auto plan = planner.plan(target, gs.bullet_speed);
-        {
-          std::lock_guard<std::mutex> lock(latest_plan_mutex);
-          latest_plan = plan;
-        }
+        foxglove.update_plan(target_generation, plan);
         gimbal.send(
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
           plan.pitch_acc,
@@ -77,18 +75,9 @@ int main(int argc, char * argv[])
     tools::ProcessedFrame processed;
     if (!runtime.next(processed)) break;
 
-    target_queue.push(
-      processed.targets.empty() ? std::nullopt : std::optional<auto_aim::Target>(processed.targets.front()));
-
-    auto_aim::Plan visualization_plan;
-    {
-      std::lock_guard<std::mutex> lock(latest_plan_mutex);
-      visualization_plan = latest_plan;
-    }
-    if (!processed.targets.empty()) {
-      processed.snapshot.anti_spin_hit_armor = tools::detail::anti_spin_hit_armor(
-        visualization_plan, processed.snapshot.tracker.armor_type, solver);
-    }
+    const auto target = processed.targets.empty() ? std::nullopt :
+                                                    std::optional(processed.targets.front());
+    target_queue.push({processed.snapshot.target_generation, target});
 
     recorder.record(processed.snapshot);
     foxglove.publish(processed.snapshot);

@@ -1,6 +1,7 @@
 #ifndef TOOLS__FOXGLOVE_VISUALIZER_HPP
 #define TOOLS__FOXGLOVE_VISUALIZER_HPP
 
+#include <cstdint>
 #include <list>
 #include <memory>
 #include <optional>
@@ -31,7 +32,8 @@ void draw_aim_overlay(
   const auto_aim::Armor * locked_armor,
   const std::vector<cv::Point2f> * anti_spin_hit_armor);
 std::optional<std::vector<cv::Point2f>> anti_spin_hit_armor(
-  const auto_aim::Plan & plan, auto_aim::ArmorType armor_type,
+  const auto_aim::Plan & plan, std::uint64_t plan_target_generation,
+  std::uint64_t current_target_generation, auto_aim::ArmorType armor_type,
   const auto_aim::Solver & solver);
 FoxgloveTargetTopic target_topic(const auto_aim::TrackerDebugData & target_data);
 const char * target_topic_name(FoxgloveTargetTopic topic);
@@ -45,12 +47,13 @@ nlohmann::json target_values(const auto_aim::TrackerDebugData & target_data);
 class FoxgloveVisualizer
 {
 public:
-  FoxgloveVisualizer();
+  explicit FoxgloveVisualizer(auto_aim::Solver & solver);
   ~FoxgloveVisualizer();
 
   FoxgloveVisualizer(const FoxgloveVisualizer &) = delete;
   FoxgloveVisualizer & operator=(const FoxgloveVisualizer &) = delete;
 
+  void update_plan(std::uint64_t target_generation, const auto_aim::Plan & plan);
   void publish(const FrameSnapshot & frame);
 
 private:

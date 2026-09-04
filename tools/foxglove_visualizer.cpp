@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <utility>
@@ -382,10 +383,13 @@ void detail::draw_aim_overlay(
 }
 
 std::optional<std::vector<cv::Point2f>> detail::anti_spin_hit_armor(
-  const auto_aim::Plan & plan, auto_aim::ArmorType armor_type,
+  const auto_aim::Plan & plan, std::uint64_t plan_target_generation,
+  std::uint64_t current_target_generation, auto_aim::ArmorType armor_type,
   const auto_aim::Solver & solver)
 {
-  if (!plan.anti_spin_active || !plan.debug_valid || !plan.debug_xyza.allFinite()) {
+  if (
+    plan_target_generation != current_target_generation || !plan.anti_spin_active ||
+    !plan.debug_valid || !plan.debug_xyza.allFinite()) {
     return std::nullopt;
   }
 
@@ -398,6 +402,11 @@ std::optional<std::vector<cv::Point2f>> detail::anti_spin_hit_armor(
 class FoxgloveVisualizer::Impl
 {
 public:
+  explicit Impl(auto_aim::Solver & solver) : solver{solver} {}
+
+  auto_aim::Solver & solver;
+  std::mutex plan_mutex;
+  std::optional<std::pair<std::uint64_t, auto_aim::Plan>> latest_plan;
   std::optional<foxglove::WebSocketServer> server;
   std::optional<foxglove::RawChannel> serial_receive;
   std::optional<foxglove::RawChannel> serial_send;
@@ -423,7 +432,8 @@ public:
   }
 };
 
-FoxgloveVisualizer::FoxgloveVisualizer() : impl_(std::make_unique<Impl>())
+FoxgloveVisualizer::FoxgloveVisualizer(auto_aim::Solver & solver)
+: impl_(std::make_unique<Impl>(solver))
 {
   foxglove::WebSocketServerOptions options;
   options.host = "0.0.0.0";
@@ -477,6 +487,13 @@ FoxgloveVisualizer::~FoxgloveVisualizer()
   if (impl_->server) impl_->server->stop();
 }
 
+void FoxgloveVisualizer::update_plan(
+  std::uint64_t target_generation, const auto_aim::Plan & plan)
+{
+  std::lock_guard<std::mutex> lock(impl_->plan_mutex);
+  impl_->latest_plan = std::make_pair(target_generation, plan);
+}
+
 void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
 {
   if (!impl_->server) return;
@@ -506,8 +523,18 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
 
   const auto * locked_armor =
     target_data.locked_armor ? &target_data.locked_armor.value() : nullptr;
-  const auto * anti_spin_hit_armor =
-    frame.anti_spin_hit_armor ? &frame.anti_spin_hit_armor.value() : nullptr;
+  std::optional<std::pair<std::uint64_t, auto_aim::Plan>> latest_plan;
+  {
+    std::lock_guard<std::mutex> lock(impl_->plan_mutex);
+    latest_plan = impl_->latest_plan;
+  }
+  std::optional<std::vector<cv::Point2f>> hit_armor;
+  if (latest_plan) {
+    hit_armor = detail::anti_spin_hit_armor(
+      latest_plan->second, latest_plan->first, frame.target_generation, target_data.armor_type,
+      impl_->solver);
+  }
+  const auto * anti_spin_hit_armor = hit_armor ? &hit_armor.value() : nullptr;
   for (const auto & polygon : target_data.predicted_image_armors) {
     draw_polygon(image, polygon, {255, 0, 0});
   }

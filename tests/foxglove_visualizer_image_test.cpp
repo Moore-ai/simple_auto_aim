@@ -64,15 +64,18 @@ int main()
   inactive_plan.debug_valid = true;
   inactive_plan.debug_xyza = {2.0, 0.0, 0.0, 0.2};
   assert(!tools::detail::anti_spin_hit_armor(
-            inactive_plan, auto_aim::ArmorType::small, projection_solver)
+            inactive_plan, 1, 1, auto_aim::ArmorType::small, projection_solver)
             .has_value());
 
   auto active_plan = inactive_plan;
   active_plan.anti_spin_active = true;
+  assert(!tools::detail::anti_spin_hit_armor(
+            active_plan, 1, 2, auto_aim::ArmorType::small, projection_solver)
+            .has_value());
   const auto small_hit = tools::detail::anti_spin_hit_armor(
-    active_plan, auto_aim::ArmorType::small, projection_solver);
+    active_plan, 2, 2, auto_aim::ArmorType::small, projection_solver);
   const auto big_hit = tools::detail::anti_spin_hit_armor(
-    active_plan, auto_aim::ArmorType::big, projection_solver);
+    active_plan, 2, 2, auto_aim::ArmorType::big, projection_solver);
   assert(small_hit && small_hit->size() == 4);
   assert(big_hit && big_hit->size() == 4);
   assert(cv::norm((*big_hit)[0] - (*big_hit)[1]) > cv::norm((*small_hit)[0] - (*small_hit)[1]));
