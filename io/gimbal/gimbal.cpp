@@ -149,13 +149,13 @@ void Gimbal::read_thread()
       InfantryFeedback feedback;
       if (parse_infantry_feedback_packet(virtual_feedback_packet_.data(), feedback)) {
         const auto t = std::chrono::steady_clock::now();
-        queue_.push({infantry_feedback_quaternion(feedback.roll, feedback.pitch, feedback.yaw), t});
+        queue_.push({infantry_feedback_quaternion(feedback), t});
 
         std::lock_guard<std::mutex> lock(mutex_);
         state_.mode = feedback.mode;
         state_.yaw = feedback.yaw;
         state_.yaw_vel = 0;
-        state_.pitch = -feedback.pitch;
+        state_.pitch = feedback.pitch;
         state_.pitch_vel = 0;
         state_.roll = feedback.roll;
         state_.bullet_speed = 0;
@@ -192,7 +192,7 @@ void Gimbal::read_thread()
     std::array<uint8_t, kInfantryFeedbackPacketSize> raw_packet{};
     while (rx_parser_.pop(feedback, &raw_packet)) {
       const auto t = std::chrono::steady_clock::now();
-      const auto q = infantry_feedback_quaternion(feedback.roll, feedback.pitch, feedback.yaw);
+      const auto q = infantry_feedback_quaternion(feedback);
       queue_.push({q, t});
 
       std::lock_guard<std::mutex> lock(mutex_);
@@ -201,7 +201,7 @@ void Gimbal::read_thread()
       state_.mode = feedback.mode;
       state_.yaw = feedback.yaw;
       state_.yaw_vel = 0;
-      state_.pitch = -feedback.pitch;
+      state_.pitch = feedback.pitch;
       state_.pitch_vel = 0;
       state_.roll = feedback.roll;
       state_.bullet_speed = 0;

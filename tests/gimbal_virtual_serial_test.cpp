@@ -31,7 +31,7 @@ int main()
   assert(configured_state.mode == 1);
   assert(configured_state.roll == 0.1F);
   assert(configured_state.pitch == -0.2F);
-  assert(configured_state.yaw == -0.3F);
+  assert(configured_state.yaw == 0.3F);
 
   gimbal.send(true, false, 0.3F, 0.1F, 0.0F, -0.2F, 0.0F, 0.0F, 5.0F);
   const auto command = gimbal.command_with_packet().command;
@@ -43,7 +43,7 @@ int main()
   assert(state.mode == 1);
   assert(state.roll == 0.1F);
   assert(state.pitch == -0.2F);
-  assert(state.yaw == -0.3F);
+  assert(state.yaw == 0.3F);
 
   std::filesystem::remove(path);
   return 0;

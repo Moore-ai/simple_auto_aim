@@ -52,12 +52,17 @@ struct InfantryFeedback
   float yaw;
 };
 
-inline Eigen::Quaterniond infantry_feedback_quaternion(float roll, float pitch, float yaw)
+inline float finite_or_zero(float value) { return std::isfinite(value) ? value : 0.0F; }
+
+inline float infantry_yaw(float value) { return -value; }
+inline float infantry_pitch(float value) { return -value; }
+
+inline Eigen::Quaterniond infantry_feedback_quaternion(const InfantryFeedback & feedback)
 {
   return Eigen::Quaterniond(
-           Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
-           Eigen::AngleAxisd(-pitch, Eigen::Vector3d::UnitY()) *
-           Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX()))
+           Eigen::AngleAxisd(feedback.yaw, Eigen::Vector3d::UnitZ()) *
+           Eigen::AngleAxisd(feedback.pitch, Eigen::Vector3d::UnitY()) *
+           Eigen::AngleAxisd(feedback.roll, Eigen::Vector3d::UnitX()))
     .normalized();
 }
 
@@ -77,14 +82,13 @@ inline std::array<uint8_t, kInfantryCommandPacketSize> make_infantry_command_pac
 {
   InfantryCommandPacket command;
   command.fire = control && fire ? 1 : 0;
-  // 本项目内部 pitch 向上为负；下位机绝对角度约定向上为正。
-  command.pitch = std::isfinite(pitch_sp) ? -pitch_sp : 0.0F;
-  command.yaw = std::isfinite(yaw_sp) ? yaw_sp : 0.0F;
-  command.distance = std::isfinite(distance) ? distance : 0.0F;
-  command.pitch_vel = std::isfinite(pitch_vel_sp) ? -pitch_vel_sp : 0.0F;
-  command.yaw_vel = std::isfinite(yaw_vel_sp) ? yaw_vel_sp : 0.0F;
-  command.pitch_acc = std::isfinite(pitch_acc_sp) ? -pitch_acc_sp : 0.0F;
-  command.yaw_acc = std::isfinite(yaw_acc_sp) ? yaw_acc_sp : 0.0F;
+  command.pitch = infantry_pitch(finite_or_zero(pitch_sp));
+  command.yaw = infantry_yaw(finite_or_zero(yaw_sp));
+  command.distance = finite_or_zero(distance);
+  command.pitch_vel = infantry_pitch(finite_or_zero(pitch_vel_sp));
+  command.yaw_vel = infantry_yaw(finite_or_zero(yaw_vel_sp));
+  command.pitch_acc = infantry_pitch(finite_or_zero(pitch_acc_sp));
+  command.yaw_acc = infantry_yaw(finite_or_zero(yaw_acc_sp));
   command.crc8 = infantry_crc8(
     reinterpret_cast<const uint8_t *>(&command), offsetof(InfantryCommandPacket, crc8));
 
@@ -104,8 +108,8 @@ inline bool parse_infantry_feedback_packet(const uint8_t * packet, InfantryFeedb
 
   feedback.mode = raw.mode;
   feedback.roll = raw.roll;
-  feedback.pitch = raw.pitch;
-  feedback.yaw = raw.yaw;
+  feedback.pitch = infantry_pitch(raw.pitch);
+  feedback.yaw = infantry_yaw(raw.yaw);
   return true;
 }
 

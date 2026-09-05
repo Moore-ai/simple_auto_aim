@@ -245,8 +245,8 @@ int main()
   const auto command_packet_values = tools::detail::command_packet_values(command_packet);
   assert(command_packet_values.at("fire") == 1);
   assert(std::abs(command_packet_values.at("pitch").get<float>() - 0.5F) < 1e-6F);
-  assert(std::abs(command_packet_values.at("yaw").get<float>() - 0.2F) < 1e-6F);
-  assert(std::abs(command_packet_values.at("yaw_acc").get<float>() - 0.8F) < 1e-6F);
+  assert(std::abs(command_packet_values.at("yaw").get<float>() + 0.2F) < 1e-6F);
+  assert(std::abs(command_packet_values.at("yaw_acc").get<float>() + 0.8F) < 1e-6F);
   assert(!command_packet_values.contains("crc8"));
   const auto feedback_packet = io::make_infantry_feedback_packet(1, 0.1F, 0.2F, -0.3F);
   const auto feedback_packet_values = tools::detail::feedback_packet_values(feedback_packet);
