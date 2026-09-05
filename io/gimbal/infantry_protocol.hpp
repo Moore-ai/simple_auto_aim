@@ -72,14 +72,14 @@ inline uint8_t infantry_crc8(const uint8_t * data, size_t size)
 }
 
 inline std::array<uint8_t, kInfantryCommandPacketSize> make_infantry_command_packet(
-  bool control, bool fire, float pitch_abs_sp, float yaw_abs_sp, float distance, float pitch_vel_sp,
+  bool control, bool fire, float pitch_sp, float yaw_sp, float distance, float pitch_vel_sp,
   float yaw_vel_sp, float pitch_acc_sp, float yaw_acc_sp)
 {
   InfantryCommandPacket command;
   command.fire = control && fire ? 1 : 0;
   // 本项目内部 pitch 向上为负；下位机绝对角度约定向上为正。
-  command.pitch_abs = std::isfinite(pitch_abs_sp) ? -pitch_abs_sp : 0.0F;
-  command.yaw_abs = std::isfinite(yaw_abs_sp) ? yaw_abs_sp : 0.0F;
+  command.pitch = std::isfinite(pitch_sp) ? -pitch_sp : 0.0F;
+  command.yaw = std::isfinite(yaw_sp) ? yaw_sp : 0.0F;
   command.distance = std::isfinite(distance) ? distance : 0.0F;
   command.pitch_vel = std::isfinite(pitch_vel_sp) ? -pitch_vel_sp : 0.0F;
   command.yaw_vel = std::isfinite(yaw_vel_sp) ? yaw_vel_sp : 0.0F;

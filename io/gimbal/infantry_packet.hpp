@@ -12,8 +12,8 @@ struct __attribute__((packed)) InfantryCommandPacket
 {
   uint8_t start = 0xFF;
   uint8_t fire = 0;
-  float pitch_abs = 0;
-  float yaw_abs = 0;
+  float pitch = 0;
+  float yaw = 0;
   float distance = 0;
   float pitch_vel = 0;
   float yaw_vel = 0;
@@ -42,8 +42,8 @@ static_assert(std::is_standard_layout_v<InfantryCommandPacket>);
 static_assert(std::is_standard_layout_v<InfantryFeedbackPacket>);
 static_assert(kInfantryCommandPacketSize == 32);
 static_assert(kInfantryFeedbackPacketSize == 24);
-static_assert(offsetof(InfantryCommandPacket, pitch_abs) == 2);
-static_assert(offsetof(InfantryCommandPacket, yaw_abs) == 6);
+static_assert(offsetof(InfantryCommandPacket, pitch) == 2);
+static_assert(offsetof(InfantryCommandPacket, yaw) == 6);
 static_assert(offsetof(InfantryFeedbackPacket, roll) == 2);
 static_assert(offsetof(InfantryFeedbackPacket, crc8) == 22);
 }  // namespace io

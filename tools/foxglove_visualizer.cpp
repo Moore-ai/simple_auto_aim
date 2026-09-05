@@ -238,19 +238,18 @@ nlohmann::json detail::command_packet_values(
 {
   io::InfantryCommandPacket packet;
   std::memcpy(&packet, bytes.data(), bytes.size());
-  const auto pitch_abs = packet.pitch_abs;
-  const auto yaw_abs = packet.yaw_abs;
+  const auto pitch = packet.pitch;
+  const auto yaw = packet.yaw;
   const auto distance = packet.distance;
   const auto pitch_vel = packet.pitch_vel;
   const auto yaw_vel = packet.yaw_vel;
   const auto pitch_acc = packet.pitch_acc;
   const auto yaw_acc = packet.yaw_acc;
   return Json{
-    {"fire", packet.fire},          {"pitch_abs", pitch_abs},
-    {"yaw_abs", yaw_abs},           {"distance", distance},
+    {"fire", packet.fire},          {"pitch", pitch},
+    {"yaw", yaw},                   {"distance", distance},
     {"pitch_vel", pitch_vel},       {"yaw_vel", yaw_vel},
-    {"pitch_acc", pitch_acc},       {"yaw_acc", yaw_acc},
-    {"crc8", packet.crc8}};
+    {"pitch_acc", pitch_acc},       {"yaw_acc", yaw_acc}};
 }
 
 nlohmann::json detail::feedback_packet_values(
@@ -265,8 +264,7 @@ nlohmann::json detail::feedback_packet_values(
     {"mode", packet.mode},          {"roll", roll},
     {"pitch", pitch},               {"yaw", yaw},
     {"reserved", std::vector<uint8_t>(
-                    packet.reserved, packet.reserved + sizeof(packet.reserved))},
-    {"crc8", packet.crc8}};
+                    packet.reserved, packet.reserved + sizeof(packet.reserved))}};
 }
 
 nlohmann::json detail::angular_error_values(
