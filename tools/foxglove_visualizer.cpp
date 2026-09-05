@@ -1,4 +1,5 @@
 #include "foxglove_visualizer.hpp"
+#include "tools/math_tools.hpp"
 
 #include <Eigen/Geometry>
 #include <array>
@@ -151,6 +152,26 @@ const std::string & angular_acceleration_schema_data()
     .dump();
   return schema;
 }
+
+const std::string & angular_error_schema_data()
+{
+  static const auto schema = Json{
+    {"$schema", "http://json-schema.org/draft-07/schema#"},
+    {"type", "object"},
+    {"properties",
+     {{"yaw_planner_error", {{"type", "number"}, {"description", "yaw_ref - yaw_mpc (rad)"}}},
+      {"pitch_planner_error",
+       {{"type", "number"}, {"description", "pitch_ref - pitch_mpc (rad)"}}},
+      {"yaw_tracking_error",
+       {{"type", "number"}, {"description", "yaw_mpc - yaw_gimbal (rad)"}}},
+      {"pitch_tracking_error",
+       {{"type", "number"}, {"description", "pitch_mpc - pitch_gimbal (rad)"}}}}},
+    {"required", Json::array({
+       "yaw_planner_error", "pitch_planner_error", "yaw_tracking_error", "pitch_tracking_error"})},
+    {"additionalProperties", false}}
+    .dump();
+  return schema;
+}
 }  // namespace
 
 cv::Mat detail::prepare_image_for_publish(const cv::Mat & image)
@@ -210,6 +231,25 @@ foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_angular_accelerati
     reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
   return foxglove::RawChannel::create(
     "/planner/angular_acceleration", "json", std::move(schema));
+}
+
+nlohmann::json detail::angular_error_values(
+  const auto_aim::Plan & plan, const io::GimbalState & gimbal_state)
+{
+  return Json{
+    {"yaw_planner_error", tools::limit_rad(plan.target_yaw - plan.yaw)},
+    {"pitch_planner_error", plan.target_pitch - plan.pitch},
+    {"yaw_tracking_error", tools::limit_rad(plan.yaw - gimbal_state.yaw)},
+    {"pitch_tracking_error", plan.pitch - gimbal_state.pitch}};
+}
+
+foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_angular_error_channel()
+{
+  const auto & schema_data = angular_error_schema_data();
+  foxglove::Schema schema{
+    "simple_auto_aim.AngularError", "jsonschema",
+    reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
+  return foxglove::RawChannel::create("/planner/angular_error", "json", std::move(schema));
 }
 
 Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
@@ -438,6 +478,7 @@ public:
   std::optional<foxglove::RawChannel> serial_receive;
   std::optional<foxglove::RawChannel> serial_send;
   std::optional<foxglove::RawChannel> angular_acceleration;
+  std::optional<foxglove::RawChannel> angular_error;
   std::optional<foxglove::schemas::CompressedImageChannel> image_raw;
   std::optional<foxglove::schemas::CompressedImageChannel> image;
   std::optional<foxglove::schemas::CompressedImageChannel> image_detection;
@@ -480,6 +521,8 @@ FoxgloveVisualizer::FoxgloveVisualizer(auto_aim::Solver & solver)
   create(
     impl_->angular_acceleration, detail::create_angular_acceleration_channel(),
     "/planner/angular_acceleration");
+  create(
+    impl_->angular_error, detail::create_angular_error_channel(), "/planner/angular_error");
   create(impl_->image_raw, foxglove::schemas::CompressedImageChannel::create("/image_raw"),
          "/image_raw");
   create(impl_->image, foxglove::schemas::CompressedImageChannel::create("/image"), "/image");
@@ -560,6 +603,11 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
   {
     std::lock_guard<std::mutex> lock(impl_->plan_mutex);
     latest_plan = impl_->latest_plan;
+  }
+  if (latest_plan && latest_plan->second.control) {
+    log_json(
+      impl_->angular_error,
+      detail::angular_error_values(latest_plan->second, serial_receive), log_time);
   }
   std::optional<std::vector<cv::Point2f>> hit_armor;
   if (latest_plan) {

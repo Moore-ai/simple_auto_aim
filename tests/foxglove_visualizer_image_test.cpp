@@ -214,6 +214,32 @@ int main()
   assert(acceleration_schema_json.at("properties").contains("yaw_acc"));
   assert(acceleration_schema_json.at("properties").contains("pitch_acc"));
 
+  auto plan = auto_aim::Plan{};
+  plan.target_yaw = 0.4F;
+  plan.yaw = 0.1F;
+  plan.target_pitch = -0.2F;
+  plan.pitch = -0.3F;
+  io::GimbalState gimbal_state;
+  gimbal_state.yaw = 0.05F;
+  gimbal_state.pitch = -0.25F;
+  const auto error_values = tools::detail::angular_error_values(plan, gimbal_state);
+  assert(std::abs(error_values.at("yaw_planner_error").get<double>() - 0.3) < 1e-6);
+  assert(std::abs(error_values.at("pitch_planner_error").get<double>() - 0.1) < 1e-6);
+  assert(std::abs(error_values.at("yaw_tracking_error").get<double>() - 0.05) < 1e-6);
+  assert(std::abs(error_values.at("pitch_tracking_error").get<double>() + 0.05) < 1e-6);
+  auto error_channel_result = tools::detail::create_angular_error_channel();
+  assert(error_channel_result.has_value());
+  auto error_channel = std::move(error_channel_result.value());
+  assert(error_channel.topic() == "/planner/angular_error");
+  const auto error_schema = error_channel.schema();
+  assert(error_schema.has_value());
+  assert(error_schema->encoding == "jsonschema");
+  const auto error_schema_json = nlohmann::json::parse(
+    reinterpret_cast<const char *>(error_schema->data),
+    reinterpret_cast<const char *>(error_schema->data) + error_schema->data_len);
+  assert(error_schema_json.at("properties").contains("yaw_planner_error"));
+  assert(error_schema_json.at("properties").contains("pitch_tracking_error"));
+
   auto v2_channel_result =
     tools::detail::create_target_values_channel(tools::detail::FoxgloveTargetTopic::outpost_v2);
   assert(v2_channel_result.has_value());

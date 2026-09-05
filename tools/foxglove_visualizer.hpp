@@ -41,6 +41,9 @@ foxglove::FoxgloveResult<foxglove::RawChannel> create_target_values_channel(
   FoxgloveTargetTopic topic);
 nlohmann::json angular_acceleration_values(const io::GimbalCommand & command);
 foxglove::FoxgloveResult<foxglove::RawChannel> create_angular_acceleration_channel();
+nlohmann::json angular_error_values(
+  const auto_aim::Plan & plan, const io::GimbalState & gimbal_state);
+foxglove::FoxgloveResult<foxglove::RawChannel> create_angular_error_channel();
 foxglove::schemas::SceneUpdate target_scene_update(
   const auto_aim::TrackerDebugData & target_data);
 nlohmann::json target_values(const auto_aim::TrackerDebugData & target_data);
