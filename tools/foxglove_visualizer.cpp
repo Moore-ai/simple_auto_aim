@@ -46,15 +46,12 @@ void draw_polygon(cv::Mat & image, const std::vector<cv::Point2f> & points, cons
   cv::polylines(image, polygon, true, color, 2, cv::LINE_AA);
 }
 
-void draw_cross(cv::Mat & image, const cv::Point2f & center, const cv::Scalar & color)
+void draw_cross(
+  cv::Mat & image, const std::vector<cv::Point2f> & corners, const cv::Scalar & color)
 {
-  constexpr float half_size = 6.0F;
-  cv::line(
-    image, center + cv::Point2f{-half_size, -half_size},
-    center + cv::Point2f{half_size, half_size}, color, 2, cv::LINE_AA);
-  cv::line(
-    image, center + cv::Point2f{-half_size, half_size},
-    center + cv::Point2f{half_size, -half_size}, color, 2, cv::LINE_AA);
+  if (corners.size() != 4) return;
+  cv::line(image, corners[0], corners[2], color, 2, cv::LINE_AA);
+  cv::line(image, corners[1], corners[3], color, 2, cv::LINE_AA);
 }
 
 foxglove::schemas::CompressedImage compressed_image(const cv::Mat & image)
@@ -372,13 +369,13 @@ void detail::draw_aim_overlay(
   const auto_aim::Armor * locked_armor, const std::vector<cv::Point2f> * anti_spin_hit_armor)
 {
   for (const auto & armor : armors) {
-    draw_cross(image, armor.center, {0, 255, 255});
+    draw_cross(image, armor.points, {0, 255, 255});
   }
 
   if (anti_spin_hit_armor) {
     draw_polygon(image, *anti_spin_hit_armor, {0, 0, 255});
   } else if (locked_armor) {
-    draw_cross(image, locked_armor->center, {0, 0, 255});
+    draw_cross(image, locked_armor->points, {0, 0, 255});
   }
 }
 

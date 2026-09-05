@@ -29,6 +29,9 @@ int main()
 
   cv::Mat detection_image = cv::Mat::zeros(40, 90, CV_8UC3);
   tools::detail::draw_aim_overlay(detection_image, armors, nullptr, nullptr);
+  const auto detected_corner = detection_image.at<cv::Vec3b>(10, 10);
+  assert(detected_corner[0] == 0);
+  assert(detected_corner[1] > 0 && detected_corner[2] > 0);
   const auto detected_center = detection_image.at<cv::Vec3b>(20, 20);
   assert(detected_center[0] == 0);
   assert(detected_center[1] > 0);
@@ -43,6 +46,8 @@ int main()
   cv::Mat tracking_image = cv::Mat::zeros(80, 100, CV_8UC3);
   tools::detail::draw_aim_overlay(
     tracking_image, red_armors, &red_armors.front(), nullptr);
+  const auto locked_corner = tracking_image.at<cv::Vec3b>(10, 10);
+  assert(locked_corner[2] > 0 && locked_corner[1] == 0);
   const auto locked_center = tracking_image.at<cv::Vec3b>(20, 20);
   const auto detected_only_center = tracking_image.at<cv::Vec3b>(20, 70);
   assert(locked_center[2] > 0 && locked_center[1] == 0);
