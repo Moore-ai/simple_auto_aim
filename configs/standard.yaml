@@ -198,6 +198,13 @@ camera2gimbal_ypr: [0.0, 0.0, 0.0]
 com_port: "/dev/ttyACM0"           # 串口路径
 baudrate: 115200                   # 串口波特率
 bytesize: 8                        # 数据位宽
+virtual_serial:
+  enable: false                    # 使用虚拟串口，不连接真实云台
+  feedback:                        # 虚拟下位机固定发送的 Infantry 反馈包字段
+    mode: 0                        # 下位机模式字节
+    roll: 0.0                      # 原始反馈 roll（rad）
+    pitch: 0.0                     # 原始反馈 pitch（rad）
+    yaw: 0.0                       # 原始反馈 yaw（rad）
 yaw_kp: 0
 yaw_kd: 0
 pitch_kp: 0

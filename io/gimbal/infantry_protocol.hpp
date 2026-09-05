@@ -61,8 +61,6 @@ inline Eigen::Quaterniond infantry_feedback_quaternion(float roll, float pitch, 
     .normalized();
 }
 
-inline float infantry_feedback_pitch_to_sp(float lower_pitch) { return -lower_pitch; }
-
 inline uint8_t infantry_crc8(const uint8_t * data, size_t size)
 {
   uint8_t crc = 0;

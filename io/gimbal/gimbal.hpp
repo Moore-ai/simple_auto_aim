@@ -75,6 +75,8 @@ public:
 
 private:
   serial::Serial serial_;
+  bool virtual_serial_{false};
+  std::array<uint8_t, kInfantryFeedbackPacketSize> virtual_feedback_packet_{};
 
   std::thread thread_;
   std::atomic<bool> quit_ = false;

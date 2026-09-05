@@ -92,6 +92,10 @@ target_link_libraries(planner_anti_spin_test PRIVATE
   tools
   io)
 
+add_executable(gimbal_virtual_serial_test tests/gimbal_virtual_serial_test.cpp)
+target_compile_options(gimbal_virtual_serial_test PRIVATE -UNDEBUG)
+target_link_libraries(gimbal_virtual_serial_test PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
+
 add_executable(outpost_snapshot_test tests/outpost_snapshot_test.cpp)
 target_link_libraries(outpost_snapshot_test PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
 

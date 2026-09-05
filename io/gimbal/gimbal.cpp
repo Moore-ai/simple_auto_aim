@@ -11,7 +11,10 @@ namespace io
 Gimbal::Gimbal(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
-  auto com_port = tools::read<std::string>(yaml, "com_port");
+  const auto virtual_serial_yaml = yaml["virtual_serial"];
+  virtual_serial_ =
+    virtual_serial_yaml && virtual_serial_yaml["enable"] &&
+    virtual_serial_yaml["enable"].as<bool>();
   const auto baudrate = yaml["baudrate"] ? yaml["baudrate"].as<uint32_t>()
                                           : kInfantryDefaultBaudrate;
   const auto bytesize_node = yaml["bytesize"]
@@ -19,20 +22,41 @@ Gimbal::Gimbal(const std::string & config_path)
                                : (yaml["byte_size"] ? yaml["byte_size"] : yaml["data_bits"]);
   const auto bytesize = bytesize_node ? bytesize_node.as<int>() : kInfantryDefaultBytesize;
 
-  try {
-    if (!is_supported_infantry_bytesize(bytesize)) {
-      throw std::invalid_argument("bytesize must be between 5 and 8");
+  if (virtual_serial_) {
+    const auto feedback_yaml = virtual_serial_yaml["feedback"];
+    auto mode = 0;
+    auto roll = 0.0F;
+    auto pitch = 0.0F;
+    auto yaw = 0.0F;
+    if (feedback_yaml) {
+      if (feedback_yaml["mode"]) mode = feedback_yaml["mode"].as<int>();
+      if (feedback_yaml["roll"]) roll = feedback_yaml["roll"].as<float>();
+      if (feedback_yaml["pitch"]) pitch = feedback_yaml["pitch"].as<float>();
+      if (feedback_yaml["yaw"]) yaw = feedback_yaml["yaw"].as<float>();
     }
-    serial_.setPort(com_port);
-    serial_.setBaudrate(baudrate);
-    serial_.setBytesize(static_cast<serial::bytesize_t>(bytesize));
-    serial::Timeout timeout(serial::Timeout::max(), kInfantryReadTimeoutMs, 0,
-                            kInfantryWriteTimeoutMs, 0);
-    serial_.setTimeout(timeout);
-    serial_.open();
-  } catch (const std::exception & e) {
-    tools::logger()->error("[Gimbal] Failed to open serial: {}", e.what());
-    exit(1);
+    if (mode < 0 || mode > 255) {
+      throw std::invalid_argument("virtual_serial.feedback.mode must be between 0 and 255");
+    }
+    virtual_feedback_packet_ = make_infantry_feedback_packet(
+      static_cast<uint8_t>(mode), roll, pitch, yaw);
+    tools::logger()->info("[Gimbal] Using virtual serial.");
+  } else {
+    const auto com_port = tools::read<std::string>(yaml, "com_port");
+    try {
+      if (!is_supported_infantry_bytesize(bytesize)) {
+        throw std::invalid_argument("bytesize must be between 5 and 8");
+      }
+      serial_.setPort(com_port);
+      serial_.setBaudrate(baudrate);
+      serial_.setBytesize(static_cast<serial::bytesize_t>(bytesize));
+      serial::Timeout timeout(serial::Timeout::max(), kInfantryReadTimeoutMs, 0,
+                              kInfantryWriteTimeoutMs, 0);
+      serial_.setTimeout(timeout);
+      serial_.open();
+    } catch (const std::exception & e) {
+      tools::logger()->error("[Gimbal] Failed to open serial: {}", e.what());
+      exit(1);
+    }
   }
 
   thread_ = std::thread(&Gimbal::read_thread, this);
@@ -45,7 +69,7 @@ Gimbal::~Gimbal()
 {
   quit_ = true;
   if (thread_.joinable()) thread_.join();
-  serial_.close();
+  if (!virtual_serial_) serial_.close();
 }
 
 GimbalState Gimbal::state() const
@@ -108,16 +132,41 @@ void Gimbal::send(
                 distance};
   }
 
-  try {
-    serial_.write(packet.data(), packet.size());
-  } catch (const std::exception & e) {
-    tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
+  if (!virtual_serial_) {
+    try {
+      serial_.write(packet.data(), packet.size());
+    } catch (const std::exception & e) {
+      tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
+    }
   }
 }
 
 void Gimbal::read_thread()
 {
   tools::logger()->info("[Gimbal] read_thread started.");
+  if (virtual_serial_) {
+    while (!quit_) {
+      InfantryFeedback feedback;
+      if (parse_infantry_feedback_packet(virtual_feedback_packet_.data(), feedback)) {
+        const auto t = std::chrono::steady_clock::now();
+        queue_.push({infantry_feedback_quaternion(feedback.roll, feedback.pitch, feedback.yaw), t});
+
+        std::lock_guard<std::mutex> lock(mutex_);
+        state_.mode = feedback.mode;
+        state_.yaw = feedback.yaw;
+        state_.yaw_vel = 0;
+        state_.pitch = -feedback.pitch;
+        state_.pitch_vel = 0;
+        state_.roll = feedback.roll;
+        state_.bullet_speed = 0;
+        state_.bullet_count = 0;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    tools::logger()->info("[Gimbal] read_thread stopped.");
+    return;
+  }
+
   int error_count = 0;
 
   while (!quit_) {
@@ -150,7 +199,7 @@ void Gimbal::read_thread()
       state_.mode = feedback.mode;
       state_.yaw = feedback.yaw;
       state_.yaw_vel = 0;
-      state_.pitch = infantry_feedback_pitch_to_sp(feedback.pitch);
+      state_.pitch = -feedback.pitch;
       state_.pitch_vel = 0;
       state_.roll = feedback.roll;
       state_.bullet_speed = 0;
