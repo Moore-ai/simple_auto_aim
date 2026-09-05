@@ -19,6 +19,7 @@ constexpr uint32_t kInfantryDefaultBaudrate = 115200;
 constexpr int kInfantryDefaultBytesize = 8;
 constexpr uint32_t kInfantryReadTimeoutMs = 2;
 constexpr uint32_t kInfantryWriteTimeoutMs = 5;
+constexpr float kInfantryPi = 3.14159265358979323846F;
 
 // 下位机反馈模式中的目标颜色约定：0=红，1=蓝。
 enum class InfantryEnemyColor : uint8_t
@@ -54,6 +55,16 @@ struct InfantryFeedback
 
 inline float finite_or_zero(float value) { return std::isfinite(value) ? value : 0.0F; }
 
+inline float infantry_angle_to_wire(float radians, bool degrees)
+{
+  return degrees ? radians * 180.0F / kInfantryPi : radians;
+}
+
+inline float infantry_angle_from_wire(float value, bool degrees)
+{
+  return degrees ? value * kInfantryPi / 180.0F : value;
+}
+
 inline float infantry_yaw(float value) { return -value; }
 inline float infantry_pitch(float value) { return -value; }
 
@@ -78,17 +89,23 @@ inline uint8_t infantry_crc8(const uint8_t * data, size_t size)
 
 inline std::array<uint8_t, kInfantryCommandPacketSize> make_infantry_command_packet(
   bool control, bool fire, float pitch_sp, float yaw_sp, float distance, float pitch_vel_sp,
-  float yaw_vel_sp, float pitch_acc_sp, float yaw_acc_sp)
+  float yaw_vel_sp, float pitch_acc_sp, float yaw_acc_sp, bool command_angles_in_degrees = false)
 {
   InfantryCommandPacket command;
   command.fire = control && fire ? 1 : 0;
-  command.pitch = infantry_pitch(finite_or_zero(pitch_sp));
-  command.yaw = infantry_yaw(finite_or_zero(yaw_sp));
+  command.pitch = infantry_pitch(
+    infantry_angle_to_wire(finite_or_zero(pitch_sp), command_angles_in_degrees));
+  command.yaw = infantry_yaw(
+    infantry_angle_to_wire(finite_or_zero(yaw_sp), command_angles_in_degrees));
   command.distance = finite_or_zero(distance);
-  command.pitch_vel = infantry_pitch(finite_or_zero(pitch_vel_sp));
-  command.yaw_vel = infantry_yaw(finite_or_zero(yaw_vel_sp));
-  command.pitch_acc = infantry_pitch(finite_or_zero(pitch_acc_sp));
-  command.yaw_acc = infantry_yaw(finite_or_zero(yaw_acc_sp));
+  command.pitch_vel = infantry_pitch(
+    infantry_angle_to_wire(finite_or_zero(pitch_vel_sp), command_angles_in_degrees));
+  command.yaw_vel = infantry_yaw(
+    infantry_angle_to_wire(finite_or_zero(yaw_vel_sp), command_angles_in_degrees));
+  command.pitch_acc = infantry_pitch(
+    infantry_angle_to_wire(finite_or_zero(pitch_acc_sp), command_angles_in_degrees));
+  command.yaw_acc = infantry_yaw(
+    infantry_angle_to_wire(finite_or_zero(yaw_acc_sp), command_angles_in_degrees));
   command.crc8 = infantry_crc8(
     reinterpret_cast<const uint8_t *>(&command), offsetof(InfantryCommandPacket, crc8));
 
@@ -97,7 +114,8 @@ inline std::array<uint8_t, kInfantryCommandPacketSize> make_infantry_command_pac
   return packet;
 }
 
-inline bool parse_infantry_feedback_packet(const uint8_t * packet, InfantryFeedback & feedback)
+inline bool parse_infantry_feedback_packet(
+  const uint8_t * packet, InfantryFeedback & feedback, bool feedback_angles_in_degrees = false)
 {
   InfantryFeedbackPacket raw;
   std::memcpy(&raw, packet, sizeof(raw));
@@ -107,9 +125,9 @@ inline bool parse_infantry_feedback_packet(const uint8_t * packet, InfantryFeedb
   }
 
   feedback.mode = raw.mode;
-  feedback.roll = raw.roll;
-  feedback.pitch = infantry_pitch(raw.pitch);
-  feedback.yaw = infantry_yaw(raw.yaw);
+  feedback.roll = infantry_angle_from_wire(raw.roll, feedback_angles_in_degrees);
+  feedback.pitch = infantry_pitch(infantry_angle_from_wire(raw.pitch, feedback_angles_in_degrees));
+  feedback.yaw = infantry_yaw(infantry_angle_from_wire(raw.yaw, feedback_angles_in_degrees));
   return true;
 }
 
@@ -148,7 +166,7 @@ public:
 
       std::array<uint8_t, kInfantryFeedbackPacketSize> candidate{};
       for (size_t i = 0; i < candidate.size(); ++i) candidate[i] = buffer_[i];
-      if (parse_infantry_feedback_packet(candidate.data(), feedback)) {
+      if (parse_infantry_feedback_packet(candidate.data(), feedback, feedback_angles_in_degrees_)) {
         if (raw_packet) *raw_packet = candidate;
         for (size_t i = 0; i < candidate.size(); ++i) buffer_.pop_front();
         return true;
@@ -160,8 +178,11 @@ public:
 
   void clear() { buffer_.clear(); }
 
+  void set_feedback_angles_in_degrees(bool enabled) { feedback_angles_in_degrees_ = enabled; }
+
 private:
   std::deque<uint8_t> buffer_;
+  bool feedback_angles_in_degrees_{false};
 };
 }  // namespace io
 

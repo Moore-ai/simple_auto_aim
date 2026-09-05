@@ -74,6 +74,8 @@ public:
 private:
   serial::Serial serial_;
   bool virtual_serial_{false};
+  bool command_angles_in_degrees_{false};
+  bool feedback_angles_in_degrees_{false};
   std::array<uint8_t, kInfantryFeedbackPacketSize> virtual_feedback_packet_{};
   std::array<uint8_t, kInfantryCommandPacketSize> command_packet_{};
   std::array<uint8_t, kInfantryFeedbackPacketSize> feedback_packet_{};
