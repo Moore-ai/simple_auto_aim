@@ -12,14 +12,17 @@ Camera::Camera(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
   if (yaml["image_rotation"]) image_rotation_ = yaml["image_rotation"].as<int>();
+  const auto virtual_camera_yaml = yaml["virtual_camera"];
+  const auto virtual_camera_enabled =
+    virtual_camera_yaml && virtual_camera_yaml["enable"] && virtual_camera_yaml["enable"].as<bool>();
+  if (virtual_camera_enabled && virtual_camera_yaml["image_rotation"]) {
+    image_rotation_ = virtual_camera_yaml["image_rotation"].as<int>();
+  }
   if (
     image_rotation_ != 0 && image_rotation_ != 90 && image_rotation_ != -90 &&
     image_rotation_ != 180 && image_rotation_ != -180) {
     throw std::runtime_error("image_rotation must be 0, 90, -90, 180, or -180");
   }
-  const auto virtual_camera_yaml = yaml["virtual_camera"];
-  const auto virtual_camera_enabled =
-    virtual_camera_yaml && virtual_camera_yaml["enable"] && virtual_camera_yaml["enable"].as<bool>();
   if (virtual_camera_enabled) {
     auto video_path = tools::read<std::string>(virtual_camera_yaml, "video_path");
     virtual_camera_ = std::make_unique<cv::VideoCapture>(video_path);

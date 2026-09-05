@@ -63,6 +63,21 @@ int main()
     if (yellow_pixel[1] <= yellow_pixel[0] + 80 || yellow_pixel[2] <= yellow_pixel[0] + 80) return 6;
   }
 
+  {
+    std::ofstream config(config_path);
+    config << "image_rotation: -90\n"
+           << "virtual_camera:\n"
+           << "  enable: true\n"
+           << "  video_path: " << video_path << '\n'
+           << "  image_rotation: 0\n";
+    config.close();
+
+    io::Camera camera(config_path);
+    cv::Mat img;
+    std::chrono::steady_clock::time_point timestamp;
+    if (!camera.read(img, timestamp) || img.empty() || img.size() != cv::Size(8, 6)) return 7;
+  }
+
   std::filesystem::remove(video_path);
   std::filesystem::remove(config_path);
   return 0;
