@@ -240,6 +240,18 @@ int main()
   assert(error_schema_json.at("properties").contains("yaw_planner_error"));
   assert(error_schema_json.at("properties").contains("pitch_tracking_error"));
 
+  const auto command_packet = io::make_infantry_command_packet(
+    true, true, -0.5F, 0.2F, 3.0F, -0.1F, 0.4F, -0.2F, 0.8F);
+  const auto command_packet_values = tools::detail::command_packet_values(command_packet);
+  assert(command_packet_values.at("fire") == 1);
+  assert(std::abs(command_packet_values.at("pitch_abs").get<float>() - 0.5F) < 1e-6F);
+  assert(std::abs(command_packet_values.at("yaw_acc").get<float>() - 0.8F) < 1e-6F);
+  assert(command_packet_values.at("crc8") == command_packet[offsetof(io::InfantryCommandPacket, crc8)]);
+  const auto feedback_packet = io::make_infantry_feedback_packet(1, 0.1F, 0.2F, -0.3F);
+  const auto feedback_packet_values = tools::detail::feedback_packet_values(feedback_packet);
+  assert(feedback_packet_values.at("mode") == 1);
+  assert(std::abs(feedback_packet_values.at("pitch").get<float>() - 0.2F) < 1e-6F);
+
   auto v2_channel_result =
     tools::detail::create_target_values_channel(tools::detail::FoxgloveTargetTopic::outpost_v2);
   assert(v2_channel_result.has_value());

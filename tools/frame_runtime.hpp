@@ -37,8 +37,8 @@ public:
     FrameSnapshot::Timestamp timestamp;
     if (!camera_.read(image, timestamp)) return false;
 
-    const auto gimbal_state = gimbal_.state();
-    if (const auto color = io::infantry_enemy_color(gimbal_state.mode)) {
+    const auto received = gimbal_.state_with_packet();
+    if (const auto color = io::infantry_enemy_color(received.state.mode)) {
       tracker_.set_enemy_color(
         *color == io::InfantryEnemyColor::red ? auto_aim::Color::red : auto_aim::Color::blue);
     }
@@ -52,9 +52,10 @@ public:
     if (has_target && !had_target_) ++target_generation_;
     had_target_ = has_target;
 
+    const auto sent = gimbal_.command_with_packet();
     result.snapshot = FrameSnapshot::capture(
-      timestamp, image, orientation, gimbal_state, gimbal_.command(), std::move(detections),
-      tracker_.debug_data());
+      timestamp, image, orientation, received.state, sent.command, std::move(detections),
+      tracker_.debug_data(), sent.packet, received.packet);
     result.snapshot.target_generation = target_generation_;
     result.targets = std::move(targets);
     return true;

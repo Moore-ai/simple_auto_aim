@@ -39,6 +39,7 @@ Gimbal::Gimbal(const std::string & config_path)
     }
     virtual_feedback_packet_ = make_infantry_feedback_packet(
       static_cast<uint8_t>(mode), roll, pitch, yaw);
+    feedback_packet_ = virtual_feedback_packet_;
     tools::logger()->info("[Gimbal] Using virtual serial.");
   } else {
     const auto com_port = tools::read<std::string>(yaml, "com_port");
@@ -78,10 +79,16 @@ GimbalState Gimbal::state() const
   return state_;
 }
 
-GimbalCommand Gimbal::command() const
+GimbalStatePacket Gimbal::state_with_packet() const
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  return command_;
+  return {state_, feedback_packet_};
+}
+
+GimbalCommandPacket Gimbal::command_with_packet() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return {command_, command_packet_};
 }
 
 Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
@@ -98,14 +105,6 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
 
     return q_c;
   }
-}
-
-void Gimbal::send(io::VisionToGimbal VisionToGimbal)
-{
-  send(
-    VisionToGimbal.mode != 0, VisionToGimbal.mode == 2, VisionToGimbal.yaw,
-    VisionToGimbal.yaw_vel, VisionToGimbal.yaw_acc, VisionToGimbal.pitch,
-    VisionToGimbal.pitch_vel, VisionToGimbal.pitch_acc, VisionToGimbal.distance);
 }
 
 void Gimbal::send(
@@ -130,6 +129,7 @@ void Gimbal::send(
     std::lock_guard<std::mutex> lock(mutex_);
     command_ = {control, control && fire, yaw, yaw_vel, yaw_acc, pitch, pitch_vel, pitch_acc,
                 distance};
+    command_packet_ = packet;
   }
 
   if (!virtual_serial_) {
@@ -189,13 +189,15 @@ void Gimbal::read_thread()
     rx_parser_.push(buffer, received);
 
     InfantryFeedback feedback;
-    while (rx_parser_.pop(feedback)) {
+    std::array<uint8_t, kInfantryFeedbackPacketSize> raw_packet{};
+    while (rx_parser_.pop(feedback, &raw_packet)) {
       const auto t = std::chrono::steady_clock::now();
       const auto q = infantry_feedback_quaternion(feedback.roll, feedback.pitch, feedback.yaw);
       queue_.push({q, t});
 
       std::lock_guard<std::mutex> lock(mutex_);
 
+      feedback_packet_ = raw_packet;
       state_.mode = feedback.mode;
       state_.yaw = feedback.yaw;
       state_.yaw_vel = 0;

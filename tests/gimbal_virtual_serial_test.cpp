@@ -34,7 +34,7 @@ int main()
   assert(configured_state.yaw == -0.3F);
 
   gimbal.send(true, false, 0.3F, 0.1F, 0.0F, -0.2F, 0.0F, 0.0F, 5.0F);
-  const auto command = gimbal.command();
+  const auto command = gimbal.command_with_packet().command;
   assert(command.control);
   assert(command.distance == 5.0F);
 

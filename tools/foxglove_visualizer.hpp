@@ -1,6 +1,7 @@
 #ifndef TOOLS__FOXGLOVE_VISUALIZER_HPP
 #define TOOLS__FOXGLOVE_VISUALIZER_HPP
 
+#include <array>
 #include <cstdint>
 #include <list>
 #include <memory>
@@ -41,6 +42,10 @@ foxglove::FoxgloveResult<foxglove::RawChannel> create_target_values_channel(
   FoxgloveTargetTopic topic);
 nlohmann::json angular_acceleration_values(const io::GimbalCommand & command);
 foxglove::FoxgloveResult<foxglove::RawChannel> create_angular_acceleration_channel();
+nlohmann::json command_packet_values(
+  const std::array<uint8_t, io::kInfantryCommandPacketSize> & packet);
+nlohmann::json feedback_packet_values(
+  const std::array<uint8_t, io::kInfantryFeedbackPacketSize> & packet);
 nlohmann::json angular_error_values(
   const auto_aim::Plan & plan, const io::GimbalState & gimbal_state);
 foxglove::FoxgloveResult<foxglove::RawChannel> create_angular_error_channel();

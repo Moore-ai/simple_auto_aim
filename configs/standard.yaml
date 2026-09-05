@@ -169,7 +169,7 @@ image_rotation: -90 # 图像旋转角度：-90、90、180（-180 等同 180）
 virtual_camera:
   enable: false
   video_path: assets/demo/demo.avi
-  image_rotation: 0 # 虚拟视频通常已是正确方向；需要时可覆盖全局 image_rotation
+  image_rotation: 180 # 虚拟视频通常已是正确方向；需要时可覆盖全局 image_rotation
 
 auto_exposure:
   enable: false
@@ -236,7 +236,7 @@ armor_selection_hysteresis:
 
 bullet_speed_min: 10             # 弹速下限 (m/s)，低于此值视为无效
 bullet_speed_max: 25             # 弹速上限 (m/s)，高于此值视为无效
-bullet_speed_default: 22         # 弹速默认回退值 (m/s)，弹速无效时使用
+bullet_speed_default: 23.4       # 弹速默认回退值 (m/s)，弹速无效时使用
 
 #####-----AIMD自适应延迟(选配)-----#####
 aimd:

@@ -233,6 +233,42 @@ foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_angular_accelerati
     "/planner/angular_acceleration", "json", std::move(schema));
 }
 
+nlohmann::json detail::command_packet_values(
+  const std::array<uint8_t, io::kInfantryCommandPacketSize> & bytes)
+{
+  io::InfantryCommandPacket packet;
+  std::memcpy(&packet, bytes.data(), bytes.size());
+  const auto pitch_abs = packet.pitch_abs;
+  const auto yaw_abs = packet.yaw_abs;
+  const auto distance = packet.distance;
+  const auto pitch_vel = packet.pitch_vel;
+  const auto yaw_vel = packet.yaw_vel;
+  const auto pitch_acc = packet.pitch_acc;
+  const auto yaw_acc = packet.yaw_acc;
+  return Json{
+    {"fire", packet.fire},          {"pitch_abs", pitch_abs},
+    {"yaw_abs", yaw_abs},           {"distance", distance},
+    {"pitch_vel", pitch_vel},       {"yaw_vel", yaw_vel},
+    {"pitch_acc", pitch_acc},       {"yaw_acc", yaw_acc},
+    {"crc8", packet.crc8}};
+}
+
+nlohmann::json detail::feedback_packet_values(
+  const std::array<uint8_t, io::kInfantryFeedbackPacketSize> & bytes)
+{
+  io::InfantryFeedbackPacket packet;
+  std::memcpy(&packet, bytes.data(), bytes.size());
+  const auto roll = packet.roll;
+  const auto pitch = packet.pitch;
+  const auto yaw = packet.yaw;
+  return Json{
+    {"mode", packet.mode},          {"roll", roll},
+    {"pitch", pitch},               {"yaw", yaw},
+    {"reserved", std::vector<uint8_t>(
+                    packet.reserved, packet.reserved + sizeof(packet.reserved))},
+    {"crc8", packet.crc8}};
+}
+
 nlohmann::json detail::angular_error_values(
   const auto_aim::Plan & plan, const io::GimbalState & gimbal_state)
 {
@@ -580,19 +616,11 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
 
   log_json(
     impl_->serial_receive,
-    Json{{"mode", serial_receive.mode}, {"roll", serial_receive.roll},
-         {"yaw", serial_receive.yaw}, {"yaw_vel", serial_receive.yaw_vel},
-         {"pitch", serial_receive.pitch}, {"pitch_vel", serial_receive.pitch_vel},
-         {"bullet_speed", serial_receive.bullet_speed},
-         {"bullet_count", serial_receive.bullet_count}},
+    detail::feedback_packet_values(frame.serial_receive_packet),
     log_time);
   log_json(
     impl_->serial_send,
-    Json{{"control", serial_send.control}, {"fire", serial_send.fire},
-         {"yaw", serial_send.yaw}, {"yaw_vel", serial_send.yaw_vel},
-         {"yaw_acc", serial_send.yaw_acc}, {"pitch", serial_send.pitch},
-         {"pitch_vel", serial_send.pitch_vel}, {"pitch_acc", serial_send.pitch_acc},
-         {"distance", serial_send.distance}},
+    detail::command_packet_values(frame.serial_send_packet),
     log_time);
   log_json(
     impl_->angular_acceleration, detail::angular_acceleration_values(serial_send), log_time);

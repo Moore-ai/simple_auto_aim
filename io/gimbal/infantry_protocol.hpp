@@ -134,7 +134,9 @@ public:
     if (buffer_.size() > kInfantryFeedbackPacketSize * 32) buffer_.clear();
   }
 
-  bool pop(InfantryFeedback & feedback)
+  bool pop(
+    InfantryFeedback & feedback,
+    std::array<uint8_t, kInfantryFeedbackPacketSize> * raw_packet = nullptr)
   {
     while (buffer_.size() >= kInfantryFeedbackPacketSize) {
       while (!buffer_.empty() && buffer_.front() != 0xFF) buffer_.pop_front();
@@ -143,6 +145,7 @@ public:
       std::array<uint8_t, kInfantryFeedbackPacketSize> candidate{};
       for (size_t i = 0; i < candidate.size(); ++i) candidate[i] = buffer_[i];
       if (parse_infantry_feedback_packet(candidate.data(), feedback)) {
+        if (raw_packet) *raw_packet = candidate;
         for (size_t i = 0; i < candidate.size(); ++i) buffer_.pop_front();
         return true;
       }

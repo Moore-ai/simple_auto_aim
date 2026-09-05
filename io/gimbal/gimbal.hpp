@@ -15,19 +15,6 @@
 
 namespace io
 {
-struct __attribute__((packed)) VisionToGimbal
-{
-  uint8_t mode;  // 0: 不控制, 1: 控制云台但不开火，2: 控制云台且开火
-  // yaw/pitch 为 SP 内部坐标系中的绝对角；pitch 向上为负。
-  float yaw;
-  float yaw_vel;
-  float yaw_acc;
-  float pitch;
-  float pitch_vel;
-  float pitch_acc;
-  float distance = 0;
-};
-
 struct GimbalState
 {
   // 下位机反馈包 byte[1] 的原始值；不参与上位机业务模式切换。
@@ -56,6 +43,18 @@ struct GimbalCommand
   float distance = -1;
 };
 
+struct GimbalStatePacket
+{
+  GimbalState state;
+  std::array<uint8_t, kInfantryFeedbackPacketSize> packet;
+};
+
+struct GimbalCommandPacket
+{
+  GimbalCommand command;
+  std::array<uint8_t, kInfantryCommandPacketSize> packet;
+};
+
 class Gimbal
 {
 public:
@@ -64,19 +63,20 @@ public:
   ~Gimbal();
 
   GimbalState state() const;
-  GimbalCommand command() const;
+  GimbalStatePacket state_with_packet() const;
+  GimbalCommandPacket command_with_packet() const;
   Eigen::Quaterniond q(std::chrono::steady_clock::time_point t);
 
   void send(
     bool control, bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
     float pitch_acc, float distance = 0);
 
-  void send(io::VisionToGimbal VisionToGimbal);
-
 private:
   serial::Serial serial_;
   bool virtual_serial_{false};
   std::array<uint8_t, kInfantryFeedbackPacketSize> virtual_feedback_packet_{};
+  std::array<uint8_t, kInfantryCommandPacketSize> command_packet_{};
+  std::array<uint8_t, kInfantryFeedbackPacketSize> feedback_packet_{};
 
   std::thread thread_;
   std::atomic<bool> quit_ = false;

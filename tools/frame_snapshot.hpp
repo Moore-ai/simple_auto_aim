@@ -2,6 +2,7 @@
 #define TOOLS__FRAME_SNAPSHOT_HPP
 
 #include <chrono>
+#include <array>
 #include <cstdint>
 #include <utility>
 
@@ -26,6 +27,8 @@ struct FrameSnapshot
   Eigen::Quaterniond gimbal_orientation{Eigen::Quaterniond::Identity()};
   io::GimbalState gimbal_state{};
   io::GimbalCommand gimbal_command{};
+  std::array<uint8_t, io::kInfantryCommandPacketSize> serial_send_packet{};
+  std::array<uint8_t, io::kInfantryFeedbackPacketSize> serial_receive_packet{};
   auto_aim::DetectionResult detections;
   auto_aim::TrackerDebugData tracker;
   std::uint64_t target_generation = 0;
@@ -33,7 +36,9 @@ struct FrameSnapshot
   static FrameSnapshot capture(
     Timestamp timestamp, const cv::Mat & image, const Eigen::Quaterniond & gimbal_orientation,
     const io::GimbalState & gimbal_state, const io::GimbalCommand & gimbal_command,
-    auto_aim::DetectionResult detections, const auto_aim::TrackerDebugData & tracker)
+    auto_aim::DetectionResult detections, const auto_aim::TrackerDebugData & tracker,
+    std::array<uint8_t, io::kInfantryCommandPacketSize> serial_send_packet = {},
+    std::array<uint8_t, io::kInfantryFeedbackPacketSize> serial_receive_packet = {})
   {
     return {
       timestamp,
@@ -41,6 +46,8 @@ struct FrameSnapshot
       gimbal_orientation,
       gimbal_state,
       gimbal_command,
+      serial_send_packet,
+      serial_receive_packet,
       std::move(detections),
       tracker};
   }
