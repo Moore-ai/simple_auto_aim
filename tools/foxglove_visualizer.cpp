@@ -136,6 +136,21 @@ const std::string & target_values_schema_data(detail::FoxgloveTargetTopic topic)
   }();
   return schemas[static_cast<std::size_t>(topic)];
 }
+
+const std::string & angular_acceleration_schema_data()
+{
+  static const auto schema = Json{
+    {"$schema", "http://json-schema.org/draft-07/schema#"},
+    {"type", "object"},
+    {"properties",
+     {{"yaw_acc", {{"type", "number"}, {"description", "yaw angular acceleration (rad/s^2)"}}},
+      {"pitch_acc",
+       {{"type", "number"}, {"description", "pitch angular acceleration (rad/s^2)"}}}}},
+    {"required", Json::array({"yaw_acc", "pitch_acc"})},
+    {"additionalProperties", false}}
+    .dump();
+  return schema;
+}
 }  // namespace
 
 cv::Mat detail::prepare_image_for_publish(const cv::Mat & image)
@@ -180,6 +195,21 @@ foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_target_values_chan
     target_values_schema_name(topic), "jsonschema",
     reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
   return foxglove::RawChannel::create(target_values_topic_name(topic), "json", std::move(schema));
+}
+
+nlohmann::json detail::angular_acceleration_values(const io::GimbalCommand & command)
+{
+  return Json{{"yaw_acc", command.yaw_acc}, {"pitch_acc", command.pitch_acc}};
+}
+
+foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_angular_acceleration_channel()
+{
+  const auto & schema_data = angular_acceleration_schema_data();
+  foxglove::Schema schema{
+    "simple_auto_aim.AngularAcceleration", "jsonschema",
+    reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
+  return foxglove::RawChannel::create(
+    "/planner/angular_acceleration", "json", std::move(schema));
 }
 
 Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
@@ -407,6 +437,7 @@ public:
   std::optional<foxglove::WebSocketServer> server;
   std::optional<foxglove::RawChannel> serial_receive;
   std::optional<foxglove::RawChannel> serial_send;
+  std::optional<foxglove::RawChannel> angular_acceleration;
   std::optional<foxglove::schemas::CompressedImageChannel> image_raw;
   std::optional<foxglove::schemas::CompressedImageChannel> image;
   std::optional<foxglove::schemas::CompressedImageChannel> image_detection;
@@ -446,6 +477,9 @@ FoxgloveVisualizer::FoxgloveVisualizer(auto_aim::Solver & solver)
   create(impl_->serial_receive, foxglove::RawChannel::create("/serial/receive", "json"),
          "/serial/receive");
   create(impl_->serial_send, foxglove::RawChannel::create("/serial/send", "json"), "/serial/send");
+  create(
+    impl_->angular_acceleration, detail::create_angular_acceleration_channel(),
+    "/planner/angular_acceleration");
   create(impl_->image_raw, foxglove::schemas::CompressedImageChannel::create("/image_raw"),
          "/image_raw");
   create(impl_->image, foxglove::schemas::CompressedImageChannel::create("/image"), "/image");
@@ -517,6 +551,8 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
          {"pitch_vel", serial_send.pitch_vel}, {"pitch_acc", serial_send.pitch_acc},
          {"distance", serial_send.distance}},
     log_time);
+  log_json(
+    impl_->angular_acceleration, detail::angular_acceleration_values(serial_send), log_time);
 
   const auto * locked_armor =
     target_data.locked_armor ? &target_data.locked_armor.value() : nullptr;

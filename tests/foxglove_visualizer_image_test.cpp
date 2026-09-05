@@ -195,6 +195,25 @@ int main()
   assert(normal_schema_json.at("properties").contains("center_x"));
   assert(normal_schema_json.at("properties").contains("radius"));
 
+  io::GimbalCommand command;
+  command.yaw_acc = 12.5F;
+  command.pitch_acc = -34.0F;
+  const auto acceleration_values = tools::detail::angular_acceleration_values(command);
+  assert(acceleration_values.at("yaw_acc") == 12.5F);
+  assert(acceleration_values.at("pitch_acc") == -34.0F);
+  auto acceleration_channel_result = tools::detail::create_angular_acceleration_channel();
+  assert(acceleration_channel_result.has_value());
+  auto acceleration_channel = std::move(acceleration_channel_result.value());
+  assert(acceleration_channel.topic() == "/planner/angular_acceleration");
+  const auto acceleration_schema = acceleration_channel.schema();
+  assert(acceleration_schema.has_value());
+  assert(acceleration_schema->encoding == "jsonschema");
+  const auto acceleration_schema_json = nlohmann::json::parse(
+    reinterpret_cast<const char *>(acceleration_schema->data),
+    reinterpret_cast<const char *>(acceleration_schema->data) + acceleration_schema->data_len);
+  assert(acceleration_schema_json.at("properties").contains("yaw_acc"));
+  assert(acceleration_schema_json.at("properties").contains("pitch_acc"));
+
   auto v2_channel_result =
     tools::detail::create_target_values_channel(tools::detail::FoxgloveTargetTopic::outpost_v2);
   assert(v2_channel_result.has_value());
