@@ -61,7 +61,7 @@ int main(int argc, char * argv[])
           plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
           plan.pitch_acc, plan.distance);
 
-        std::this_thread::sleep_for(10ms);
+        std::this_thread::sleep_for(1ms);
       } else {
         std::this_thread::sleep_for(200ms);
       }
