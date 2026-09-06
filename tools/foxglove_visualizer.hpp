@@ -30,6 +30,7 @@ foxglove::schemas::CubePrimitive armor_cube(
   const Eigen::Vector3d & center, double yaw, double pitch, auto_aim::ArmorType armor_type);
 void draw_aim_overlay(
   cv::Mat & image, const std::list<auto_aim::Armor> & armors,
+  auto_aim::Color enemy_color,
   const auto_aim::Armor * locked_armor,
   const std::vector<cv::Point2f> * anti_spin_hit_armor);
 std::optional<std::vector<cv::Point2f>> anti_spin_hit_armor(

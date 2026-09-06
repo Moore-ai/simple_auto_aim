@@ -470,17 +470,18 @@ foxglove::schemas::SceneUpdate detail::target_scene_update(
 
 void detail::draw_aim_overlay(
   cv::Mat & image, const std::list<auto_aim::Armor> & armors,
+  auto_aim::Color enemy_color,
   const auto_aim::Armor * locked_armor, const std::vector<cv::Point2f> * anti_spin_hit_armor)
 {
   for (const auto & armor : armors) {
-    draw_cross(image, armor.points, {0, 255, 255});
+    if (armor.color != enemy_color) continue;
+    draw_cross(image, armor.points, {0, 0, 255});
   }
 
   if (anti_spin_hit_armor) {
     draw_polygon(image, *anti_spin_hit_armor, {0, 0, 255});
-  } else if (locked_armor) {
-    draw_cross(image, locked_armor->points, {0, 0, 255});
   }
+  if (locked_armor) draw_polygon(image, locked_armor->points, {0, 255, 255});
 }
 
 std::optional<std::vector<cv::Point2f>> detail::anti_spin_hit_armor(
@@ -522,6 +523,7 @@ public:
   std::optional<foxglove::schemas::SceneUpdateChannel> target;
   std::optional<foxglove::schemas::SceneUpdateChannel> outpost_current;
   std::optional<foxglove::schemas::SceneUpdateChannel> outpost_v2;
+  auto_aim::Color enemy_color = auto_aim::Color::blue;
   const std::chrono::steady_clock::time_point steady_origin = std::chrono::steady_clock::now();
   const std::chrono::system_clock::time_point system_origin = std::chrono::system_clock::now();
 
@@ -612,6 +614,11 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
   const auto & target_data = frame.tracker;
   cv::Mat image = frame.image.clone();
 
+  if (const auto color = io::infantry_enemy_color(serial_receive.mode)) {
+    impl_->enemy_color = *color == io::InfantryEnemyColor::red ?
+      auto_aim::Color::red : auto_aim::Color::blue;
+  }
+
   log_json(
     impl_->serial_receive,
     detail::feedback_packet_values(frame.serial_receive_packet),
@@ -646,11 +653,12 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
     draw_polygon(image, polygon, {255, 0, 0});
   }
   detail::draw_aim_overlay(
-    image, frame.detections.armors, locked_armor, anti_spin_hit_armor);
+    image, frame.detections.armors, impl_->enemy_color, locked_armor, anti_spin_hit_armor);
 
   cv::Mat detection_image = frame.image.clone();
   detail::draw_aim_overlay(
-    detection_image, frame.detections.armors, locked_armor, anti_spin_hit_armor);
+    detection_image, frame.detections.armors, impl_->enemy_color, locked_armor,
+    anti_spin_hit_armor);
 
   if (impl_->image_raw) {
     impl_->image_raw->log(

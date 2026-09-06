@@ -28,16 +28,17 @@ int main()
   std::list<auto_aim::Armor> armors = {red_armor, blue_armor};
 
   cv::Mat detection_image = cv::Mat::zeros(40, 90, CV_8UC3);
-  tools::detail::draw_aim_overlay(detection_image, armors, nullptr, nullptr);
+  tools::detail::draw_aim_overlay(
+    detection_image, armors, auto_aim::Color::red, nullptr, nullptr);
   const auto detected_corner = detection_image.at<cv::Vec3b>(10, 10);
   assert(detected_corner[0] == 0);
-  assert(detected_corner[1] > 0 && detected_corner[2] > 0);
+  assert(detected_corner[1] == 0 && detected_corner[2] > 0);
   const auto detected_center = detection_image.at<cv::Vec3b>(20, 20);
   assert(detected_center[0] == 0);
-  assert(detected_center[1] > 0);
+  assert(detected_center[1] == 0);
   assert(detected_center[2] > 0);
   const auto other_color_center = detection_image.at<cv::Vec3b>(20, 70);
-  assert(other_color_center[1] > 0 && other_color_center[2] > 0);
+  assert(other_color_center == cv::Vec3b(0, 0, 0));
   assert(detection_image.at<cv::Vec3b>(30, 20) == cv::Vec3b(0, 0, 0));
 
   const std::vector<cv::Point2f> second_red_points = {{60, 10}, {80, 10}, {80, 30}, {60, 30}};
@@ -45,22 +46,30 @@ int main()
   std::list<auto_aim::Armor> red_armors = {red_armor, second_red_armor};
   cv::Mat tracking_image = cv::Mat::zeros(80, 100, CV_8UC3);
   tools::detail::draw_aim_overlay(
-    tracking_image, red_armors, &red_armors.front(), nullptr);
+    tracking_image, red_armors, auto_aim::Color::red, &red_armors.front(), nullptr);
   const auto locked_corner = tracking_image.at<cv::Vec3b>(10, 10);
-  assert(locked_corner[2] > 0 && locked_corner[1] == 0);
+  assert(locked_corner[0] == 0 && locked_corner[1] > 0 && locked_corner[2] > 0);
+  const auto locked_edge = tracking_image.at<cv::Vec3b>(20, 10);
+  assert(locked_edge[0] == 0 && locked_edge[1] > 0 && locked_edge[2] > 0);
   const auto locked_center = tracking_image.at<cv::Vec3b>(20, 20);
   const auto detected_only_center = tracking_image.at<cv::Vec3b>(20, 70);
-  assert(locked_center[2] > 0 && locked_center[1] == 0);
-  assert(detected_only_center[1] > 0 && detected_only_center[2] > 0);
+  assert(locked_center[0] == 0 && locked_center[1] == 0 && locked_center[2] > 0);
+  assert(detected_only_center[0] == 0 && detected_only_center[1] == 0);
+  assert(detected_only_center[2] > 0);
 
   const std::vector<cv::Point2f> predicted_hit = {{35, 45}, {65, 45}, {65, 65}, {35, 65}};
   cv::Mat anti_spin_image = cv::Mat::zeros(80, 100, CV_8UC3);
   tools::detail::draw_aim_overlay(
-    anti_spin_image, red_armors, &red_armors.front(), &predicted_hit);
+    anti_spin_image, red_armors, auto_aim::Color::red, &red_armors.front(), &predicted_hit);
+  const auto anti_spin_locked_edge = anti_spin_image.at<cv::Vec3b>(20, 10);
   const auto anti_spin_locked_center = anti_spin_image.at<cv::Vec3b>(20, 20);
   const auto predicted_hit_edge = anti_spin_image.at<cv::Vec3b>(45, 50);
   const auto predicted_hit_center = anti_spin_image.at<cv::Vec3b>(55, 50);
-  assert(anti_spin_locked_center[1] > 0 && anti_spin_locked_center[2] > 0);
+  assert(
+    anti_spin_locked_edge[0] == 0 && anti_spin_locked_edge[1] > 0 &&
+    anti_spin_locked_edge[2] > 0);
+  assert(anti_spin_locked_center[0] == 0 && anti_spin_locked_center[1] == 0);
+  assert(anti_spin_locked_center[2] > 0);
   assert(predicted_hit_edge[2] > 0 && predicted_hit_edge[1] == 0);
   assert(predicted_hit_center == cv::Vec3b(0, 0, 0));
 
