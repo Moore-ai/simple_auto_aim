@@ -65,7 +65,6 @@ inline float infantry_angle_from_wire(float value, bool degrees)
   return degrees ? value * kInfantryPi / 180.0F : value;
 }
 
-inline float infantry_yaw(float value) { return -value; }
 inline float infantry_pitch(float value) { return -value; }
 
 inline Eigen::Quaterniond infantry_feedback_quaternion(const InfantryFeedback & feedback)
@@ -95,17 +94,14 @@ inline std::array<uint8_t, kInfantryCommandPacketSize> make_infantry_command_pac
   command.fire = control && fire ? 1 : 0;
   command.pitch = infantry_pitch(
     infantry_angle_to_wire(finite_or_zero(pitch_sp), command_angles_in_degrees));
-  command.yaw = infantry_yaw(
-    infantry_angle_to_wire(finite_or_zero(yaw_sp), command_angles_in_degrees));
+  command.yaw = infantry_angle_to_wire(finite_or_zero(yaw_sp), command_angles_in_degrees);
   command.distance = finite_or_zero(distance);
   command.pitch_vel = infantry_pitch(
     infantry_angle_to_wire(finite_or_zero(pitch_vel_sp), command_angles_in_degrees));
-  command.yaw_vel = infantry_yaw(
-    infantry_angle_to_wire(finite_or_zero(yaw_vel_sp), command_angles_in_degrees));
+  command.yaw_vel = infantry_angle_to_wire(finite_or_zero(yaw_vel_sp), command_angles_in_degrees);
   command.pitch_acc = infantry_pitch(
     infantry_angle_to_wire(finite_or_zero(pitch_acc_sp), command_angles_in_degrees));
-  command.yaw_acc = infantry_yaw(
-    infantry_angle_to_wire(finite_or_zero(yaw_acc_sp), command_angles_in_degrees));
+  command.yaw_acc = infantry_angle_to_wire(finite_or_zero(yaw_acc_sp), command_angles_in_degrees);
   command.crc8 = infantry_crc8(
     reinterpret_cast<const uint8_t *>(&command), offsetof(InfantryCommandPacket, crc8));
 
@@ -127,7 +123,7 @@ inline bool parse_infantry_feedback_packet(
   feedback.mode = raw.mode;
   feedback.roll = infantry_angle_from_wire(raw.roll, feedback_angles_in_degrees);
   feedback.pitch = infantry_pitch(infantry_angle_from_wire(raw.pitch, feedback_angles_in_degrees));
-  feedback.yaw = infantry_yaw(infantry_angle_from_wire(raw.yaw, feedback_angles_in_degrees));
+  feedback.yaw = infantry_angle_from_wire(raw.yaw, feedback_angles_in_degrees);
   return true;
 }
 

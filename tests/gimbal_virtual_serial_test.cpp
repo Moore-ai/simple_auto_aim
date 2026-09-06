@@ -17,7 +17,7 @@ int main()
   config["virtual_serial"]["feedback"]["mode"] = 1;
   config["virtual_serial"]["feedback"]["roll"] = 0.1F;
   config["virtual_serial"]["feedback"]["pitch"] = 0.2F;
-  config["virtual_serial"]["feedback"]["yaw"] = -0.3F;
+  config["virtual_serial"]["feedback"]["yaw"] = 0.3F;
 
   const auto path = std::filesystem::temp_directory_path() / "simple_auto_aim_virtual_serial.yaml";
   {
@@ -53,7 +53,7 @@ int main()
   config["feedback_angles_in_degrees"] = true;
   config["virtual_serial"]["feedback"]["roll"] = 10.0F;
   config["virtual_serial"]["feedback"]["pitch"] = 20.0F;
-  config["virtual_serial"]["feedback"]["yaw"] = -30.0F;
+  config["virtual_serial"]["feedback"]["yaw"] = 30.0F;
   {
     std::ofstream degree_output(path);
     assert(degree_output);
@@ -61,7 +61,7 @@ int main()
   }
 
   {
-    const auto packet = io::make_infantry_feedback_packet(1, 10.0F, 20.0F, -30.0F);
+    const auto packet = io::make_infantry_feedback_packet(1, 10.0F, 20.0F, 30.0F);
     io::InfantryFeedbackStreamParser parser;
     parser.set_feedback_angles_in_degrees(true);
     parser.push(packet.data(), packet.size());
@@ -72,6 +72,21 @@ int main()
     assert(std::abs(feedback.roll - 10.0F / kRadToDeg) < 1e-6F);
     assert(std::abs(feedback.pitch + 20.0F / kRadToDeg) < 1e-6F);
     assert(std::abs(feedback.yaw - 30.0F / kRadToDeg) < 1e-6F);
+  }
+
+  {
+    const auto feedback_packet = io::make_infantry_feedback_packet(1, 0.0F, 0.0F, 0.3F);
+    io::InfantryFeedbackStreamParser parser;
+    parser.push(feedback_packet.data(), feedback_packet.size());
+    io::InfantryFeedback feedback{};
+    assert(parser.pop(feedback));
+    assert(std::abs(feedback.yaw - 0.3F) < 1e-6F);
+
+    const auto command_packet = io::make_infantry_command_packet(
+      true, false, 0.0F, 0.3F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
+    io::InfantryCommandPacket raw_command;
+    std::memcpy(&raw_command, command_packet.data(), sizeof(raw_command));
+    assert(std::abs(raw_command.yaw - 0.3F) < 1e-6F);
   }
 
   {
@@ -88,11 +103,11 @@ int main()
     io::InfantryCommandPacket raw_command;
     std::memcpy(&raw_command, packet.data(), sizeof(raw_command));
     assert(std::abs(raw_command.pitch - 0.2F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.yaw + 0.3F * kRadToDeg) < 1e-5F);
+    assert(std::abs(raw_command.yaw - 0.3F * kRadToDeg) < 1e-5F);
     assert(std::abs(raw_command.pitch_vel - 0.1F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.yaw_vel + 0.1F * kRadToDeg) < 1e-5F);
+    assert(std::abs(raw_command.yaw_vel - 0.1F * kRadToDeg) < 1e-5F);
     assert(std::abs(raw_command.pitch_acc - 0.4F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.yaw_acc + 0.2F * kRadToDeg) < 1e-5F);
+    assert(std::abs(raw_command.yaw_acc - 0.2F * kRadToDeg) < 1e-5F);
   }
 
   std::filesystem::remove(path);
