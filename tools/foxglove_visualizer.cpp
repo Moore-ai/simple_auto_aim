@@ -10,12 +10,16 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include <foxglove/channel.hpp>
 #include <foxglove/error.hpp>
 #include <foxglove/schemas.hpp>
 #include <foxglove/server.hpp>
+
+#include "tools/yaml.hpp"
 
 namespace tools
 {
@@ -173,6 +177,67 @@ const std::string & angular_error_schema_data()
   return schema;
 }
 }  // namespace
+
+detail::FoxgloveConfig detail::load_foxglove_config(const YAML::Node & yaml)
+{
+  FoxgloveConfig config;
+  const auto foxglove = yaml["foxglove"];
+  if (foxglove) {
+    if (foxglove["enable"]) config.enable = foxglove["enable"].as<bool>();
+    if (foxglove["image_fps"]) config.image_fps = foxglove["image_fps"].as<double>();
+  }
+  if (!std::isfinite(config.image_fps) || config.image_fps <= 0.0) {
+    throw std::invalid_argument("foxglove.image_fps must be positive");
+  }
+  return config;
+}
+
+detail::ImagePublishLimiter::ImagePublishLimiter(double fps)
+: period_{std::chrono::duration_cast<FrameSnapshot::Timestamp::duration>(
+    std::chrono::duration<double>(1.0 / fps))}
+{
+}
+
+bool detail::ImagePublishLimiter::should_publish(FrameSnapshot::Timestamp timestamp)
+{
+  if (
+    last_publish_time_ && timestamp >= *last_publish_time_ &&
+    timestamp - *last_publish_time_ < period_) {
+    return false;
+  }
+  last_publish_time_ = timestamp;
+  return true;
+}
+
+void detail::LatestFrameQueue::push(FrameSnapshot frame)
+{
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stopped_) return;
+    latest_frame_ = std::move(frame);
+  }
+  ready_.notify_one();
+}
+
+bool detail::LatestFrameQueue::wait_and_pop(FrameSnapshot & frame)
+{
+  std::unique_lock<std::mutex> lock(mutex_);
+  ready_.wait(lock, [this] { return stopped_ || latest_frame_.has_value(); });
+  if (!latest_frame_) return false;
+  frame = std::move(*latest_frame_);
+  latest_frame_.reset();
+  return true;
+}
+
+void detail::LatestFrameQueue::stop()
+{
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    stopped_ = true;
+    latest_frame_.reset();
+  }
+  ready_.notify_all();
+}
 
 cv::Mat detail::prepare_image_for_publish(const cv::Mat & image)
 {
@@ -504,9 +569,16 @@ std::optional<std::vector<cv::Point2f>> detail::anti_spin_hit_armor(
 class FoxgloveVisualizer::Impl
 {
 public:
-  explicit Impl(auto_aim::Solver & solver) : solver{solver} {}
+  Impl(auto_aim::Solver & solver, detail::FoxgloveConfig config)
+  : solver{solver}, enabled{config.enable}, image_limiter{config.image_fps}
+  {
+  }
 
-  auto_aim::Solver & solver;
+  auto_aim::Solver solver;
+  bool enabled;
+  detail::ImagePublishLimiter image_limiter;
+  detail::LatestFrameQueue frames;
+  std::thread worker;
   std::mutex plan_mutex;
   std::optional<std::pair<std::uint64_t, auto_aim::Plan>> latest_plan;
   std::optional<foxglove::WebSocketServer> server;
@@ -537,9 +609,13 @@ public:
   }
 };
 
-FoxgloveVisualizer::FoxgloveVisualizer(auto_aim::Solver & solver)
-: impl_(std::make_unique<Impl>(solver))
+FoxgloveVisualizer::FoxgloveVisualizer(
+  auto_aim::Solver & solver, const std::string & config_path)
+: impl_(std::make_unique<Impl>(
+    solver, detail::load_foxglove_config(tools::load(config_path))))
 {
+  if (!impl_->enabled) return;
+
   foxglove::WebSocketServerOptions options;
   options.host = "0.0.0.0";
   options.port = 8765;
@@ -589,22 +665,35 @@ FoxgloveVisualizer::FoxgloveVisualizer(auto_aim::Solver & solver)
       detail::target_topic_name(detail::FoxgloveTargetTopic::outpost_v2)),
     detail::target_topic_name(detail::FoxgloveTargetTopic::outpost_v2));
 
+  impl_->worker = std::thread([this] {
+    FrameSnapshot frame;
+    while (impl_->frames.wait_and_pop(frame)) publish_frame(frame);
+  });
   std::cout << "Foxglove server listening at ws://127.0.0.1:" << impl_->server->port() << '\n';
 }
 
 FoxgloveVisualizer::~FoxgloveVisualizer()
 {
+  impl_->frames.stop();
+  if (impl_->worker.joinable()) impl_->worker.join();
   if (impl_->server) impl_->server->stop();
 }
 
 void FoxgloveVisualizer::update_plan(
   std::uint64_t target_generation, const auto_aim::Plan & plan)
 {
+  if (!impl_->server) return;
   std::lock_guard<std::mutex> lock(impl_->plan_mutex);
   impl_->latest_plan = std::make_pair(target_generation, plan);
 }
 
-void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
+void FoxgloveVisualizer::publish(FrameSnapshot frame)
+{
+  if (!impl_->server) return;
+  impl_->frames.push(std::move(frame));
+}
+
+void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
 {
   if (!impl_->server) return;
 
@@ -612,7 +701,6 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
   const auto & serial_receive = frame.gimbal_state;
   const auto & serial_send = frame.gimbal_command;
   const auto & target_data = frame.tracker;
-  cv::Mat image = frame.image.clone();
 
   if (const auto color = io::infantry_enemy_color(serial_receive.mode)) {
     impl_->enemy_color = *color == io::InfantryEnemyColor::red ?
@@ -630,8 +718,6 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
   log_json(
     impl_->angular_acceleration, detail::angular_acceleration_values(serial_send), log_time);
 
-  const auto * locked_armor =
-    target_data.locked_armor ? &target_data.locked_armor.value() : nullptr;
   std::optional<std::pair<std::uint64_t, auto_aim::Plan>> latest_plan;
   {
     std::lock_guard<std::mutex> lock(impl_->plan_mutex);
@@ -642,34 +728,40 @@ void FoxgloveVisualizer::publish(const FrameSnapshot & frame)
       impl_->angular_error,
       detail::angular_error_values(latest_plan->second, serial_receive), log_time);
   }
-  std::optional<std::vector<cv::Point2f>> hit_armor;
-  if (latest_plan) {
-    hit_armor = detail::anti_spin_hit_armor(
-      latest_plan->second, latest_plan->first, frame.target_generation, target_data.armor_type,
-      impl_->solver);
-  }
-  const auto * anti_spin_hit_armor = hit_armor ? &hit_armor.value() : nullptr;
-  for (const auto & polygon : target_data.predicted_image_armors) {
-    draw_polygon(image, polygon, {255, 0, 0});
-  }
-  detail::draw_aim_overlay(
-    image, frame.detections.armors, impl_->enemy_color, locked_armor, anti_spin_hit_armor);
+  if (impl_->image_limiter.should_publish(frame.timestamp)) {
+    const auto * locked_armor =
+      target_data.locked_armor ? &target_data.locked_armor.value() : nullptr;
+    std::optional<std::vector<cv::Point2f>> hit_armor;
+    if (latest_plan) {
+      impl_->solver.set_R_gimbal2world(frame.gimbal_orientation);
+      hit_armor = detail::anti_spin_hit_armor(
+        latest_plan->second, latest_plan->first, frame.target_generation, target_data.armor_type,
+        impl_->solver);
+    }
+    const auto * anti_spin_hit_armor = hit_armor ? &hit_armor.value() : nullptr;
+    cv::Mat image = frame.image.clone();
+    for (const auto & polygon : target_data.predicted_image_armors) {
+      draw_polygon(image, polygon, {255, 0, 0});
+    }
+    detail::draw_aim_overlay(
+      image, frame.detections.armors, impl_->enemy_color, locked_armor, anti_spin_hit_armor);
 
-  cv::Mat detection_image = frame.image.clone();
-  detail::draw_aim_overlay(
-    detection_image, frame.detections.armors, impl_->enemy_color, locked_armor,
-    anti_spin_hit_armor);
+    cv::Mat detection_image = frame.image.clone();
+    detail::draw_aim_overlay(
+      detection_image, frame.detections.armors, impl_->enemy_color, locked_armor,
+      anti_spin_hit_armor);
 
-  if (impl_->image_raw) {
-    impl_->image_raw->log(
-      compressed_image(detail::prepare_image_for_publish(frame.image)), log_time);
-  }
-  if (impl_->image) {
-    impl_->image->log(compressed_image(detail::prepare_image_for_publish(image)), log_time);
-  }
-  if (impl_->image_detection) {
-    impl_->image_detection->log(
-      compressed_image(detail::prepare_image_for_publish(detection_image)), log_time);
+    if (impl_->image_raw) {
+      impl_->image_raw->log(
+        compressed_image(detail::prepare_image_for_publish(frame.image)), log_time);
+    }
+    if (impl_->image) {
+      impl_->image->log(compressed_image(detail::prepare_image_for_publish(image)), log_time);
+    }
+    if (impl_->image_detection) {
+      impl_->image_detection->log(
+        compressed_image(detail::prepare_image_for_publish(detection_image)), log_time);
+    }
   }
 
   const auto active_topic = detail::target_topic(target_data);

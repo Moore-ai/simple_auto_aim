@@ -1,4 +1,5 @@
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <list>
@@ -8,11 +9,47 @@
 #include <Eigen/Geometry>
 #include <nlohmann/json.hpp>
 #include <opencv2/core.hpp>
+#include <yaml-cpp/yaml.h>
 
 #include "tools/foxglove_visualizer.hpp"
 
 int main()
 {
+  const auto default_config = tools::detail::load_foxglove_config(YAML::Load("{}"));
+  assert(default_config.enable);
+  assert(default_config.image_fps == 30.0);
+
+  const auto custom_config = tools::detail::load_foxglove_config(
+    YAML::Load("foxglove:\n  enable: false\n  image_fps: 20\n"));
+  assert(!custom_config.enable);
+  assert(custom_config.image_fps == 20.0);
+  bool rejected_invalid_image_fps = false;
+  try {
+    tools::detail::load_foxglove_config(YAML::Load("foxglove:\n  image_fps: 0\n"));
+  } catch (const std::invalid_argument &) {
+    rejected_invalid_image_fps = true;
+  }
+  assert(rejected_invalid_image_fps);
+
+  tools::detail::ImagePublishLimiter image_limiter(20.0);
+  const tools::FrameSnapshot::Timestamp time_origin{};
+  assert(image_limiter.should_publish(time_origin));
+  assert(!image_limiter.should_publish(time_origin + std::chrono::milliseconds(49)));
+  assert(image_limiter.should_publish(time_origin + std::chrono::milliseconds(50)));
+
+  tools::detail::LatestFrameQueue frame_queue;
+  tools::FrameSnapshot first_frame;
+  first_frame.target_generation = 1;
+  tools::FrameSnapshot second_frame;
+  second_frame.target_generation = 2;
+  frame_queue.push(first_frame);
+  frame_queue.push(second_frame);
+  tools::FrameSnapshot latest_frame;
+  assert(frame_queue.wait_and_pop(latest_frame));
+  assert(latest_frame.target_generation == 2);
+  frame_queue.stop();
+  assert(!frame_queue.wait_and_pop(latest_frame));
+
   cv::Mat input(1, 3, CV_8UC3);
   input.at<cv::Vec3b>(0, 0) = {1, 2, 3};
   input.at<cv::Vec3b>(0, 1) = {4, 5, 6};

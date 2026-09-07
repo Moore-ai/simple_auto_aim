@@ -57,6 +57,10 @@ use_traditional: true
 detect_method: "yolo"              # YOLO 主检测；use_traditional=true 时进行传统方法二次校正
 debug_window: false                # 是否显示 OpenCV 调试窗口；Web/WSL 环境建议关闭
 
+foxglove:
+  enable: true # 是否发布 Foxglove 调试数据
+  image_fps: 30 # 三路调试图像的最大发布频率，单位 FPS
+
 #####-----ROI-----#####
 roi:
   x: 420

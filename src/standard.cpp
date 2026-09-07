@@ -37,7 +37,7 @@ int main(int argc, char * argv[])
   io::Camera camera(config_path);
 
   auto_aim::Solver solver(config_path);
-  tools::FoxgloveVisualizer foxglove(solver);
+  tools::FoxgloveVisualizer foxglove(solver, config_path);
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Planner planner(config_path);
 
@@ -77,7 +77,7 @@ int main(int argc, char * argv[])
     target_queue.push({processed.snapshot.target_generation, target});
 
     recorder.record(processed.snapshot);
-    foxglove.publish(processed.snapshot);
+    foxglove.publish(std::move(processed.snapshot));
   }
 
   quit = true;

@@ -2,10 +2,14 @@
 #define TOOLS__FOXGLOVE_VISUALIZER_HPP
 
 #include <array>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <Eigen/Core>
@@ -14,6 +18,7 @@
 #include <foxglove/channel.hpp>
 #include <foxglove/schemas.hpp>
 #include <nlohmann/json.hpp>
+#include <yaml-cpp/yaml.h>
 
 #include "tasks/auto_aim/planner/planner.hpp"
 #include "tasks/auto_aim/solver.hpp"
@@ -23,6 +28,39 @@ namespace tools
 {
 namespace detail
 {
+struct FoxgloveConfig
+{
+  bool enable = true;
+  double image_fps = 30.0;
+};
+
+FoxgloveConfig load_foxglove_config(const YAML::Node & yaml);
+
+class ImagePublishLimiter
+{
+public:
+  explicit ImagePublishLimiter(double fps);
+  bool should_publish(FrameSnapshot::Timestamp timestamp);
+
+private:
+  FrameSnapshot::Timestamp::duration period_;
+  std::optional<FrameSnapshot::Timestamp> last_publish_time_;
+};
+
+class LatestFrameQueue
+{
+public:
+  void push(FrameSnapshot frame);
+  bool wait_and_pop(FrameSnapshot & frame);
+  void stop();
+
+private:
+  std::mutex mutex_;
+  std::condition_variable ready_;
+  std::optional<FrameSnapshot> latest_frame_;
+  bool stopped_ = false;
+};
+
 enum class FoxgloveTargetTopic { normal, outpost_current, outpost_v2 };
 
 cv::Mat prepare_image_for_publish(const cv::Mat & image);
@@ -58,16 +96,18 @@ nlohmann::json target_values(const auto_aim::TrackerDebugData & target_data);
 class FoxgloveVisualizer
 {
 public:
-  explicit FoxgloveVisualizer(auto_aim::Solver & solver);
+  FoxgloveVisualizer(auto_aim::Solver & solver, const std::string & config_path);
   ~FoxgloveVisualizer();
 
   FoxgloveVisualizer(const FoxgloveVisualizer &) = delete;
   FoxgloveVisualizer & operator=(const FoxgloveVisualizer &) = delete;
 
   void update_plan(std::uint64_t target_generation, const auto_aim::Plan & plan);
-  void publish(const FrameSnapshot & frame);
+  void publish(FrameSnapshot frame);
 
 private:
+  void publish_frame(const FrameSnapshot & frame);
+
   class Impl;
   std::unique_ptr<Impl> impl_;
 };
