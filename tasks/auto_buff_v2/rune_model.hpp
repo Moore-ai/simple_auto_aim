@@ -47,6 +47,11 @@ public:
   std::optional<RuneState> state() const;
 
 private:
+  bool initialize(const RuneElements & elements, Timestamp timestamp,
+                  const Eigen::Matrix3d & R_camera2world,
+                  const Eigen::Vector3d & t_camera2world);
+  void update_motion_fit(RuneState & state, double elapsed_seconds);
+
   cv::Mat camera_matrix_;
   cv::Mat distort_coeffs_;
   Eigen::Matrix3d R_camera2gimbal_ = Eigen::Matrix3d::Identity();

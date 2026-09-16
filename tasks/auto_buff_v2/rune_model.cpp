@@ -216,32 +216,7 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
                                           R_gimbal2imubody_ * R_camera2gimbal_;
   const Eigen::Vector3d t_camera2world = q_gimbal2world_ *
                                           R_gimbal2imubody_ * t_camera2gimbal_;
-  if (!state_) {
-    int inactive_count = 0;
-    for (const auto & bull : elements.bullseyes) {
-      if (!bull.active) {
-        ++inactive_count;
-      }
-    }
-    if (elements.icons.empty() || inactive_count == 0 || inactive_count > 2) return false;
-    for (const auto & icon : elements.icons) {
-      for (const auto & bull : elements.bullseyes) {
-        if (bull.active) continue;
-        RuneState seed;
-        if (!solve_seed(icon, bull, camera_matrix_, distort_coeffs_, R_camera2world,
-                        t_camera2world, seed)) continue;
-        seed.start_timestamp = timestamp;
-        seed.timestamp = timestamp;
-        seed.inactive[0] = true;
-        inactive_timeout_[0] = timestamp + std::chrono::milliseconds(100);
-        state_ = seed;
-        covariance_.diagonal() << 64, 64, 64, 100, 25, 10;
-        fitter_.reset();
-        return true;
-      }
-    }
-    return false;
-  }
+  if (!state_) return initialize(elements, timestamp, R_camera2world, t_camera2world);
 
   auto & state = *state_;
   const double dt = std::chrono::duration<double>(timestamp - state.timestamp).count();
@@ -312,23 +287,54 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
   vector_into(state, x);
   if (corrected_blades == 0) return false;
   ++state.update_count;
-  const double t = std::chrono::duration<double>(timestamp - state.start_timestamp).count();
-  if (t >= 1) {
-    fitter_.push(t, state.rotation_angle);
-    const auto linear = fitter_.fit_linear();
-    const auto sine = big_rune_ ? fitter_.fit_sine() : std::nullopt;
-    if (sine && (!linear || (sine->cost < linear->cost && sine->a >= 0.6))) {
-      state.sine_v = sine->v;
-      state.sine_a = sine->a;
-      state.sine_omega = sine->omega;
-      state.sine_phase = sine->omega * t + sine->phi;
-      state.sine_t = t;
-      state.sine_valid = true;
-    } else if (linear) {
-      state.rotation_speed = linear->speed;
-      state.sine_valid = false;
+  const double elapsed_seconds =
+    std::chrono::duration<double>(timestamp - state.start_timestamp).count();
+  if (elapsed_seconds >= 1) update_motion_fit(state, elapsed_seconds);
+  return true;
+}
+
+bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
+                           const Eigen::Matrix3d & R_camera2world,
+                           const Eigen::Vector3d & t_camera2world)
+{
+  const auto inactive_count = std::count_if(elements.bullseyes.begin(),
+                                            elements.bullseyes.end(),
+                                            [](const auto & bull) { return !bull.active; });
+  if (elements.icons.empty() || inactive_count == 0 || inactive_count > 2) return false;
+  for (const auto & icon : elements.icons) {
+    for (const auto & bull : elements.bullseyes) {
+      if (bull.active) continue;
+      RuneState seed;
+      if (!solve_seed(icon, bull, camera_matrix_, distort_coeffs_, R_camera2world,
+                      t_camera2world, seed)) continue;
+      seed.start_timestamp = timestamp;
+      seed.timestamp = timestamp;
+      seed.inactive[0] = true;
+      inactive_timeout_[0] = timestamp + std::chrono::milliseconds(100);
+      state_ = seed;
+      covariance_.diagonal() << 64, 64, 64, 100, 25, 10;
+      fitter_.reset();
+      return true;
     }
   }
-  return true;
+  return false;
+}
+
+void RuneModel::update_motion_fit(RuneState & state, double elapsed_seconds)
+{
+  fitter_.push(elapsed_seconds, state.rotation_angle);
+  const auto linear = fitter_.fit_linear();
+  const auto sine = big_rune_ ? fitter_.fit_sine() : std::nullopt;
+  if (sine && (!linear || (sine->cost < linear->cost && sine->a >= 0.6))) {
+    state.sine_v = sine->v;
+    state.sine_a = sine->a;
+    state.sine_omega = sine->omega;
+    state.sine_phase = sine->omega * elapsed_seconds + sine->phi;
+    state.sine_t = elapsed_seconds;
+    state.sine_valid = true;
+  } else if (linear) {
+    state.rotation_speed = linear->speed;
+    state.sine_valid = false;
+  }
 }
 }  // namespace auto_buff_v2

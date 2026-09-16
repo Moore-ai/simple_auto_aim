@@ -15,6 +15,9 @@ namespace auto_buff_v2
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
+constexpr int kRadialBins = 32;
+constexpr int kThetaBins = 180;
+using PolarBins = std::array<double, kRadialBins * kThetaBins>;
 
 cv::Mat extract_channel(const cv::Mat & image, bool enemy_red)
 {
@@ -69,12 +72,37 @@ double icon_score(const cv::Mat & image)
   return 0;
 }
 
+double arm_length(const PolarBins & polar, int theta_bin, double radius)
+{
+  std::array<double, kRadialBins> profile{};
+  for (int r = 0; r < kRadialBins; ++r)
+    for (int dt = -3; dt <= 3; ++dt)
+      profile[r] += polar[r * kThetaBins +
+                          ((theta_bin + dt) % kThetaBins + kThetaBins) % kThetaBins];
+  const double threshold = *std::max_element(profile.begin(), profile.end()) * 0.25;
+  int boundary = -1;
+  for (int r = kRadialBins - 1; r >= 0; --r)
+    if (profile[r] >= threshold) { boundary = r; break; }
+  double exact = 0;
+  if (boundary >= kRadialBins - 1) {
+    exact = 1;
+  } else if (boundary < 0) {
+    exact = std::distance(profile.begin(), std::max_element(profile.begin(), profile.end())) /
+            static_cast<double>(kRadialBins);
+  } else {
+    const double inside = profile[boundary];
+    const double outside = profile[boundary + 1];
+    exact = inside > outside ?
+      (boundary + 1.0 - (threshold - outside) / (inside - outside)) / kRadialBins :
+      (boundary + 1.0) / kRadialBins;
+  }
+  return radius * exact;
+}
+
 std::optional<RuneBullseye> bullseye_feature(
   const cv::Mat & image, const cv::Rect & roi, const std::vector<cv::Point> & contour,
   cv::Point2f center, double active_threshold)
 {
-  constexpr int kRadialBins = 32;
-  constexpr int kThetaBins = 180;
   auto local_contour = contour;
   for (auto & point : local_contour) point -= roi.tl();
   cv::Mat mask = cv::Mat::zeros(roi.size(), CV_8UC1);
@@ -85,7 +113,7 @@ std::optional<RuneBullseye> bullseye_feature(
   cv::Mat gray;
   cv::cvtColor(masked, gray, cv::COLOR_BGR2GRAY);
   const double radius = std::min(gray.rows, gray.cols) * 0.5;
-  std::array<double, kRadialBins * kThetaBins> polar{};
+  PolarBins polar{};
   for (int y = 0; y < gray.rows; ++y) {
     for (int x = 0; x < gray.cols; ++x) {
       const double dx = x - (center.x - roi.x);
@@ -145,31 +173,7 @@ std::optional<RuneBullseye> bullseye_feature(
     const double angle = phase + p * kPi / 2;
     const int theta_bin =
       static_cast<int>(std::llround((angle + kPi) / (2 * kPi) * kThetaBins));
-    std::array<double, kRadialBins> profile{};
-    for (int r = 0; r < kRadialBins; ++r)
-      for (int dt = -3; dt <= 3; ++dt)
-        profile[r] += polar[r * kThetaBins +
-                            ((theta_bin + dt) % kThetaBins + kThetaBins) % kThetaBins];
-    const double threshold =
-      *std::max_element(profile.begin(), profile.end()) * 0.25;
-    int boundary = -1;
-    for (int r = kRadialBins - 1; r >= 0; --r)
-      if (profile[r] >= threshold) { boundary = r; break; }
-    double exact = 0;
-    if (boundary >= kRadialBins - 1) {
-      exact = 1;
-    } else if (boundary < 0) {
-      exact = std::distance(profile.begin(),
-                            std::max_element(profile.begin(), profile.end())) /
-              static_cast<double>(kRadialBins);
-    } else {
-      const double inside = profile[boundary];
-      const double outside = profile[boundary + 1];
-      exact = inside > outside ?
-        (boundary + 1.0 - (threshold - outside) / (inside - outside)) / kRadialBins :
-        (boundary + 1.0) / kRadialBins;
-    }
-    lengths[p] = radius * exact;
+    lengths[p] = arm_length(polar, theta_bin, radius);
     mean += lengths[p];
     result.corners[p] =
       center + cv::Point2f(lengths[p] * std::cos(angle), lengths[p] * std::sin(angle));
