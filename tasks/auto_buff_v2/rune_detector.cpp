@@ -203,6 +203,14 @@ RuneElements RuneDetector::detect(const cv::Mat & image) const
                                (config.max_distance * config.max_distance) * 0.9 * kPi * 0.2;
   const double max_icon_area = focal * focal * 0.05 * 0.05 /
                                (config.min_distance * config.min_distance * cosine) * 1.1 * kPi;
+  struct BullCandidate
+  {
+    std::vector<cv::Point> contour;
+    cv::Point2f center;
+    double major;
+  };
+  std::vector<BullCandidate> bull_candidates;
+  std::vector<std::vector<cv::Point>> icon_candidates;
   for (const auto & contour : contours) {
     if (contour.size() < 5) continue;
     const double area = cv::contourArea(contour);
@@ -220,25 +228,56 @@ RuneElements RuneDetector::detect(const cv::Mat & image) const
           circularity < 0.7 * 2 * cosine / (1 + cosine * cosine)) continue;
       const auto moments = cv::moments(contour);
       const cv::Point2f center(moments.m10 / moments.m00, moments.m01 / moments.m00);
-      auto roi = cv::boundingRect(contour);
-      roi.x -= 20;
-      roi.y -= 20;
-      roi.width += 40;
-      roi.height += 40;
-      roi &= cv::Rect(0, 0, image.cols, image.rows);
-      const auto feature =
-        bullseye_feature(image, roi, contour, center, config.active_threshold);
-      if (feature) result.bullseyes.push_back(*feature);
+      bull_candidates.push_back({contour, center, major});
     } else if (area >= min_icon_area && area <= max_icon_area) {
-      auto roi = cv::boundingRect(contour);
-      roi.x -= 5;
-      roi.y -= 5;
-      roi.width += 10;
-      roi.height += 10;
-      roi &= cv::Rect(0, 0, image.cols, image.rows);
-      const double score = icon_score(image(roi));
-      if (score >= config.match_threshold) result.icons.push_back({ellipse.center, score});
+      icon_candidates.push_back(contour);
     }
+  }
+  std::vector<bool> grouped(bull_candidates.size(), false);
+  std::vector<BullCandidate> selected_bulls;
+  for (std::size_t i = 0; i < bull_candidates.size(); ++i) {
+    if (grouped[i]) continue;
+    grouped[i] = true;
+    std::size_t largest = i;
+    for (std::size_t j = i + 1; j < bull_candidates.size(); ++j) {
+      if (grouped[j]) continue;
+      const auto & a = bull_candidates[i];
+      const auto & b = bull_candidates[j];
+      if (cv::norm(a.center - b.center) < std::max(a.major, b.major) * 0.15) {
+        grouped[j] = true;
+        if (b.major > bull_candidates[largest].major) largest = j;
+      }
+    }
+    selected_bulls.push_back(bull_candidates[largest]);
+  }
+  for (const auto & bull : selected_bulls) {
+    auto roi = cv::boundingRect(bull.contour);
+    roi.x -= 20;
+    roi.y -= 20;
+    roi.width += 40;
+    roi.height += 40;
+    roi &= cv::Rect(0, 0, image.cols, image.rows);
+    const auto feature = bullseye_feature(image, roi, bull.contour, bull.center,
+                                         config.active_threshold);
+    if (feature) result.bullseyes.push_back(*feature);
+  }
+  for (const auto & contour : icon_candidates) {
+    const auto moments = cv::moments(contour);
+    const cv::Point2f center(moments.m10 / moments.m00, moments.m01 / moments.m00);
+    const bool inside_bull = std::any_of(selected_bulls.begin(), selected_bulls.end(),
+                                         [&](const auto & bull) {
+                                           return cv::pointPolygonTest(bull.contour, center,
+                                                                       false) >= 0;
+                                         });
+    if (inside_bull) continue;
+    auto roi = cv::boundingRect(contour);
+    roi.x -= 5;
+    roi.y -= 5;
+    roi.width += 10;
+    roi.height += 10;
+    roi &= cv::Rect(0, 0, image.cols, image.rows);
+    const double score = icon_score(image(roi));
+    if (score >= config.match_threshold) result.icons.push_back({center, score});
   }
   return result;
 }

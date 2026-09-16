@@ -5,7 +5,7 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include "tools/trajectory.hpp"
+#include "rune_trajectory.hpp"
 
 namespace auto_buff_v2
 {
@@ -48,6 +48,7 @@ struct AimSolution
 {
   Eigen::Vector2d angles;
   double fly_time;
+  Eigen::Vector3d point;
 };
 
 std::optional<AimSolution> aim_solution(RuneState state, double seconds, double speed,
@@ -56,12 +57,12 @@ std::optional<AimSolution> aim_solution(RuneState state, double seconds, double 
   const auto point = future_point(state, seconds);
   if (!point) return std::nullopt;
   const double distance = std::hypot(point->x(), point->y());
-  tools::Trajectory bullet(speed, distance, point->z());
-  if (bullet.unsolvable) return std::nullopt;
+  const auto bullet = solve_rune_trajectory(speed, distance, point->z());
+  if (!bullet) return std::nullopt;
   return AimSolution{
     {std::remainder(std::atan2(point->y(), point->x()) + yaw_offset, 2 * kPi),
-     -bullet.pitch - pitch_offset},
-    bullet.fly_time};
+     -bullet->pitch - pitch_offset},
+    bullet->fly_time, *point};
 }
 }  // namespace
 
@@ -80,12 +81,14 @@ BuffPlan BuffPlanner::plan(std::optional<RuneState> target, double bullet_speed,
   const double distance = target->center.norm();
   double fly_time = distance / bullet_speed;
   Eigen::Vector2d angles;
+  Eigen::Vector3d attack_point;
   for (int i = 0; i < 5; ++i) {
     const double future = stale + config_.shoot_delay + fly_time;
     const auto solution = aim_solution(*target, future, bullet_speed,
                                        config_.yaw_offset, config_.pitch_offset);
     if (!solution) return result;
     angles = solution->angles;
+    attack_point = solution->point;
     if (std::abs(solution->fly_time - fly_time) < 0.001) break;
     fly_time = solution->fly_time;
   }
@@ -100,16 +103,34 @@ BuffPlan BuffPlanner::plan(std::optional<RuneState> target, double bullet_speed,
   result.pitch = angles.y();
   result.yaw_vel = std::remainder(after->angles.x() - before->angles.x(), 2 * kPi) / 0.02;
   result.pitch_vel = (after->angles.y() - before->angles.y()) / 0.02;
+  result.yaw_acc = (std::remainder(after->angles.x() - angles.x(), 2 * kPi) -
+                    std::remainder(angles.x() - before->angles.x(), 2 * kPi)) / 0.0001;
+  result.pitch_acc = (after->angles.y() - 2 * angles.y() + before->angles.y()) / 0.0001;
   result.distance = distance;
   if (!attack_start_) attack_start_ = now;
   const double cycle = config_.rune_idle_duration + config_.rune_shoot_duration;
   const double phase =
     std::fmod(std::chrono::duration<double>(now - *attack_start_).count(), cycle);
   const bool shoot_phase = phase >= config_.rune_idle_duration;
+  const double xy = std::hypot(attack_point.x(), attack_point.y());
+  if (xy < 0.1) return result;
+  const double ratio = std::min(xy, 5.0) / xy;
+  const Eigen::Vector3d scaled = attack_point * ratio;
+  const double scaled_xy = std::hypot(scaled.x(), scaled.y());
+  const double center_yaw = std::atan2(target->center.y(), target->center.x());
+  const double target_yaw = std::atan2(attack_point.y(), attack_point.x());
+  const double blade_scale = std::max(0.0, std::cos(std::remainder(
+    target_yaw - center_yaw, 2 * kPi)));
+  const double yaw_window = std::atan2(config_.yaw_tolerance * blade_scale, scaled_xy);
+  const double pitch_center = std::atan2(scaled.z(), scaled_xy);
+  const double pitch_lower =
+    std::atan2(scaled.z() - config_.pitch_tolerance * blade_scale, scaled_xy) - pitch_center;
+  const double pitch_upper =
+    std::atan2(scaled.z() + config_.pitch_tolerance * blade_scale, scaled_xy) - pitch_center;
+  const double pitch_error = gimbal.pitch - result.pitch;
   result.fire = shoot_phase &&
-                std::abs(std::remainder(result.yaw - gimbal.yaw, 2 * kPi)) <
-                  config_.yaw_tolerance &&
-                std::abs(result.pitch - gimbal.pitch) < config_.pitch_tolerance;
+                std::abs(std::remainder(result.yaw - gimbal.yaw, 2 * kPi)) <= yaw_window &&
+                pitch_error >= pitch_lower && pitch_error <= pitch_upper;
   return result;
 }
 }  // namespace auto_buff_v2

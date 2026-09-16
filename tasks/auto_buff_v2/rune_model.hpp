@@ -22,6 +22,8 @@ struct RuneState
   Timestamp start_timestamp{};
   Timestamp timestamp{};
   double rotation_speed = 0;
+  double prediction_speed = 0;
+  bool use_prediction_speed = false;
   double rotation_angle = 0;
   double face_yaw = 0;
   std::array<bool, 5> inactive{};
@@ -40,6 +42,24 @@ struct RuneState
 class RuneModel
 {
 public:
+  struct Config
+  {
+    double timeout_seconds = 1.5;
+    double noise_x = 1e-5;
+    double noise_y = 1e-5;
+    double noise_z = 1e-5;
+    double noise_rotation_speed = 1;
+    double noise_rotation_angle = 1e-3;
+    double noise_face_yaw = 1e-5;
+    double noise_observation = 20;
+    double gate_threshold = 13.816;
+    double init_seed_mean_error = 10;
+    double init_seed_max_error = 20;
+    double init_center_gate = 30;
+    double init_pitch_bound = 20;
+    double diverge_face_angle = 45;
+  };
+
   RuneModel(const std::string & config_path, bool big_rune);
   void update_transform(const Eigen::Quaterniond & q_gimbal2world);
   bool update(const RuneElements & elements, Timestamp timestamp);
@@ -51,6 +71,7 @@ private:
                   const Eigen::Matrix3d & R_camera2world,
                   const Eigen::Vector3d & t_camera2world);
   void update_motion_fit(RuneState & state, double elapsed_seconds);
+  bool diverged() const;
 
   cv::Mat camera_matrix_;
   cv::Mat distort_coeffs_;
@@ -59,10 +80,14 @@ private:
   Eigen::Vector3d t_camera2gimbal_ = Eigen::Vector3d::Zero();
   Eigen::Quaterniond q_gimbal2world_ = Eigen::Quaterniond::Identity();
   bool big_rune_ = false;
+  Config config_;
   std::optional<RuneState> state_;
   RuneEnergyFitter fitter_;
   Eigen::Matrix<double, 6, 6> covariance_ = Eigen::Matrix<double, 6, 6>::Identity();
+  Eigen::Matrix<double, 6, 1> ekf_state_ = Eigen::Matrix<double, 6, 1>::Zero();
   std::array<Timestamp, 5> inactive_timeout_{};
+  Timestamp last_inactive_corrected_{};
+  Timestamp force_sine_until_{};
 };
 }  // namespace auto_buff_v2
 
