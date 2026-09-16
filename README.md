@@ -52,19 +52,20 @@ cmake -S . -B build
 cmake --build build --parallel 1
 ```
 
-运行自瞄测试 demo：
+运行自瞄或打符：
 
 ```bash
-./build/auto_aim_test
+./build/standard configs/standard.yaml
+./build/buff configs/standard.yaml --mode=0 # 小符
+./build/buff configs/standard.yaml --mode=1 # 大符
 ```
 
-其他常用可执行文件：
+标定可执行文件：
 
 ```bash
-./build/camera_test
-./build/detector_video_test
-./build/planner_test
-./build/auto_buff_test
+./build/capture -c configs/calibration.yaml -o assets/img_with_q
+./build/calibrate_camera -c configs/calibration.yaml assets/img_with_q
+./build/calibrate_handeye -c configs/calibration.yaml assets/img_with_q
 ```
 
 ## 4 开机自启
