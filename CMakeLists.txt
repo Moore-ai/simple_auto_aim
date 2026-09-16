@@ -50,6 +50,7 @@ add_subdirectory(tools)
 add_subdirectory(io)
 add_subdirectory(tasks/auto_aim)
 add_subdirectory(tasks/auto_buff)
+add_subdirectory(tasks/auto_buff_v2)
 
 add_executable(standard
   src/standard.cpp
@@ -63,6 +64,37 @@ target_link_libraries(standard PRIVATE
   tools
   io
   foxglove_sdk)
+
+add_executable(buff src/buff.cpp tools/foxglove_visualizer.cpp)
+target_link_libraries(buff PRIVATE
+  ${OpenCV_LIBS}
+  fmt::fmt
+  yaml-cpp
+  auto_buff_v2
+  auto_aim
+  tools
+  io
+  foxglove_sdk)
+
+add_executable(buff_v2_model_test tests/buff_v2_model_test.cpp)
+target_compile_options(buff_v2_model_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_model_test PRIVATE auto_buff_v2)
+
+add_executable(buff_v2_assignment_test tests/buff_v2_assignment_test.cpp)
+target_compile_options(buff_v2_assignment_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_assignment_test PRIVATE auto_buff_v2)
+
+add_executable(buff_v2_detector_test tests/buff_v2_detector_test.cpp)
+target_compile_options(buff_v2_detector_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_detector_test PRIVATE auto_buff_v2)
+
+add_executable(buff_v2_pnp_test tests/buff_v2_pnp_test.cpp)
+target_compile_options(buff_v2_pnp_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_pnp_test PRIVATE auto_buff_v2)
+
+add_executable(buff_v2_planner_test tests/buff_v2_planner_test.cpp)
+target_compile_options(buff_v2_planner_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_planner_test PRIVATE auto_buff_v2)
 
 # 相机与手眼标定工具。
 add_executable(capture calibration/capture.cpp)

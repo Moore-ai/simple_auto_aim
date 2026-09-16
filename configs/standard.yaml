@@ -275,3 +275,14 @@ model: "assets/yolo11_buff_int8.xml"
 #####-----buff_aimer参数-----#####
 fire_gap_time: 0.700   # s
 predict_time: 0.120     # s
+
+buff_v2: # 新打符入口使用的源项目参数
+  min_distance: 1.7 # m，轮廓几何筛选的最近距离
+  max_distance: 5.0 # m，轮廓几何筛选的最远距离
+  active_threshold: 0.2 # PVD 靶心形状阈值
+  match_threshold: 0.5 # R 标骨架拓扑匹配阈值
+  shoot_delay: 0.04 # s，发射至出膛延迟
+  rune_idle_duration: 0.4 # s，符叶瞄准但禁止发射的周期
+  rune_shoot_duration: 0.2 # s，符叶允许发射的周期
+  yaw_tolerance: 0.07 # rad，发射 yaw 误差上限
+  pitch_tolerance: 0.04 # rad，发射 pitch 误差上限
