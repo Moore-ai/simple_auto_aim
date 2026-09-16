@@ -2,9 +2,11 @@
 #define AUTO_BUFF_V2__BUFF_PLANNER_HPP
 
 #include <optional>
+#include <string>
 
 #include "io/gimbal/gimbal.hpp"
 #include "rune_model.hpp"
+#include "tools/ballistic_solver.hpp"
 
 namespace auto_buff_v2
 {
@@ -36,6 +38,8 @@ public:
     double bullet_speed_min = 10;
     double bullet_speed_max = 25;
     double bullet_speed_default = 23.4;
+    std::string ballistic_model = "njust";
+    tools::BallisticSolverConfig ballistic_config;
   };
 
   explicit BuffPlanner(Config config);
@@ -45,6 +49,7 @@ public:
 
 private:
   Config config_;
+  std::unique_ptr<tools::BallisticSolver> ballistic_solver_;
   std::optional<Timestamp> attack_start_;
 };
 }  // namespace auto_buff_v2

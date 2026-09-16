@@ -1,4 +1,5 @@
 yaw_offset: 0
+ballistic_model: vacuum
 pitch_offset: 0
 fire_thresh: 0.0035
 decision_speed: 0

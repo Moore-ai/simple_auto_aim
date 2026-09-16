@@ -243,6 +243,8 @@ armor_selection_hysteresis:
 bullet_speed_min: 10             # 弹速下限 (m/s)，低于此值视为无效
 bullet_speed_max: 25             # 弹速上限 (m/s)，高于此值视为无效
 bullet_speed_default: 23.4       # 弹速默认回退值 (m/s)，弹速无效时使用
+ballistic_model: "vacuum"        # 弹道模型：njust=南理工含空气阻力模型，vacuum=无空气阻力模型
+njust_air_resistance: 0.003      # 南理工二次空气阻力系数；仅 ballistic_model=njust 时生效
 
 #####-----AIMD自适应延迟(选配)-----#####
 aimd:

@@ -8,6 +8,7 @@
 #include "tasks/auto_aim/target.hpp"
 #include "tinympc/types.hpp"
 #include "tools/adaptive_delay_controller.hpp"
+#include "tools/ballistic_solver.hpp"
 
 namespace auto_aim
 {
@@ -68,6 +69,7 @@ private:
   double rho_;
   int max_iter_;
   double bullet_speed_min_, bullet_speed_max_, bullet_speed_default_;
+  std::unique_ptr<tools::BallisticSolver> ballistic_solver_;
 
   struct ManeuverAdaptConfig
   {

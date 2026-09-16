@@ -5,8 +5,6 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include "rune_trajectory.hpp"
-
 namespace auto_buff_v2
 {
 namespace
@@ -27,6 +25,9 @@ BuffPlanner::Config load_config(const std::string & path)
     result.yaw_tolerance = buff["yaw_tolerance"].as<double>(result.yaw_tolerance);
     result.pitch_tolerance = buff["pitch_tolerance"].as<double>(result.pitch_tolerance);
   }
+  result.ballistic_model = yaml["ballistic_model"].as<std::string>(result.ballistic_model);
+  result.ballistic_config.njust_air_resistance = yaml["njust_air_resistance"].as<double>(
+    result.ballistic_config.njust_air_resistance);
   result.yaw_offset = yaml["yaw_offset"].as<double>(0) * kPi / 180;
   result.pitch_offset = yaml["pitch_offset"].as<double>(0) * kPi / 180;
   result.bullet_speed_min = yaml["bullet_speed_min"].as<double>(result.bullet_speed_min);
@@ -52,12 +53,13 @@ struct AimSolution
 };
 
 std::optional<AimSolution> aim_solution(RuneState state, double seconds, double speed,
-                                        double yaw_offset, double pitch_offset)
+                                        double yaw_offset, double pitch_offset,
+                                        const tools::BallisticSolver & ballistic_solver)
 {
   const auto point = future_point(state, seconds);
   if (!point) return std::nullopt;
   const double distance = std::hypot(point->x(), point->y());
-  const auto bullet = solve_rune_trajectory(speed, distance, point->z());
+  const auto bullet = ballistic_solver.solve(speed, distance, point->z());
   if (!bullet) return std::nullopt;
   return AimSolution{
     {std::remainder(std::atan2(point->y(), point->x()) + yaw_offset, 2 * kPi),
@@ -66,8 +68,12 @@ std::optional<AimSolution> aim_solution(RuneState state, double seconds, double 
 }
 }  // namespace
 
-BuffPlanner::BuffPlanner(Config config) : config_(config) {}
-BuffPlanner::BuffPlanner(const std::string & config_path) : config_(load_config(config_path)) {}
+BuffPlanner::BuffPlanner(Config config)
+: config_(std::move(config)),
+  ballistic_solver_(tools::make_ballistic_solver(config_.ballistic_model, config_.ballistic_config))
+{
+}
+BuffPlanner::BuffPlanner(const std::string & config_path) : BuffPlanner(load_config(config_path)) {}
 
 BuffPlan BuffPlanner::plan(std::optional<RuneState> target, double bullet_speed,
                            const io::GimbalState & gimbal, Timestamp now)
@@ -85,7 +91,8 @@ BuffPlan BuffPlanner::plan(std::optional<RuneState> target, double bullet_speed,
   for (int i = 0; i < 5; ++i) {
     const double future = stale + config_.shoot_delay + fly_time;
     const auto solution = aim_solution(*target, future, bullet_speed,
-                                       config_.yaw_offset, config_.pitch_offset);
+                                       config_.yaw_offset, config_.pitch_offset,
+                                       *ballistic_solver_);
     if (!solution) return result;
     angles = solution->angles;
     attack_point = solution->point;
@@ -94,9 +101,11 @@ BuffPlan BuffPlanner::plan(std::optional<RuneState> target, double bullet_speed,
   }
   const double future = stale + config_.shoot_delay + fly_time;
   const auto before = aim_solution(*target, future - 0.01, bullet_speed,
-                                   config_.yaw_offset, config_.pitch_offset);
+                                   config_.yaw_offset, config_.pitch_offset,
+                                   *ballistic_solver_);
   const auto after = aim_solution(*target, future + 0.01, bullet_speed,
-                                  config_.yaw_offset, config_.pitch_offset);
+                                  config_.yaw_offset, config_.pitch_offset,
+                                  *ballistic_solver_);
   if (!before || !after) return result;
   result.control = true;
   result.yaw = angles.x();

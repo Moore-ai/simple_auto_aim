@@ -6,9 +6,9 @@
 #include <vector>
 
 #include "tinympc/tiny_api.hpp"
+#include "tools/ballistic_solver.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
-#include "tools/trajectory.hpp"
 #include "tools/yaml.hpp"
 
 using namespace std::chrono_literals;
@@ -41,6 +41,12 @@ Plan invalid_plan(const char * reason)
 Planner::Planner(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
+  const auto ballistic_model =
+    yaml["ballistic_model"].as<std::string>("vacuum");
+  tools::BallisticSolverConfig ballistic_config;
+  ballistic_config.njust_air_resistance =
+    yaml["njust_air_resistance"].as<double>(ballistic_config.njust_air_resistance);
+  ballistic_solver_ = tools::make_ballistic_solver(ballistic_model, ballistic_config);
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
@@ -160,11 +166,11 @@ Plan Planner::plan(Target target, double bullet_speed)
       }
     }
   }
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  if (bullet_traj.unsolvable || !std::isfinite(bullet_traj.fly_time)) {
+  const auto bullet_traj = ballistic_solver_->solve(bullet_speed, min_dist, xyz.z());
+  if (!bullet_traj || !std::isfinite(bullet_traj->fly_time)) {
     return invalid_plan("invalid bullet trajectory");
   }
-  auto fly_time = bullet_traj.fly_time;
+  auto fly_time = bullet_traj->fly_time;
   if (fly_time_iteration_enabled_) {
     for (int i = 0; i < fly_time_iteration_max_iteration_; ++i) {
       auto future_target = target;
@@ -185,12 +191,12 @@ Plan Planner::plan(Target target, double bullet_speed)
         }
       }
       const auto future_bullet_traj =
-        tools::Trajectory(bullet_speed, future_min_dist, future_xyz.z());
-      if (future_bullet_traj.unsolvable || !std::isfinite(future_bullet_traj.fly_time)) {
+        ballistic_solver_->solve(bullet_speed, future_min_dist, future_xyz.z());
+      if (!future_bullet_traj || !std::isfinite(future_bullet_traj->fly_time)) {
         return invalid_plan("invalid iterative bullet trajectory");
       }
 
-      const auto next_fly_time = future_bullet_traj.fly_time;
+      const auto next_fly_time = future_bullet_traj->fly_time;
       const auto converged =
         std::abs(next_fly_time - fly_time) < fly_time_iteration_convergence_threshold_;
       fly_time = next_fly_time;
@@ -505,10 +511,10 @@ Eigen::Matrix<double, 2, 1> Planner::aim(
   debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), yaw);
 
   auto azim = std::atan2(xyz.y(), xyz.x());
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
+  const auto bullet_traj = ballistic_solver_->solve(bullet_speed, min_dist, xyz.z());
+  if (!bullet_traj) throw std::runtime_error("Unsolvable bullet trajectory!");
 
-  return {tools::limit_rad(azim + yaw_offset_), -bullet_traj.pitch - pitch_offset_};
+  return {tools::limit_rad(azim + yaw_offset_), -bullet_traj->pitch - pitch_offset_};
 }
 
 Trajectory Planner::get_trajectory(

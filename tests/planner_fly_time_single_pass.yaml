@@ -18,6 +18,4 @@ max_pitch_acc: 100
 Q_pitch: [9e6, 0]
 R_pitch: [1]
 fly_time_iteration:
-  enable: true
-  max_iteration: 1
-  convergence_threshold: 1e-9
+  enable: false
