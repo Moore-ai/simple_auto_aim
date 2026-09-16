@@ -113,8 +113,8 @@ Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
 }
 
 void Gimbal::send(
-  bool control, bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
-  float pitch_acc, float distance)
+  bool control, InfantryFireCommand fire, float yaw, float yaw_vel, float yaw_acc, float pitch,
+  float pitch_vel, float pitch_acc, float distance)
 {
   if (!control) {
     const auto current = state();
@@ -133,8 +133,8 @@ void Gimbal::send(
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    command_ = {control, control && fire, yaw, yaw_vel, yaw_acc, pitch, pitch_vel, pitch_acc,
-                distance};
+    command_ = {control, control ? fire : InfantryFireCommand::none, yaw, yaw_vel, yaw_acc,
+                pitch, pitch_vel, pitch_acc, distance};
     command_packet_ = packet;
   }
 

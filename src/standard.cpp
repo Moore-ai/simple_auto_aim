@@ -58,8 +58,10 @@ int main(int argc, char * argv[])
         auto plan = planner.plan(target, gs.bullet_speed);
         foxglove.update_plan(target_generation, plan);
         gimbal.send(
-          plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel,
-          plan.pitch_acc, plan.distance);
+          plan.control,
+          plan.fire ? io::InfantryFireCommand::continuous : io::InfantryFireCommand::none,
+          plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel, plan.pitch_acc,
+          plan.distance);
 
         std::this_thread::sleep_for(1ms);
       } else {

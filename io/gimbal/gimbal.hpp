@@ -32,7 +32,7 @@ struct GimbalState
 struct GimbalCommand
 {
   bool control = false;
-  bool fire = false;
+  InfantryFireCommand fire = InfantryFireCommand::none;
   // yaw/pitch 为 SP 内部坐标系中的绝对命令角；pitch 向上为负。
   float yaw = 0;
   float yaw_vel = 0;
@@ -68,8 +68,8 @@ public:
   Eigen::Quaterniond q(std::chrono::steady_clock::time_point t);
 
   void send(
-    bool control, bool fire, float yaw, float yaw_vel, float yaw_acc, float pitch, float pitch_vel,
-    float pitch_acc, float distance = 0);
+    bool control, InfantryFireCommand fire, float yaw, float yaw_vel, float yaw_acc, float pitch,
+    float pitch_vel, float pitch_acc, float distance = 0);
 
 private:
   serial::Serial serial_;

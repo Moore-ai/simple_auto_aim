@@ -71,8 +71,11 @@ int main(int argc, char * argv[])
         visual_plan.pitch_acc = plan.pitch_acc;
         visual_plan.distance = plan.distance;
         foxglove.update_plan(generation, visual_plan);
-        gimbal.send(plan.control, plan.fire, plan.yaw, plan.yaw_vel, plan.yaw_acc,
-                    plan.pitch, plan.pitch_vel, plan.pitch_acc, plan.distance);
+        gimbal.send(
+          plan.control,
+          plan.fire ? io::InfantryFireCommand::single : io::InfantryFireCommand::none,
+          plan.yaw, plan.yaw_vel, plan.yaw_acc, plan.pitch, plan.pitch_vel, plan.pitch_acc,
+          plan.distance);
         std::this_thread::sleep_for(1ms);
       } else {
         std::this_thread::sleep_for(200ms);

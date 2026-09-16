@@ -28,6 +28,15 @@ enum class InfantryEnemyColor : uint8_t
   blue,
 };
 
+enum class InfantryFireCommand : uint8_t
+{
+  none = 0,
+  // 下位机沿用自瞄的连续发射处理。
+  continuous = 1,
+  // 下位机应将连续收到的 single 命令锁存为一次单发，收到 none 后重新使能。
+  single = 2,
+};
+
 inline std::optional<InfantryEnemyColor> infantry_enemy_color(uint8_t mode)
 {
   switch (mode) {
@@ -87,11 +96,12 @@ inline uint8_t infantry_crc8(const uint8_t * data, size_t size)
 }
 
 inline std::array<uint8_t, kInfantryCommandPacketSize> make_infantry_command_packet(
-  bool control, bool fire, float pitch_sp, float yaw_sp, float distance, float pitch_vel_sp,
+  bool control, InfantryFireCommand fire, float pitch_sp, float yaw_sp, float distance,
+  float pitch_vel_sp,
   float yaw_vel_sp, float pitch_acc_sp, float yaw_acc_sp, bool command_angles_in_degrees = false)
 {
   InfantryCommandPacket command;
-  command.fire = control && fire ? 1 : 0;
+  command.fire = control ? static_cast<uint8_t>(fire) : 0;
   command.pitch = infantry_pitch(
     infantry_angle_to_wire(finite_or_zero(pitch_sp), command_angles_in_degrees));
   command.yaw = infantry_angle_to_wire(finite_or_zero(yaw_sp), command_angles_in_degrees);

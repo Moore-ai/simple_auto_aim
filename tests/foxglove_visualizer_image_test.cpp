@@ -287,7 +287,8 @@ int main()
   assert(error_schema_json.at("properties").contains("pitch_tracking_error"));
 
   const auto command_packet = io::make_infantry_command_packet(
-    true, true, -0.5F, 0.2F, 3.0F, -0.1F, 0.4F, -0.2F, 0.8F);
+    true, io::InfantryFireCommand::continuous, -0.5F, 0.2F, 3.0F,
+    -0.1F, 0.4F, -0.2F, 0.8F);
   const auto command_packet_values = tools::detail::command_packet_values(command_packet);
   assert(command_packet_values.at("fire") == 1);
   assert(std::abs(command_packet_values.at("pitch").get<float>() - 0.5F) < 1e-6F);

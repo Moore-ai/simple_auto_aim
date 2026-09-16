@@ -36,7 +36,8 @@ int main()
     assert(configured_state.pitch == -0.2F);
     assert(configured_state.yaw == 0.3F);
 
-    gimbal.send(true, false, 0.3F, 0.1F, 0.0F, -0.2F, 0.0F, 0.0F, 5.0F);
+    gimbal.send(true, io::InfantryFireCommand::none, 0.3F, 0.1F, 0.0F,
+                -0.2F, 0.0F, 0.0F, 5.0F);
     const auto command = gimbal.command_with_packet().command;
     assert(command.control);
     assert(command.distance == 5.0F);
@@ -83,10 +84,18 @@ int main()
     assert(std::abs(feedback.yaw - 0.3F) < 1e-6F);
 
     const auto command_packet = io::make_infantry_command_packet(
-      true, false, 0.0F, 0.3F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
+      true, io::InfantryFireCommand::single, 0.0F, 0.3F, 0.0F,
+      0.0F, 0.0F, 0.0F, 0.0F);
     io::InfantryCommandPacket raw_command;
     std::memcpy(&raw_command, command_packet.data(), sizeof(raw_command));
+    assert(raw_command.fire == 2);
     assert(std::abs(raw_command.yaw - 0.3F) < 1e-6F);
+
+    const auto disabled_packet = io::make_infantry_command_packet(
+      false, io::InfantryFireCommand::single, 0.0F, 0.0F, 0.0F,
+      0.0F, 0.0F, 0.0F, 0.0F);
+    std::memcpy(&raw_command, disabled_packet.data(), sizeof(raw_command));
+    assert(raw_command.fire == 0);
   }
 
   {
@@ -98,10 +107,12 @@ int main()
     assert(std::abs(state.pitch + 20.0F / kRadToDeg) < 1e-6F);
     assert(std::abs(state.yaw - 30.0F / kRadToDeg) < 1e-6F);
 
-    gimbal.send(true, false, 0.3F, 0.1F, 0.2F, -0.2F, -0.1F, -0.4F, 5.0F);
+    gimbal.send(true, io::InfantryFireCommand::single, 0.3F, 0.1F, 0.2F,
+                -0.2F, -0.1F, -0.4F, 5.0F);
     const auto packet = gimbal.command_with_packet().packet;
     io::InfantryCommandPacket raw_command;
     std::memcpy(&raw_command, packet.data(), sizeof(raw_command));
+    assert(raw_command.fire == 2);
     assert(std::abs(raw_command.pitch - 0.2F * kRadToDeg) < 1e-5F);
     assert(std::abs(raw_command.yaw - 0.3F * kRadToDeg) < 1e-5F);
     assert(std::abs(raw_command.pitch_vel - 0.1F * kRadToDeg) < 1e-5F);
