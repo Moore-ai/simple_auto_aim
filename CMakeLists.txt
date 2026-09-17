@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(simple_auto_aim)
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -61,20 +63,13 @@ target_link_libraries(standard PRIVATE
   fmt::fmt
   yaml-cpp
   auto_aim
+  auto_buff_v2
   tools
   io
   foxglove_sdk)
 
-add_executable(buff src/buff.cpp tools/foxglove_visualizer.cpp)
-target_link_libraries(buff PRIVATE
-  ${OpenCV_LIBS}
-  fmt::fmt
-  yaml-cpp
-  auto_buff_v2
-  auto_aim
-  tools
-  io
-  foxglove_sdk)
+add_test(NAME standard_cli_test
+  COMMAND ${PROJECT_SOURCE_DIR}/tests/standard_cli_test.sh $<TARGET_FILE:standard>)
 
 add_executable(buff_v2_model_test tests/buff_v2_model_test.cpp)
 target_compile_options(buff_v2_model_test PRIVATE -UNDEBUG)
