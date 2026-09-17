@@ -58,7 +58,7 @@ int main(int argc, char * argv[])
       if (!target_queue.empty()) {
         const auto [generation, target] = target_queue.front();
         const auto gs = gimbal.state();
-        const auto plan = planner.plan(target, gs.bullet_speed, gs,
+        const auto plan = planner.plan(generation, target, gs.bullet_speed, gs,
                                        std::chrono::steady_clock::now());
         auto_aim::Plan visual_plan;
         visual_plan.control = plan.control;

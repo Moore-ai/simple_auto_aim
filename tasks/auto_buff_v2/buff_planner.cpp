@@ -75,11 +75,20 @@ BuffPlanner::BuffPlanner(Config config)
 }
 BuffPlanner::BuffPlanner(const std::string & config_path) : BuffPlanner(load_config(config_path)) {}
 
-BuffPlan BuffPlanner::plan(std::optional<RuneState> target, double bullet_speed,
+BuffPlan BuffPlanner::plan(std::uint64_t target_generation, std::optional<RuneState> target,
+                           double bullet_speed,
                            const io::GimbalState & gimbal, Timestamp now)
 {
   BuffPlan result;
-  if (!target) return result;
+  if (!target) {
+    attack_start_.reset();
+    attack_generation_.reset();
+    return result;
+  }
+  if (attack_generation_ != target_generation) {
+    attack_start_ = now;
+    attack_generation_ = target_generation;
+  }
   if (bullet_speed < config_.bullet_speed_min || bullet_speed > config_.bullet_speed_max)
     bullet_speed = config_.bullet_speed_default;
   const double stale =
@@ -116,7 +125,6 @@ BuffPlan BuffPlanner::plan(std::optional<RuneState> target, double bullet_speed,
                     std::remainder(angles.x() - before->angles.x(), 2 * kPi)) / 0.0001;
   result.pitch_acc = (after->angles.y() - 2 * angles.y() + before->angles.y()) / 0.0001;
   result.distance = distance;
-  if (!attack_start_) attack_start_ = now;
   const double cycle = config_.rune_idle_duration + config_.rune_shoot_duration;
   const double phase =
     std::fmod(std::chrono::duration<double>(now - *attack_start_).count(), cycle);

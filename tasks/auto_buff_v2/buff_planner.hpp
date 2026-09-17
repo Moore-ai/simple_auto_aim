@@ -1,6 +1,7 @@
 #ifndef AUTO_BUFF_V2__BUFF_PLANNER_HPP
 #define AUTO_BUFF_V2__BUFF_PLANNER_HPP
 
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -44,13 +45,15 @@ public:
 
   explicit BuffPlanner(Config config);
   explicit BuffPlanner(const std::string & config_path);
-  BuffPlan plan(std::optional<RuneState> target, double bullet_speed,
+  BuffPlan plan(std::uint64_t target_generation, std::optional<RuneState> target,
+                double bullet_speed,
                 const io::GimbalState & gimbal, Timestamp now);
 
 private:
   Config config_;
   std::unique_ptr<tools::BallisticSolver> ballistic_solver_;
   std::optional<Timestamp> attack_start_;
+  std::optional<std::uint64_t> attack_generation_;
 };
 }  // namespace auto_buff_v2
 

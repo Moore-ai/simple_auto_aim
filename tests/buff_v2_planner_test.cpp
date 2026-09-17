@@ -24,20 +24,26 @@ int main()
   config.pitch_tolerance = 0.04;
   auto_buff_v2::BuffPlanner planner(config);
   io::GimbalState gimbal;
-  const auto idle = planner.plan(target, 20, gimbal, start);
+  const auto idle = planner.plan(1, target, 20, gimbal, start);
   assert(idle.control && !idle.fire);
   gimbal.yaw = idle.yaw;
   gimbal.pitch = idle.pitch;
-  const auto shoot = planner.plan(target, 20, gimbal, start + 450ms);
+  const auto shoot = planner.plan(1, target, 20, gimbal, start + 450ms);
   assert(shoot.control && shoot.fire);
   gimbal.yaw = shoot.yaw + 0.05;
-  assert(!planner.plan(target, 20, gimbal, start + 470ms).fire);
+  assert(!planner.plan(1, target, 20, gimbal, start + 470ms).fire);
   gimbal.yaw = shoot.yaw;
   gimbal.pitch = shoot.pitch + 0.03;
-  assert(!planner.plan(target, 20, gimbal, start + 480ms).fire);
+  assert(!planner.plan(1, target, 20, gimbal, start + 480ms).fire);
+
+  gimbal.pitch = shoot.pitch;
+  const auto lost = planner.plan(1, std::nullopt, 20, gimbal, start + 460ms);
+  assert(!lost.control && !lost.fire);
+  const auto reacquired = planner.plan(2, target, 20, gimbal, start + 470ms);
+  assert(reacquired.control && !reacquired.fire);
 
   target.inactive.fill(false);
-  const auto no_blade = planner.plan(target, 20, gimbal, start + 500ms);
+  const auto no_blade = planner.plan(2, target, 20, gimbal, start + 500ms);
   assert(!no_blade.fire);
 
   target.inactive[0] = true;
@@ -47,7 +53,7 @@ int main()
   target.sine_a = 0.8;
   target.sine_omega = 2;
   target.sine_phase = 0.2;
-  const auto accelerating = planner.plan(target, 20, gimbal, start + 510ms);
+  const auto accelerating = planner.plan(2, target, 20, gimbal, start + 510ms);
   assert(accelerating.control);
   assert(std::abs(accelerating.pitch_acc) > 0.01);
 
@@ -83,9 +89,9 @@ int main()
   auto_buff_v2::BuffPlanner njust_planner(njust_config_path);
   auto_buff_v2::BuffPlanner high_drag_planner(high_drag_config_path);
   auto_buff_v2::BuffPlanner vacuum_planner(vacuum_config_path);
-  const auto njust_plan = njust_planner.plan(target, 20, io::GimbalState{}, start);
-  const auto high_drag_plan = high_drag_planner.plan(target, 20, io::GimbalState{}, start);
-  const auto vacuum_plan = vacuum_planner.plan(target, 20, io::GimbalState{}, start);
+  const auto njust_plan = njust_planner.plan(1, target, 20, io::GimbalState{}, start);
+  const auto high_drag_plan = high_drag_planner.plan(1, target, 20, io::GimbalState{}, start);
+  const auto vacuum_plan = vacuum_planner.plan(1, target, 20, io::GimbalState{}, start);
   assert(njust_plan.control && high_drag_plan.control && vacuum_plan.control);
   assert(high_drag_plan.pitch < njust_plan.pitch);
   assert(njust_plan.pitch < vacuum_plan.pitch);
