@@ -2,6 +2,7 @@
 .github/
 AGENTS.md
 CLAUDE.md
+CONTEXT.md
 build/
 Camera/
 logs/
