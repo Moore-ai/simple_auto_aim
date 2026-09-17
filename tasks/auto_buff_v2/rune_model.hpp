@@ -36,7 +36,7 @@ struct RuneState
   std::size_t update_count = 0;
 
   void transition(double seconds);
-  std::optional<Eigen::Vector3d> aimpoint() const;
+  std::optional<Eigen::Vector3d> aimpoint_at(Timestamp prediction_time) const;
 };
 
 class RuneModel

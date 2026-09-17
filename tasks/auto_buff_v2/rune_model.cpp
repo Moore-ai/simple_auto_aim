@@ -33,17 +33,21 @@ void RuneState::transition(double seconds)
   }
 }
 
-std::optional<Eigen::Vector3d> RuneState::aimpoint() const
+std::optional<Eigen::Vector3d> RuneState::aimpoint_at(Timestamp prediction_time) const
 {
   const auto delay = std::chrono::seconds(sine_valid ? 6 : 3);
-  if (std::chrono::steady_clock::now() - start_timestamp < delay) return std::nullopt;
+  if (prediction_time < timestamp || prediction_time - start_timestamp < delay)
+    return std::nullopt;
+  RuneState predicted = *this;
+  predicted.transition(std::chrono::duration<double>(prediction_time - timestamp).count());
   constexpr double kPi = 3.14159265358979323846;
-  for (std::size_t i = 0; i < inactive.size(); ++i) {
-    if (!inactive[i]) continue;
-    const double angle = rotation_angle + i * 2 * kPi / 5;
+  for (std::size_t i = 0; i < predicted.inactive.size(); ++i) {
+    if (!predicted.inactive[i]) continue;
+    const double angle = predicted.rotation_angle + i * 2 * kPi / 5;
     const Eigen::Vector3d local(0, -kRuneGlobalRadius * std::sin(angle),
                                 kRuneGlobalRadius * std::cos(angle));
-    return center + Eigen::AngleAxisd(face_yaw, Eigen::Vector3d::UnitZ()) * local;
+    return predicted.center +
+           Eigen::AngleAxisd(predicted.face_yaw, Eigen::Vector3d::UnitZ()) * local;
   }
   return std::nullopt;
 }

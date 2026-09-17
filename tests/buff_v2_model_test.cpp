@@ -22,14 +22,14 @@ int main()
   assert(std::abs(big.rotation_angle - (0.5 + 0.25 * (1 - std::cos(1.0)))) < 1e-9);
   assert(std::abs(big.rotation_speed - (1 + 0.5 * std::sin(1.0))) < 1e-9);
 
+  const auto start = auto_buff_v2::Timestamp{};
   auto_buff_v2::RuneState warming;
   warming.center = {3, 0, 0};
-  warming.start_timestamp = std::chrono::steady_clock::now() -
-                            std::chrono::milliseconds(2900);
-  warming.timestamp = std::chrono::steady_clock::now() +
-                      std::chrono::milliseconds(300);
+  warming.start_timestamp = start;
+  warming.timestamp = start + std::chrono::seconds(2);
   warming.inactive[0] = true;
-  assert(!warming.aimpoint());
+  assert(!warming.aimpoint_at(start + std::chrono::milliseconds(2999)));
+  assert(warming.aimpoint_at(start + std::chrono::seconds(3)));
 
   auto_buff_v2::RuneEnergyFitter fitter;
   for (int i = 0; i <= 40; ++i) {

@@ -37,14 +37,6 @@ BuffPlanner::Config load_config(const std::string & path)
   return result;
 }
 
-std::optional<Eigen::Vector3d> future_point(RuneState state, double future_seconds)
-{
-  state.transition(future_seconds);
-  state.timestamp += std::chrono::duration_cast<Timestamp::duration>(
-    std::chrono::duration<double>(future_seconds));
-  return state.aimpoint();
-}
-
 struct AimSolution
 {
   Eigen::Vector2d angles;
@@ -52,11 +44,12 @@ struct AimSolution
   Eigen::Vector3d point;
 };
 
-std::optional<AimSolution> aim_solution(RuneState state, double seconds, double speed,
+std::optional<AimSolution> aim_solution(const RuneState & state, Timestamp prediction_time,
+                                        double speed,
                                         double yaw_offset, double pitch_offset,
                                         const tools::BallisticSolver & ballistic_solver)
 {
-  const auto point = future_point(state, seconds);
+  const auto point = state.aimpoint_at(prediction_time);
   if (!point) return std::nullopt;
   const double distance = std::hypot(point->x(), point->y());
   const auto bullet = ballistic_solver.solve(speed, distance, point->z());
@@ -91,15 +84,15 @@ BuffPlan BuffPlanner::plan(std::uint64_t target_generation, std::optional<RuneSt
   }
   if (bullet_speed < config_.bullet_speed_min || bullet_speed > config_.bullet_speed_max)
     bullet_speed = config_.bullet_speed_default;
-  const double stale =
-    std::max(0.0, std::chrono::duration<double>(now - target->timestamp).count());
   const double distance = target->center.norm();
   double fly_time = distance / bullet_speed;
   Eigen::Vector2d angles;
   Eigen::Vector3d attack_point;
   for (int i = 0; i < 5; ++i) {
-    const double future = stale + config_.shoot_delay + fly_time;
-    const auto solution = aim_solution(*target, future, bullet_speed,
+    const double future = config_.shoot_delay + fly_time;
+    const auto prediction_time = now + std::chrono::duration_cast<Timestamp::duration>(
+      std::chrono::duration<double>(future));
+    const auto solution = aim_solution(*target, prediction_time, bullet_speed,
                                        config_.yaw_offset, config_.pitch_offset,
                                        *ballistic_solver_);
     if (!solution) return result;
@@ -108,11 +101,15 @@ BuffPlan BuffPlanner::plan(std::uint64_t target_generation, std::optional<RuneSt
     if (std::abs(solution->fly_time - fly_time) < 0.001) break;
     fly_time = solution->fly_time;
   }
-  const double future = stale + config_.shoot_delay + fly_time;
-  const auto before = aim_solution(*target, future - 0.01, bullet_speed,
+  const double future = config_.shoot_delay + fly_time;
+  const auto before_time = now + std::chrono::duration_cast<Timestamp::duration>(
+    std::chrono::duration<double>(future - 0.01));
+  const auto after_time = now + std::chrono::duration_cast<Timestamp::duration>(
+    std::chrono::duration<double>(future + 0.01));
+  const auto before = aim_solution(*target, before_time, bullet_speed,
                                    config_.yaw_offset, config_.pitch_offset,
                                    *ballistic_solver_);
-  const auto after = aim_solution(*target, future + 0.01, bullet_speed,
+  const auto after = aim_solution(*target, after_time, bullet_speed,
                                   config_.yaw_offset, config_.pitch_offset,
                                   *ballistic_solver_);
   if (!before || !after) return result;
