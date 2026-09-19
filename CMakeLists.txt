@@ -51,7 +51,6 @@ include_directories(${PROJECT_SOURCE_DIR})
 add_subdirectory(tools)
 add_subdirectory(io)
 add_subdirectory(tasks/auto_aim)
-add_subdirectory(tasks/auto_buff)
 add_subdirectory(tasks/auto_buff_v2)
 
 add_executable(standard
@@ -71,6 +70,9 @@ target_link_libraries(standard PRIVATE
 
 add_test(NAME standard_cli_test
   COMMAND ${PROJECT_SOURCE_DIR}/tests/standard_cli_test.sh $<TARGET_FILE:standard>)
+
+add_test(NAME legacy_buff_ownership_test
+  COMMAND ${PROJECT_SOURCE_DIR}/tests/legacy_buff_ownership_test.sh ${CMAKE_BINARY_DIR})
 
 add_executable(mode_runtime_test tests/mode_runtime_test.cpp)
 target_compile_options(mode_runtime_test PRIVATE -UNDEBUG)
