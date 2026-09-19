@@ -56,6 +56,7 @@ add_subdirectory(tasks/auto_buff_v2)
 
 add_executable(standard
   src/standard.cpp
+  src/mode_runtime.cpp
   tools/detect_factory.cpp
   tools/foxglove_visualizer.cpp)
 target_link_libraries(standard PRIVATE
@@ -70,6 +71,10 @@ target_link_libraries(standard PRIVATE
 
 add_test(NAME standard_cli_test
   COMMAND ${PROJECT_SOURCE_DIR}/tests/standard_cli_test.sh $<TARGET_FILE:standard>)
+
+add_executable(mode_runtime_test tests/mode_runtime_test.cpp)
+target_compile_options(mode_runtime_test PRIVATE -UNDEBUG)
+add_test(NAME mode_runtime_test COMMAND mode_runtime_test)
 
 add_executable(processed_frame_test tests/processed_frame_test.cpp)
 target_compile_options(processed_frame_test PRIVATE -UNDEBUG)
