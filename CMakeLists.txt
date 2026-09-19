@@ -86,6 +86,11 @@ target_compile_options(frame_facts_test PRIVATE -UNDEBUG)
 target_link_libraries(frame_facts_test PRIVATE ${OpenCV_LIBS} io)
 add_test(NAME frame_facts_test COMMAND frame_facts_test)
 
+add_executable(auto_aim_frame_runtime_test tests/auto_aim_frame_runtime_test.cpp)
+target_compile_options(auto_aim_frame_runtime_test PRIVATE -UNDEBUG)
+target_link_libraries(auto_aim_frame_runtime_test PRIVATE io)
+add_test(NAME auto_aim_frame_runtime_test COMMAND auto_aim_frame_runtime_test)
+
 add_executable(buff_v2_model_test tests/buff_v2_model_test.cpp)
 target_compile_options(buff_v2_model_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_model_test PRIVATE auto_buff_v2)
@@ -102,6 +107,12 @@ target_link_libraries(buff_v2_assignment_test PRIVATE auto_buff_v2)
 add_executable(buff_v2_detector_test tests/buff_v2_detector_test.cpp)
 target_compile_options(buff_v2_detector_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_detector_test PRIVATE auto_buff_v2)
+
+add_executable(buff_v2_frame_processor_test tests/buff_v2_frame_processor_test.cpp)
+target_compile_options(buff_v2_frame_processor_test PRIVATE -UNDEBUG)
+target_link_libraries(
+  buff_v2_frame_processor_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_frame_processor_test COMMAND buff_v2_frame_processor_test)
 
 add_executable(buff_v2_pnp_test tests/buff_v2_pnp_test.cpp)
 target_compile_options(buff_v2_pnp_test PRIVATE -UNDEBUG)

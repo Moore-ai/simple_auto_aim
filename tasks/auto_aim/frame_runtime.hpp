@@ -1,36 +1,34 @@
-#ifndef TOOLS__FRAME_RUNTIME_HPP
-#define TOOLS__FRAME_RUNTIME_HPP
+#ifndef AUTO_AIM__FRAME_RUNTIME_HPP
+#define AUTO_AIM__FRAME_RUNTIME_HPP
 
 #include <utility>
 
-#include "io/gimbal/gimbal.hpp"
-#include "tasks/auto_aim/solver.hpp"
-#include "tasks/auto_aim/tracker.hpp"
+#include "solver.hpp"
+#include "tracker.hpp"
 #include "tools/detect_factory.hpp"
 #include "tools/frame_facts.hpp"
 #include "tools/processed_frame.hpp"
 
-namespace tools
+namespace auto_aim
 {
-
-// Owns the ordering and timestamp contract for one vehicle camera frame.
+// Owns the ordering and timestamp contract for one auto-aim camera frame.
 class FrameRuntime
 {
 public:
   FrameRuntime(
-    io::Camera & camera, io::Gimbal & gimbal, auto_aim::Solver & solver,
-    auto_aim::Tracker & tracker, DetectionBackend & detector)
+    io::Camera & camera, io::Gimbal & gimbal, Solver & solver, Tracker & tracker,
+    tools::DetectionBackend & detector)
   : frames_{camera, gimbal}, solver_{solver}, tracker_{tracker}, detector_{detector}
   {}
 
-  bool next(ProcessedFrame & result)
+  bool next(tools::ProcessedFrame & result)
   {
-    FrameFacts facts;
+    tools::FrameFacts facts;
     if (!frames_.next(facts)) return false;
 
     if (const auto color = io::infantry_enemy_color(facts.received.state.mode)) {
       tracker_.set_enemy_color(
-        *color == io::InfantryEnemyColor::red ? auto_aim::Color::red : auto_aim::Color::blue);
+        *color == io::InfantryEnemyColor::red ? Color::red : Color::blue);
     }
 
     solver_.set_R_gimbal2world(facts.gimbal_orientation);
@@ -46,12 +44,11 @@ public:
   }
 
 private:
-  FrameCapture frames_;
-  auto_aim::Solver & solver_;
-  auto_aim::Tracker & tracker_;
-  DetectionBackend & detector_;
+  tools::FrameCapture frames_;
+  Solver & solver_;
+  Tracker & tracker_;
+  tools::DetectionBackend & detector_;
 };
+}  // namespace auto_aim
 
-}  // namespace tools
-
-#endif  // TOOLS__FRAME_RUNTIME_HPP
+#endif  // AUTO_AIM__FRAME_RUNTIME_HPP

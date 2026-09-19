@@ -10,6 +10,7 @@
 
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
+#include "tasks/auto_aim/frame_runtime.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
@@ -19,7 +20,6 @@
 #include "tools/detect_factory.hpp"
 #include "tools/exiter.hpp"
 #include "tools/foxglove_visualizer.hpp"
-#include "tools/frame_runtime.hpp"
 #include "tools/processed_frame.hpp"
 #include "tools/recorder.hpp"
 #include "tools/thread_safe_queue.hpp"
@@ -105,7 +105,7 @@ private:
   auto_aim::Tracker tracker_;
   auto_aim::Planner planner_;
   std::unique_ptr<tools::DetectionBackend> detector_;
-  tools::FrameRuntime runtime_;
+  auto_aim::FrameRuntime runtime_;
   tools::FoxgloveVisualizer & foxglove_;
   tools::ThreadSafeQueue<Request, true> target_queue_{1};
   std::atomic<bool> quit_{false};
