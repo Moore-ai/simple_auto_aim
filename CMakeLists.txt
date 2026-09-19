@@ -71,6 +71,11 @@ target_link_libraries(standard PRIVATE
 add_test(NAME standard_cli_test
   COMMAND ${PROJECT_SOURCE_DIR}/tests/standard_cli_test.sh $<TARGET_FILE:standard>)
 
+add_executable(processed_frame_test tests/processed_frame_test.cpp)
+target_compile_options(processed_frame_test PRIVATE -UNDEBUG)
+target_link_libraries(processed_frame_test PRIVATE io)
+add_test(NAME processed_frame_test COMMAND processed_frame_test)
+
 add_executable(buff_v2_model_test tests/buff_v2_model_test.cpp)
 target_compile_options(buff_v2_model_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_model_test PRIVATE auto_buff_v2)
@@ -89,7 +94,7 @@ target_link_libraries(buff_v2_pnp_test PRIVATE auto_buff_v2)
 
 add_executable(buff_v2_planner_test tests/buff_v2_planner_test.cpp)
 target_compile_options(buff_v2_planner_test PRIVATE -UNDEBUG)
-target_link_libraries(buff_v2_planner_test PRIVATE auto_buff_v2)
+target_link_libraries(buff_v2_planner_test PRIVATE auto_buff_v2 fmt::fmt)
 
 # 相机与手眼标定工具。
 add_executable(capture calibration/capture.cpp)

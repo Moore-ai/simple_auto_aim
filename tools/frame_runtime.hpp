@@ -2,7 +2,6 @@
 #define TOOLS__FRAME_RUNTIME_HPP
 
 #include <cstdint>
-#include <list>
 #include <utility>
 
 #include "io/camera.hpp"
@@ -10,16 +9,10 @@
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 #include "tools/detect_factory.hpp"
-#include "tools/frame_snapshot.hpp"
+#include "tools/processed_frame.hpp"
 
 namespace tools
 {
-
-struct ProcessedFrame
-{
-  FrameSnapshot snapshot;
-  std::list<auto_aim::Target> targets;
-};
 
 // Owns the ordering and timestamp contract for one vehicle camera frame.
 class FrameRuntime
@@ -58,6 +51,7 @@ public:
       tracker_.debug_data(), sent.packet, received.packet);
     result.snapshot.target_generation = target_generation_;
     result.targets = std::move(targets);
+    result.buff_target.reset();
     return true;
   }
 

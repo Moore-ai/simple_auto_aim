@@ -7,21 +7,19 @@
 
 #include "io/gimbal/gimbal.hpp"
 #include "rune_model.hpp"
+#include "tasks/auto_aim/planner/planner.hpp"
 #include "tools/ballistic_solver.hpp"
 
 namespace auto_buff_v2
 {
-struct BuffPlan
+struct BuffTrackingRequest
 {
-  bool control = false;
-  bool fire = false;
-  float yaw = 0;
-  float yaw_vel = 0;
-  float yaw_acc = 0;
-  float pitch = 0;
-  float pitch_vel = 0;
-  float pitch_acc = 0;
-  float distance = -1;
+  auto_aim::Trajectory trajectory;
+  double yaw0 = 0;
+  double distance = -1;
+  double fly_time = 0;
+  Eigen::Vector3d rune_center = Eigen::Vector3d::Zero();
+  Eigen::Vector3d aimpoint = Eigen::Vector3d::Zero();
 };
 
 class BuffPlanner
@@ -45,9 +43,11 @@ public:
 
   explicit BuffPlanner(Config config);
   explicit BuffPlanner(const std::string & config_path);
-  BuffPlan plan(std::uint64_t target_generation, std::optional<RuneState> target,
-                double bullet_speed,
-                const io::GimbalState & gimbal, Timestamp now);
+  std::optional<BuffTrackingRequest> prepare(
+    std::uint64_t target_generation, const std::optional<RuneState> & target, double bullet_speed,
+    Timestamp now);
+  bool fire_advice(const BuffTrackingRequest & request, const auto_aim::Plan & plan,
+                   const io::GimbalState & gimbal, Timestamp now) const;
 
 private:
   Config config_;

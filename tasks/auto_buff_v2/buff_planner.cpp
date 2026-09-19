@@ -1,6 +1,7 @@
 #include "buff_planner.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include <yaml-cpp/yaml.h>
@@ -44,12 +45,18 @@ struct AimSolution
   Eigen::Vector3d point;
 };
 
+Timestamp offset_time(Timestamp time, double seconds)
+{
+  return time + std::chrono::duration_cast<Timestamp::duration>(
+                   std::chrono::duration<double>(seconds));
+}
+
 std::optional<AimSolution> aim_solution(const RuneState & state, Timestamp prediction_time,
                                         double speed,
                                         double yaw_offset, double pitch_offset,
                                         const tools::BallisticSolver & ballistic_solver)
 {
-  const auto point = state.aimpoint_at(prediction_time);
+  const auto point = state.aimpoint_at(std::max(prediction_time, state.timestamp));
   if (!point) return std::nullopt;
   const double distance = std::hypot(point->x(), point->y());
   const auto bullet = ballistic_solver.solve(speed, distance, point->z());
@@ -58,6 +65,33 @@ std::optional<AimSolution> aim_solution(const RuneState & state, Timestamp predi
     {std::remainder(std::atan2(point->y(), point->x()) + yaw_offset, 2 * kPi),
      -bullet->pitch - pitch_offset},
     bullet->fly_time, *point};
+}
+
+std::optional<auto_aim::Trajectory> make_reference_trajectory(
+  const RuneState & state, Timestamp center_time, double speed, double yaw0,
+  double yaw_offset, double pitch_offset, const tools::BallisticSolver & ballistic_solver)
+{
+  std::array<AimSolution, auto_aim::HORIZON + 2> samples;
+  for (int i = 0; i <= auto_aim::HORIZON + 1; ++i) {
+    const auto time = offset_time(
+      center_time,
+      (static_cast<double>(i - 1 - auto_aim::HALF_HORIZON)) * auto_aim::DT);
+    const auto solution = aim_solution(
+      state, time, speed, yaw_offset, pitch_offset, ballistic_solver);
+    if (!solution) return std::nullopt;
+    samples[i] = *solution;
+  }
+
+  auto_aim::Trajectory result;
+  for (int i = 0; i < auto_aim::HORIZON; ++i) {
+    const auto & before = samples[i];
+    const auto & center = samples[i + 1];
+    const auto & after = samples[i + 2];
+    result.col(i) << std::remainder(center.angles.x() - yaw0, 2 * kPi),
+      std::remainder(after.angles.x() - before.angles.x(), 2 * kPi) / (2 * auto_aim::DT),
+      center.angles.y(), (after.angles.y() - before.angles.y()) / (2 * auto_aim::DT);
+  }
+  return result;
 }
 }  // namespace
 
@@ -68,15 +102,14 @@ BuffPlanner::BuffPlanner(Config config)
 }
 BuffPlanner::BuffPlanner(const std::string & config_path) : BuffPlanner(load_config(config_path)) {}
 
-BuffPlan BuffPlanner::plan(std::uint64_t target_generation, std::optional<RuneState> target,
-                           double bullet_speed,
-                           const io::GimbalState & gimbal, Timestamp now)
+std::optional<BuffTrackingRequest> BuffPlanner::prepare(
+  std::uint64_t target_generation, const std::optional<RuneState> & target, double bullet_speed,
+  Timestamp now)
 {
-  BuffPlan result;
   if (!target) {
     attack_start_.reset();
     attack_generation_.reset();
-    return result;
+    return std::nullopt;
   }
   if (attack_generation_ != target_generation) {
     attack_start_ = now;
@@ -86,53 +119,51 @@ BuffPlan BuffPlanner::plan(std::uint64_t target_generation, std::optional<RuneSt
     bullet_speed = config_.bullet_speed_default;
   const double distance = target->center.norm();
   double fly_time = distance / bullet_speed;
-  Eigen::Vector2d angles;
-  Eigen::Vector3d attack_point;
   for (int i = 0; i < 5; ++i) {
     const double future = config_.shoot_delay + fly_time;
-    const auto prediction_time = now + std::chrono::duration_cast<Timestamp::duration>(
-      std::chrono::duration<double>(future));
+    const auto prediction_time = offset_time(now, future);
     const auto solution = aim_solution(*target, prediction_time, bullet_speed,
                                        config_.yaw_offset, config_.pitch_offset,
                                        *ballistic_solver_);
-    if (!solution) return result;
-    angles = solution->angles;
-    attack_point = solution->point;
+    if (!solution) return std::nullopt;
     if (std::abs(solution->fly_time - fly_time) < 0.001) break;
     fly_time = solution->fly_time;
   }
-  const double future = config_.shoot_delay + fly_time;
-  const auto before_time = now + std::chrono::duration_cast<Timestamp::duration>(
-    std::chrono::duration<double>(future - 0.01));
-  const auto after_time = now + std::chrono::duration_cast<Timestamp::duration>(
-    std::chrono::duration<double>(future + 0.01));
-  const auto before = aim_solution(*target, before_time, bullet_speed,
+  const auto center_time = offset_time(now, config_.shoot_delay + fly_time);
+  const auto center = aim_solution(*target, center_time, bullet_speed,
                                    config_.yaw_offset, config_.pitch_offset,
                                    *ballistic_solver_);
-  const auto after = aim_solution(*target, after_time, bullet_speed,
-                                  config_.yaw_offset, config_.pitch_offset,
-                                  *ballistic_solver_);
-  if (!before || !after) return result;
-  result.control = true;
-  result.yaw = angles.x();
-  result.pitch = angles.y();
-  result.yaw_vel = std::remainder(after->angles.x() - before->angles.x(), 2 * kPi) / 0.02;
-  result.pitch_vel = (after->angles.y() - before->angles.y()) / 0.02;
-  result.yaw_acc = (std::remainder(after->angles.x() - angles.x(), 2 * kPi) -
-                    std::remainder(angles.x() - before->angles.x(), 2 * kPi)) / 0.0001;
-  result.pitch_acc = (after->angles.y() - 2 * angles.y() + before->angles.y()) / 0.0001;
-  result.distance = distance;
+  if (!center) return std::nullopt;
+  const auto trajectory = make_reference_trajectory(
+    *target, center_time, bullet_speed, center->angles.x(), config_.yaw_offset,
+    config_.pitch_offset, *ballistic_solver_);
+  if (!trajectory) return std::nullopt;
+
+  BuffTrackingRequest request;
+  request.trajectory = *trajectory;
+  request.yaw0 = center->angles.x();
+  request.distance = distance;
+  request.fly_time = fly_time;
+  request.rune_center = target->center;
+  request.aimpoint = center->point;
+  return request;
+}
+
+bool BuffPlanner::fire_advice(const BuffTrackingRequest & request, const auto_aim::Plan & plan,
+                              const io::GimbalState & gimbal, Timestamp now) const
+{
+  if (!plan.control || !attack_start_) return false;
   const double cycle = config_.rune_idle_duration + config_.rune_shoot_duration;
   const double phase =
     std::fmod(std::chrono::duration<double>(now - *attack_start_).count(), cycle);
   const bool shoot_phase = phase >= config_.rune_idle_duration;
-  const double xy = std::hypot(attack_point.x(), attack_point.y());
-  if (xy < 0.1) return result;
+  const double xy = std::hypot(request.aimpoint.x(), request.aimpoint.y());
+  if (xy < 0.1) return false;
   const double ratio = std::min(xy, 5.0) / xy;
-  const Eigen::Vector3d scaled = attack_point * ratio;
+  const Eigen::Vector3d scaled = request.aimpoint * ratio;
   const double scaled_xy = std::hypot(scaled.x(), scaled.y());
-  const double center_yaw = std::atan2(target->center.y(), target->center.x());
-  const double target_yaw = std::atan2(attack_point.y(), attack_point.x());
+  const double center_yaw = std::atan2(request.rune_center.y(), request.rune_center.x());
+  const double target_yaw = std::atan2(request.aimpoint.y(), request.aimpoint.x());
   const double blade_scale = std::max(0.0, std::cos(std::remainder(
     target_yaw - center_yaw, 2 * kPi)));
   const double yaw_window = std::atan2(config_.yaw_tolerance * blade_scale, scaled_xy);
@@ -141,10 +172,9 @@ BuffPlan BuffPlanner::plan(std::uint64_t target_generation, std::optional<RuneSt
     std::atan2(scaled.z() - config_.pitch_tolerance * blade_scale, scaled_xy) - pitch_center;
   const double pitch_upper =
     std::atan2(scaled.z() + config_.pitch_tolerance * blade_scale, scaled_xy) - pitch_center;
-  const double pitch_error = gimbal.pitch - result.pitch;
-  result.fire = shoot_phase &&
-                std::abs(std::remainder(result.yaw - gimbal.yaw, 2 * kPi)) <= yaw_window &&
-                pitch_error >= pitch_lower && pitch_error <= pitch_upper;
-  return result;
+  const double pitch_error = gimbal.pitch - plan.pitch;
+  return shoot_phase &&
+         std::abs(std::remainder(plan.yaw - gimbal.yaw, 2 * kPi)) <= yaw_window &&
+         pitch_error >= pitch_lower && pitch_error <= pitch_upper;
 }
 }  // namespace auto_buff_v2

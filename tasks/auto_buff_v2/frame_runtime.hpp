@@ -13,16 +13,10 @@
 #include "io/gimbal/gimbal.hpp"
 #include "rune_detector.hpp"
 #include "rune_model.hpp"
-#include "tools/frame_snapshot.hpp"
+#include "tools/processed_frame.hpp"
 
 namespace auto_buff_v2
 {
-struct ProcessedBuffFrame
-{
-  tools::FrameSnapshot snapshot;
-  std::optional<RuneState> target;
-};
-
 class FrameRuntime
 {
 public:
@@ -47,7 +41,7 @@ public:
     }
   }
 
-  bool next(ProcessedBuffFrame & result)
+  bool next(tools::ProcessedFrame & result)
   {
     cv::Mat image;
     Timestamp timestamp;
@@ -77,7 +71,8 @@ public:
       timestamp, debug, orientation, received.state, sent.command, {}, {}, sent.packet,
       received.packet);
     result.snapshot.target_generation = target_generation_;
-    result.target = target;
+    result.targets.clear();
+    result.buff_target = target;
     return true;
   }
 

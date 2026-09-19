@@ -44,6 +44,8 @@ public:
   Eigen::Vector4d debug_xyza;
   Planner(const std::string & config_path);
 
+  // Run the shared yaw/pitch MPC. The trajectory's yaw row is relative to yaw0.
+  Plan plan(const Trajectory & trajectory, double yaw0, double distance);
   Plan plan(Target target, double bullet_speed);
   Plan plan(std::optional<Target> target, double bullet_speed);
 
