@@ -289,6 +289,42 @@ void correct_initial_observation(Vector & x, Matrix & covariance, int feature,
 }
 }  // namespace
 
+std::vector<RuneReprojectedFeature> RuneModel::reprojected_features() const
+{
+  if (!state_) return {};
+  const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() *
+                                          R_gimbal2imubody_ * R_camera2gimbal_;
+  const Eigen::Vector3d t_camera2world = q_gimbal2world_ *
+                                          R_gimbal2imubody_ * t_camera2gimbal_;
+  const auto state = vector_from(*state_);
+  std::vector<RuneReprojectedFeature> result;
+  result.reserve(6);
+  for (int id = 0; id <= 5; ++id) {
+    const auto point = project_feature(
+      state, id, R_camera2world, t_camera2world, camera_matrix_, distort_coeffs_);
+    if (point) result.push_back({id, *point});
+  }
+  return result;
+}
+
+std::optional<cv::Point2f> RuneModel::reprojected_center() const
+{
+  if (!state_) return std::nullopt;
+  const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() *
+                                          R_gimbal2imubody_ * R_camera2gimbal_;
+  const Eigen::Vector3d t_camera2world = q_gimbal2world_ *
+                                          R_gimbal2imubody_ * t_camera2gimbal_;
+  const Eigen::Vector3d camera =
+    R_camera2world.transpose() * (state_->center - t_camera2world);
+  if (camera.z() <= 0.1) return std::nullopt;
+  std::vector<cv::Point2f> pixels;
+  cv::projectPoints(
+    std::vector<cv::Point3f>{{static_cast<float>(camera.x()), static_cast<float>(camera.y()),
+                              static_cast<float>(camera.z())}},
+    cv::Vec3d(0, 0, 0), cv::Vec3d(0, 0, 0), camera_matrix_, distort_coeffs_, pixels);
+  return pixels.front();
+}
+
 bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
 {
   const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() *
@@ -498,12 +534,14 @@ void RuneModel::update_motion_fit(RuneState & state, double elapsed_seconds)
     state.sine_t = elapsed_seconds;
     state.sine_valid = true;
     state.use_prediction_speed = false;
+    state.prediction_cost = sine->cost;
     state.rotation_speed = sine->v + sine->a * std::sin(state.sine_phase);
   } else if (linear) {
     state.prediction_speed = linear->speed;
     state.rotation_speed = linear->speed;
     state.use_prediction_speed = true;
     state.sine_valid = false;
+    state.prediction_cost = linear->cost;
   }
 }
 

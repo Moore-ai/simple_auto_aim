@@ -549,6 +549,37 @@ void detail::draw_aim_overlay(
   if (locked_armor) draw_polygon(image, locked_armor->points, {0, 255, 255});
 }
 
+void detail::draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data)
+{
+  const cv::Scalar yellow{0, 255, 255};
+  const cv::Scalar green{0, 255, 0};
+  for (const auto & detection : debug_data.detections) {
+    cv::circle(image, detection.point, 5, green, 2, cv::LINE_AA);
+    for (const auto & corner : detection.corners)
+      cv::circle(image, corner, 3, green, 1, cv::LINE_AA);
+    if (!detection.label.empty())
+      cv::putText(image, detection.label, detection.point, cv::FONT_HERSHEY_SIMPLEX, 0.45, green,
+                  1, cv::LINE_AA);
+  }
+  for (const auto & point : debug_data.reprojected_features)
+    cv::circle(image, point, 4, yellow, 2, cv::LINE_AA);
+
+  if (debug_data.blade_polygon) {
+    std::vector<cv::Point2f> blades(
+      debug_data.blade_polygon->begin(), debug_data.blade_polygon->end());
+    draw_polygon(image, blades, yellow);
+    if (debug_data.icon) {
+      cv::Point2f center;
+      for (const auto & blade : *debug_data.blade_polygon) center += blade;
+      center *= 1.0F / static_cast<float>(debug_data.blade_polygon->size());
+      cv::line(image, *debug_data.icon, center, yellow, 2, cv::LINE_AA);
+    }
+  }
+  if (debug_data.info_anchor && !debug_data.info.empty())
+    cv::putText(image, debug_data.info, *debug_data.info_anchor, cv::FONT_HERSHEY_SIMPLEX, 0.45,
+                {255, 255, 255}, 1, cv::LINE_AA);
+}
+
 std::optional<std::vector<cv::Point2f>> detail::anti_spin_hit_armor(
   const auto_aim::Plan & plan, std::uint64_t plan_target_generation,
   std::uint64_t current_target_generation, auto_aim::ArmorType armor_type,
@@ -745,6 +776,7 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
     }
     detail::draw_aim_overlay(
       image, frame.detections.armors, impl_->enemy_color, locked_armor, anti_spin_hit_armor);
+    detail::draw_buff_overlay(image, frame.buff_debug);
 
     cv::Mat detection_image = frame.image.clone();
     detail::draw_aim_overlay(

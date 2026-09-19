@@ -42,6 +42,12 @@ int main()
   assert((state->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
   assert(std::abs(state->rotation_angle) < 0.03);
   assert(!state->inactive[0]);
+  const auto reprojected = model.reprojected_features();
+  assert(reprojected.size() == 6);
+  for (std::size_t id = 0; id < reprojected.size(); ++id)
+    assert(reprojected[id].id == static_cast<int>(id));
+  assert(cv::norm(reprojected.front().point - pixel.front()) < 2.0);
+  assert(model.reprojected_center());
 
   auto_buff_v2::RuneElements candidates = elements;
   candidates.icons.insert(candidates.icons.begin(),

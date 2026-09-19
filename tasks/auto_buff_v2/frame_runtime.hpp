@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include <fmt/format.h>
 #include <opencv2/imgproc.hpp>
 #include <yaml-cpp/yaml.h>
 
@@ -57,19 +58,46 @@ public:
     const bool has_target = target.has_value();
     if (has_target && !had_target_) ++target_generation_;
     had_target_ = has_target;
-    cv::Mat debug = image.clone();
+    tools::BuffDebugData buff_debug;
     for (const auto & icon : elements.icons)
-      cv::circle(debug, icon.center, 5, {0, 255, 255}, 2);
+      buff_debug.detections.push_back({icon.center, {}, fmt::format("R: {:.3f}", icon.score)});
     for (const auto & bull : elements.bullseyes) {
-      cv::circle(debug, bull.center, 5, bull.active ? cv::Scalar(0, 0, 255) :
-                                                    cv::Scalar(0, 255, 0), 2);
-      for (const auto & corner : bull.corners)
-        cv::circle(debug, corner, 3, {255, 255, 0}, 1);
+      buff_debug.detections.push_back(
+        {bull.center, bull.active ? std::vector<cv::Point2f>{} :
+                                     std::vector<cv::Point2f>(bull.corners.begin(), bull.corners.end()),
+         fmt::format("B: {:.3f}", bull.score)});
+    }
+    std::array<cv::Point2f, 5> blades;
+    bool complete_polygon = true;
+    for (const auto & feature : model_.reprojected_features()) {
+      buff_debug.reprojected_features.push_back(feature.point);
+      if (feature.id == 0)
+        buff_debug.icon = feature.point;
+      else if (feature.id >= 1 && feature.id <= 5)
+        blades[static_cast<std::size_t>(feature.id - 1)] = feature.point;
+      else
+        complete_polygon = false;
+    }
+    complete_polygon = complete_polygon && buff_debug.reprojected_features.size() == 6;
+    if (complete_polygon) buff_debug.blade_polygon = blades;
+    buff_debug.info_anchor = model_.reprojected_center();
+    if (target) {
+      if (target->sine_valid) {
+        buff_debug.info = fmt::format(
+          "spd_{}(t)={:+.2f}{:+.2f}*sin({:+.2f}{:+.2f}t), e={:.3f}", target->update_count,
+          target->sine_v, target->sine_a, target->sine_phase, target->sine_omega,
+          target->prediction_cost);
+      } else if (target->use_prediction_speed) {
+        buff_debug.info = fmt::format("spd_{}(t)={:+.2f}, e={:.3f}", target->update_count,
+                                      target->rotation_speed, target->prediction_cost);
+      } else {
+        buff_debug.info = fmt::format("theta_ekf={:+.2f}", target->rotation_angle);
+      }
     }
     const auto sent = gimbal_.command_with_packet();
     result.snapshot = tools::FrameSnapshot::capture(
-      timestamp, debug, orientation, received.state, sent.command, {}, {}, sent.packet,
-      received.packet);
+      timestamp, image, orientation, received.state, sent.command, {}, {}, sent.packet,
+      received.packet, std::move(buff_debug));
     result.snapshot.target_generation = target_generation_;
     result.targets.clear();
     result.buff_target = target;

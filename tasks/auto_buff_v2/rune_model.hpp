@@ -5,6 +5,7 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <Eigen/Geometry>
 #include <opencv2/core.hpp>
@@ -24,6 +25,7 @@ struct RuneState
   double rotation_speed = 0;
   double prediction_speed = 0;
   bool use_prediction_speed = false;
+  double prediction_cost = 0;
   double rotation_angle = 0;
   double face_yaw = 0;
   std::array<bool, 5> inactive{};
@@ -37,6 +39,12 @@ struct RuneState
 
   void transition(double seconds);
   std::optional<Eigen::Vector3d> aimpoint_at(Timestamp prediction_time) const;
+};
+
+struct RuneReprojectedFeature
+{
+  int id = 0;
+  cv::Point2f point;
 };
 
 class RuneModel
@@ -65,6 +73,8 @@ public:
   bool update(const RuneElements & elements, Timestamp timestamp);
   void reset();
   std::optional<RuneState> state() const;
+  std::vector<RuneReprojectedFeature> reprojected_features() const;
+  std::optional<cv::Point2f> reprojected_center() const;
 
 private:
   bool initialize(const RuneElements & elements, Timestamp timestamp,
