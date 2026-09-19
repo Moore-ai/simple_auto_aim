@@ -81,6 +81,11 @@ target_compile_options(processed_frame_test PRIVATE -UNDEBUG)
 target_link_libraries(processed_frame_test PRIVATE io)
 add_test(NAME processed_frame_test COMMAND processed_frame_test)
 
+add_executable(frame_facts_test tests/frame_facts_test.cpp)
+target_compile_options(frame_facts_test PRIVATE -UNDEBUG)
+target_link_libraries(frame_facts_test PRIVATE ${OpenCV_LIBS} io)
+add_test(NAME frame_facts_test COMMAND frame_facts_test)
+
 add_executable(buff_v2_model_test tests/buff_v2_model_test.cpp)
 target_compile_options(buff_v2_model_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_model_test PRIVATE auto_buff_v2)
