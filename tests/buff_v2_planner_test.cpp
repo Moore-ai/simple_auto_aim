@@ -12,7 +12,7 @@
 
 static_assert(std::is_same_v<
               decltype(std::declval<auto_buff_v2::BuffPlanner>().prepare(
-                std::uint64_t{}, std::optional<auto_buff_v2::RuneState>{}, 0.0,
+                std::uint64_t{}, std::optional<auto_buff_v2::RuneEstimate>{}, 0.0,
                 auto_buff_v2::Timestamp{})),
               std::optional<auto_buff_v2::BuffTrackingRequest>>);
 
@@ -20,7 +20,7 @@ int main()
 {
   using namespace std::chrono_literals;
   const auto start = std::chrono::steady_clock::now();
-  auto_buff_v2::RuneState target;
+  auto_buff_v2::RuneEstimate target;
   target.center = {3, 0, 0};
   target.start_timestamp = start - 4s;
   target.timestamp = start;

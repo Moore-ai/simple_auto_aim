@@ -10,6 +10,6 @@ using ProcessedFrame = tools::ProcessedFrame;
 static_assert(std::is_same_v<decltype(std::declval<ProcessedFrame>().targets),
                              std::list<auto_aim::Target>>);
 static_assert(std::is_same_v<decltype(std::declval<ProcessedFrame>().buff_target),
-                             std::optional<auto_buff_v2::RuneState>>);
+                             std::optional<auto_buff_v2::RuneEstimate>>);
 
 int main() { return 0; }

@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <optional>
-#include <string>
 
 #include "io/gimbal/gimbal.hpp"
 #include "buff_config.hpp"
@@ -30,7 +29,8 @@ public:
 
   explicit BuffPlanner(Config config);
   std::optional<BuffTrackingRequest> prepare(
-    std::uint64_t target_generation, const std::optional<RuneState> & target, double bullet_speed,
+    std::uint64_t target_generation, const std::optional<RuneEstimate> & target,
+    double bullet_speed,
     Timestamp now);
   bool fire_advice(const BuffTrackingRequest & request, const auto_aim::Plan & plan,
                    const io::GimbalState & gimbal, Timestamp now) const;

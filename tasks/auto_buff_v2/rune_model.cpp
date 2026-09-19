@@ -9,46 +9,10 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/eigen.hpp>
 #include "hungarian.hpp"
+#include "rune_predictor.hpp"
 
 namespace auto_buff_v2
 {
-void RuneState::transition(double seconds)
-{
-  if (sine_valid) {
-    const auto old_phase = sine_phase;
-    sine_t += seconds;
-    sine_phase += sine_omega * seconds;
-    if (std::abs(sine_omega) > 1e-12) {
-      rotation_angle += sine_v * seconds +
-                        sine_a / sine_omega * (std::cos(old_phase) - std::cos(sine_phase));
-    } else {
-      rotation_angle += rotation_speed * seconds;
-    }
-    rotation_speed = sine_v + sine_a * std::sin(sine_phase);
-  } else {
-    rotation_angle += rotation_speed * seconds;
-  }
-}
-
-std::optional<Eigen::Vector3d> RuneState::aimpoint_at(Timestamp prediction_time) const
-{
-  const auto delay = std::chrono::seconds(sine_valid ? 6 : 3);
-  if (prediction_time < timestamp || prediction_time - start_timestamp < delay)
-    return std::nullopt;
-  RuneState predicted = *this;
-  predicted.transition(std::chrono::duration<double>(prediction_time - timestamp).count());
-  constexpr double kPi = 3.14159265358979323846;
-  for (std::size_t i = 0; i < predicted.inactive.size(); ++i) {
-    if (!predicted.inactive[i]) continue;
-    const double angle = predicted.rotation_angle + i * 2 * kPi / 5;
-    const Eigen::Vector3d local(0, -kRuneGlobalRadius * std::sin(angle),
-                                kRuneGlobalRadius * std::cos(angle));
-    return predicted.center +
-           Eigen::AngleAxisd(predicted.face_yaw, Eigen::Vector3d::UnitZ()) * local;
-  }
-  return std::nullopt;
-}
-
 RuneModel::RuneModel(BuffConfig::Camera camera, Config config, bool big_rune)
 : camera_matrix_(std::move(camera.camera_matrix)),
   distort_coeffs_(std::move(camera.distort_coeffs)),
@@ -74,7 +38,7 @@ void RuneModel::reset()
   force_sine_until_ = Timestamp{};
 }
 
-std::optional<RuneState> RuneModel::state() const { return state_; }
+std::optional<RuneEstimate> RuneModel::state() const { return state_; }
 
 namespace
 {
@@ -94,7 +58,7 @@ double squared_pixel_error(const cv::Point2f & a, const cv::Point2f & b)
   return dx * dx + dy * dy;
 }
 
-Vector vector_from(const RuneState & state)
+Vector vector_from(const RuneEstimate & state)
 {
   Vector result;
   result << state.center.x(), state.center.y(), state.center.z(), state.rotation_speed,
@@ -102,7 +66,7 @@ Vector vector_from(const RuneState & state)
   return result;
 }
 
-void vector_into(RuneState & state, const Vector & value)
+void vector_into(RuneEstimate & state, const Vector & value)
 {
   state.center = value.head<3>();
   state.rotation_speed = value[3];
@@ -158,7 +122,7 @@ Eigen::Matrix<double, 2, 6> observation_jacobian(
 bool solve_seed(const RuneIcon & icon, const RuneBullseye & bull, const cv::Mat & camera_matrix,
                 const cv::Mat & distortion, const Eigen::Matrix3d & R_camera2world,
                 const Eigen::Vector3d & t_camera2world, const RuneModel::Config & config,
-                RuneState & state, double & seed_sse, double & seed_max_error)
+                RuneEstimate & state, double & seed_sse, double & seed_max_error)
 {
   std::size_t bottom = 0, top = 0;
   double nearest = std::numeric_limits<double>::max(), farthest = 0;
@@ -307,8 +271,7 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
   }
   const double dt = std::chrono::duration<double>(timestamp - state.timestamp).count();
   if (dt < 0 || dt > 0.5) { reset(); return false; }
-  state.transition(dt);
-  state.timestamp = timestamp;
+  state = RunePredictor{}.predict(state, timestamp);
   Vector x = ekf_state_;
   x[4] += x[3] * dt;
   Matrix F = Matrix::Identity();
@@ -380,8 +343,8 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
   vector_into(state, x);
   if (state.sine_valid)
     state.rotation_speed = state.sine_v + state.sine_a * std::sin(state.sine_phase);
-  else if (state.use_prediction_speed)
-    state.rotation_speed = state.prediction_speed;
+  else if (state.has_fitted_motion)
+    state.rotation_speed = state.fitted_rotation_speed;
   if (diverged()) { reset(); return false; }
   if (corrected_inactive > 0) last_inactive_corrected_ = timestamp;
   if (corrected_inactive > 1) force_sine_until_ = timestamp + std::chrono::seconds(3);
@@ -403,7 +366,7 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
   if (elements.icons.empty() || inactive_count == 0 || inactive_count > 2) return false;
   struct Candidate
   {
-    RuneState state;
+    RuneEstimate state;
     cv::Point2f icon_pixel;
     cv::Point2f seed_pixel;
     int inactive_inliers = 0;
@@ -422,7 +385,7 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
   for (const auto & icon : elements.icons) {
     for (const auto & bull : elements.bullseyes) {
       if (bull.active) continue;
-      RuneState seed;
+      RuneEstimate seed;
       double seed_sse = 0, seed_max_error = 0;
       if (!solve_seed(icon, bull, camera_matrix_, distort_coeffs_, R_camera2world,
                       t_camera2world, config_, seed, seed_sse, seed_max_error)) continue;
@@ -467,7 +430,7 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
     }
   }
   if (!best) return false;
-  RuneState seed = best->state;
+  RuneEstimate seed = best->state;
   seed.start_timestamp = timestamp;
   seed.timestamp = timestamp;
   inactive_timeout_.fill(Timestamp{});
@@ -486,7 +449,7 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
   return true;
 }
 
-void RuneModel::update_motion_fit(RuneState & state, double elapsed_seconds)
+void RuneModel::update_motion_fit(RuneEstimate & state, double elapsed_seconds)
 {
   fitter_.push(elapsed_seconds, state.rotation_angle);
   const auto linear = fitter_.fit_linear();
@@ -499,15 +462,15 @@ void RuneModel::update_motion_fit(RuneState & state, double elapsed_seconds)
     state.sine_phase = sine->omega * elapsed_seconds + sine->phi;
     state.sine_t = elapsed_seconds;
     state.sine_valid = true;
-    state.use_prediction_speed = false;
-    state.prediction_cost = sine->cost;
+    state.has_fitted_motion = false;
+    state.motion_fit_cost = sine->cost;
     state.rotation_speed = sine->v + sine->a * std::sin(state.sine_phase);
   } else if (linear) {
-    state.prediction_speed = linear->speed;
+    state.fitted_rotation_speed = linear->speed;
     state.rotation_speed = linear->speed;
-    state.use_prediction_speed = true;
+    state.has_fitted_motion = true;
     state.sine_valid = false;
-    state.prediction_cost = linear->cost;
+    state.motion_fit_cost = linear->cost;
   }
 }
 

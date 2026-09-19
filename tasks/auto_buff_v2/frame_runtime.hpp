@@ -62,10 +62,10 @@ public:
         buff_debug.info = fmt::format(
           "spd_{}(t)={:+.2f}{:+.2f}*sin({:+.2f}{:+.2f}t), e={:.3f}", target->update_count,
           target->sine_v, target->sine_a, target->sine_phase, target->sine_omega,
-          target->prediction_cost);
-      } else if (target->use_prediction_speed) {
+          target->motion_fit_cost);
+      } else if (target->has_fitted_motion) {
         buff_debug.info = fmt::format("spd_{}(t)={:+.2f}, e={:.3f}", target->update_count,
-                                      target->rotation_speed, target->prediction_cost);
+                                      target->rotation_speed, target->motion_fit_cost);
       } else {
         buff_debug.info = fmt::format("theta_ekf={:+.2f}", target->rotation_angle);
       }

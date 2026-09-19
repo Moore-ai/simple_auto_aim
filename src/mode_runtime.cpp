@@ -141,7 +141,7 @@ public:
   }
 
 private:
-  using Target = std::optional<auto_buff_v2::RuneState>;
+  using Target = std::optional<auto_buff_v2::RuneEstimate>;
   using Request = std::pair<std::uint64_t, Target>;
 
   void plan()

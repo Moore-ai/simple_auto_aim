@@ -15,7 +15,7 @@ struct ProcessedFrame
 {
   FrameSnapshot snapshot;
   std::list<auto_aim::Target> targets;
-  std::optional<auto_buff_v2::RuneState> buff_target;
+  std::optional<auto_buff_v2::RuneEstimate> buff_target;
 };
 
 }  // namespace tools

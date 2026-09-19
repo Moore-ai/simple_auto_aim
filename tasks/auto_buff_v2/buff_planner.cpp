@@ -4,6 +4,8 @@
 #include <array>
 #include <cmath>
 
+#include "rune_predictor.hpp"
+
 namespace auto_buff_v2
 {
 namespace
@@ -23,12 +25,12 @@ Timestamp offset_time(Timestamp time, double seconds)
                    std::chrono::duration<double>(seconds));
 }
 
-std::optional<AimSolution> aim_solution(const RuneState & state, Timestamp prediction_time,
+std::optional<AimSolution> aim_solution(const RuneEstimate & state, Timestamp prediction_time,
                                         double speed,
                                         double yaw_offset, double pitch_offset,
                                         const tools::BallisticSolver & ballistic_solver)
 {
-  const auto point = state.aimpoint_at(std::max(prediction_time, state.timestamp));
+  const auto point = RunePredictor{}.aimpoint_at(state, std::max(prediction_time, state.timestamp));
   if (!point) return std::nullopt;
   const double distance = std::hypot(point->x(), point->y());
   const auto bullet = ballistic_solver.solve(speed, distance, point->z());
@@ -40,7 +42,7 @@ std::optional<AimSolution> aim_solution(const RuneState & state, Timestamp predi
 }
 
 std::optional<auto_aim::Trajectory> make_reference_trajectory(
-  const RuneState & state, Timestamp center_time, double speed, double yaw0,
+  const RuneEstimate & state, Timestamp center_time, double speed, double yaw0,
   double yaw_offset, double pitch_offset, const tools::BallisticSolver & ballistic_solver)
 {
   std::array<AimSolution, auto_aim::HORIZON + 2> samples;
@@ -74,7 +76,8 @@ BuffPlanner::BuffPlanner(Config config)
 }
 
 std::optional<BuffTrackingRequest> BuffPlanner::prepare(
-  std::uint64_t target_generation, const std::optional<RuneState> & target, double bullet_speed,
+  std::uint64_t target_generation, const std::optional<RuneEstimate> & target,
+  double bullet_speed,
   Timestamp now)
 {
   if (!target) {

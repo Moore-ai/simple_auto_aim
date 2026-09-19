@@ -17,15 +17,15 @@ namespace auto_buff_v2
 {
 using Timestamp = std::chrono::steady_clock::time_point;
 
-struct RuneState
+struct RuneEstimate
 {
   Eigen::Vector3d center = Eigen::Vector3d::Zero();
   Timestamp start_timestamp{};
   Timestamp timestamp{};
   double rotation_speed = 0;
-  double prediction_speed = 0;
-  bool use_prediction_speed = false;
-  double prediction_cost = 0;
+  double fitted_rotation_speed = 0;
+  bool has_fitted_motion = false;
+  double motion_fit_cost = 0;
   double rotation_angle = 0;
   double face_yaw = 0;
   std::array<bool, 5> inactive{};
@@ -36,9 +36,6 @@ struct RuneState
   double sine_t = 0;
   bool sine_valid = false;
   std::size_t update_count = 0;
-
-  void transition(double seconds);
-  std::optional<Eigen::Vector3d> aimpoint_at(Timestamp prediction_time) const;
 };
 
 struct RuneReprojectedFeature
@@ -56,7 +53,7 @@ public:
   void update_transform(const Eigen::Quaterniond & q_gimbal2world);
   bool update(const RuneElements & elements, Timestamp timestamp);
   void reset();
-  std::optional<RuneState> state() const;
+  std::optional<RuneEstimate> state() const;
   std::vector<RuneReprojectedFeature> reprojected_features() const;
   std::optional<cv::Point2f> reprojected_center() const;
 
@@ -64,7 +61,7 @@ private:
   bool initialize(const RuneElements & elements, Timestamp timestamp,
                   const Eigen::Matrix3d & R_camera2world,
                   const Eigen::Vector3d & t_camera2world);
-  void update_motion_fit(RuneState & state, double elapsed_seconds);
+  void update_motion_fit(RuneEstimate & state, double elapsed_seconds);
   bool diverged() const;
 
   cv::Mat camera_matrix_;
@@ -75,7 +72,7 @@ private:
   Eigen::Quaterniond q_gimbal2world_ = Eigen::Quaterniond::Identity();
   bool big_rune_ = false;
   Config config_;
-  std::optional<RuneState> state_;
+  std::optional<RuneEstimate> state_;
   RuneEnergyFitter fitter_;
   Eigen::Matrix<double, 6, 6> covariance_ = Eigen::Matrix<double, 6, 6>::Identity();
   Eigen::Matrix<double, 6, 1> ekf_state_ = Eigen::Matrix<double, 6, 1>::Zero();

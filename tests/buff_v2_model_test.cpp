@@ -3,33 +3,53 @@
 
 #include "tasks/auto_buff_v2/rune_energy_fitter.hpp"
 #include "tasks/auto_buff_v2/rune_model.hpp"
+#include "tasks/auto_buff_v2/rune_predictor.hpp"
 
 int main()
 {
-  auto_buff_v2::RuneState small;
+  auto_buff_v2::RunePredictor predictor;
+  const auto start = auto_buff_v2::Timestamp{};
+  auto_buff_v2::RuneEstimate small;
   small.rotation_speed = 1.2;
   small.rotation_angle = 0.1;
-  small.transition(0.5);
-  assert(std::abs(small.rotation_angle - 0.7) < 1e-9);
+  const auto small_future = predictor.predict(
+    small, start + std::chrono::duration_cast<auto_buff_v2::Timestamp::duration>(
+                     std::chrono::duration<double>(0.5)));
+  assert(std::abs(small_future.rotation_angle - 0.7) < 1e-9);
 
-  auto_buff_v2::RuneState big;
+  auto_buff_v2::RuneEstimate big;
   big.sine_valid = true;
   big.sine_v = 1.0;
   big.sine_a = 0.5;
   big.sine_omega = 2.0;
   big.sine_phase = 0.0;
-  big.transition(0.5);
-  assert(std::abs(big.rotation_angle - (0.5 + 0.25 * (1 - std::cos(1.0)))) < 1e-9);
-  assert(std::abs(big.rotation_speed - (1 + 0.5 * std::sin(1.0))) < 1e-9);
+  const auto big_future = predictor.predict(
+    big, start + std::chrono::duration_cast<auto_buff_v2::Timestamp::duration>(
+                   std::chrono::duration<double>(0.5)));
+  assert(std::abs(big_future.rotation_angle - (0.5 + 0.25 * (1 - std::cos(1.0)))) < 1e-9);
+  assert(std::abs(big_future.rotation_speed - (1 + 0.5 * std::sin(1.0))) < 1e-9);
 
-  const auto start = auto_buff_v2::Timestamp{};
-  auto_buff_v2::RuneState warming;
+  auto_buff_v2::RuneEstimate warming;
   warming.center = {3, 0, 0};
   warming.start_timestamp = start;
   warming.timestamp = start + std::chrono::seconds(2);
   warming.inactive[0] = true;
-  assert(!warming.aimpoint_at(start + std::chrono::milliseconds(2999)));
-  assert(warming.aimpoint_at(start + std::chrono::seconds(3)));
+  assert(!predictor.aimpoint_at(warming, start + std::chrono::milliseconds(2999)));
+  assert(predictor.aimpoint_at(warming, start + std::chrono::seconds(3)));
+
+  auto_buff_v2::RuneEstimate estimate;
+  estimate.center = {3, 0, 0};
+  estimate.start_timestamp = start - std::chrono::seconds(3);
+  estimate.timestamp = start;
+  estimate.rotation_speed = 1;
+  estimate.inactive[0] = true;
+  const auto aimpoint = predictor.aimpoint_at(
+    estimate, start + std::chrono::duration_cast<auto_buff_v2::Timestamp::duration>(
+                        std::chrono::duration<double>(std::acos(-1) / 2)));
+  assert(aimpoint);
+  assert(((*aimpoint - Eigen::Vector3d{3, -0.7, 0}).norm()) < 1e-9);
+  assert(std::abs(estimate.rotation_angle) < 1e-12);
+  assert(std::abs(estimate.rotation_speed - 1) < 1e-12);
 
   auto_buff_v2::RuneEnergyFitter fitter;
   for (int i = 0; i <= 40; ++i) {
