@@ -8,9 +8,6 @@
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/eigen.hpp>
-#include <yaml-cpp/yaml.h>
-
-#include "tools/camera2gimbal_extrinsic.hpp"
 #include "hungarian.hpp"
 
 namespace auto_buff_v2
@@ -52,46 +49,15 @@ std::optional<Eigen::Vector3d> RuneState::aimpoint_at(Timestamp prediction_time)
   return std::nullopt;
 }
 
-RuneModel::RuneModel(const std::string & config_path, bool big_rune) : big_rune_(big_rune)
+RuneModel::RuneModel(BuffConfig::Camera camera, Config config, bool big_rune)
+: camera_matrix_(std::move(camera.camera_matrix)),
+  distort_coeffs_(std::move(camera.distort_coeffs)),
+  R_camera2gimbal_(camera.R_camera2gimbal),
+  R_gimbal2imubody_(camera.R_gimbal2imubody),
+  t_camera2gimbal_(camera.t_camera2gimbal),
+  big_rune_(big_rune),
+  config_(std::move(config))
 {
-  const auto yaml = YAML::LoadFile(config_path);
-  const auto buff = yaml["buff_v2"];
-  if (buff) {
-    config_.timeout_seconds = buff["timeout_seconds"].as<double>(config_.timeout_seconds);
-    config_.noise_x = buff["noise_x"].as<double>(config_.noise_x);
-    config_.noise_y = buff["noise_y"].as<double>(config_.noise_y);
-    config_.noise_z = buff["noise_z"].as<double>(config_.noise_z);
-    config_.noise_rotation_speed =
-      buff["noise_rotation_speed"].as<double>(config_.noise_rotation_speed);
-    config_.noise_rotation_angle =
-      buff["noise_rotation_angle"].as<double>(config_.noise_rotation_angle);
-    config_.noise_face_yaw = buff["noise_face_yaw"].as<double>(config_.noise_face_yaw);
-    config_.noise_observation =
-      buff["noise_observation"].as<double>(config_.noise_observation);
-    config_.gate_threshold = buff["gate_threshold"].as<double>(config_.gate_threshold);
-    config_.init_seed_mean_error =
-      buff["init_seed_mean_error"].as<double>(config_.init_seed_mean_error);
-    config_.init_seed_max_error =
-      buff["init_seed_max_error"].as<double>(config_.init_seed_max_error);
-    config_.init_center_gate =
-      buff["init_center_gate"].as<double>(config_.init_center_gate);
-    config_.init_pitch_bound =
-      buff["init_pitch_bound"].as<double>(config_.init_pitch_bound);
-    config_.diverge_face_angle =
-      buff["diverge_face_angle"].as<double>(config_.diverge_face_angle);
-  }
-  const auto intrinsics = yaml["camera_matrix"].as<std::vector<double>>();
-  const auto distortion = yaml["distort_coeffs"].as<std::vector<double>>();
-  camera_matrix_ = (cv::Mat_<double>(3, 3) <<
-    intrinsics[0], intrinsics[1], intrinsics[2], intrinsics[3], intrinsics[4], intrinsics[5],
-    intrinsics[6], intrinsics[7], intrinsics[8]);
-  distort_coeffs_ = cv::Mat(1, 5, CV_64F);
-  for (int i = 0; i < 5; ++i) distort_coeffs_.at<double>(0, i) = distortion[i];
-  const auto extrinsic = tools::load_camera2gimbal_extrinsic(yaml);
-  R_camera2gimbal_ = extrinsic.rotation;
-  t_camera2gimbal_ = extrinsic.translation;
-  const auto body = yaml["R_gimbal2imubody"].as<std::vector<double>>();
-  R_gimbal2imubody_ = Eigen::Matrix<double, 3, 3, Eigen::RowMajor>(body.data());
 }
 
 void RuneModel::update_transform(const Eigen::Quaterniond & q_gimbal2world)

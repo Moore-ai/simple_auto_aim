@@ -1,6 +1,7 @@
 #ifndef AUTO_BUFF_V2__RUNE_DETECTOR_HPP
 #define AUTO_BUFF_V2__RUNE_DETECTOR_HPP
 
+#include "buff_config.hpp"
 #include "rune.hpp"
 
 namespace auto_buff_v2
@@ -8,16 +9,10 @@ namespace auto_buff_v2
 class RuneDetector
 {
 public:
-  struct Config
+  struct Config : BuffConfig::Detector
   {
-    double fx = 0;
-    double fy = 0;
     bool enemy_red = false;
-    double min_distance = 1.7;
-    double max_distance = 5.0;
     double max_perspective = 60.0;
-    double active_threshold = 0.2;
-    double match_threshold = 0.5;
   } config;
 
   RuneElements detect(const cv::Mat & image) const;

@@ -4,39 +4,11 @@
 #include <array>
 #include <cmath>
 
-#include <yaml-cpp/yaml.h>
-
 namespace auto_buff_v2
 {
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
-
-BuffPlanner::Config load_config(const std::string & path)
-{
-  const auto yaml = YAML::LoadFile(path);
-  BuffPlanner::Config result;
-  const auto buff = yaml["buff_v2"];
-  if (buff) {
-    result.shoot_delay = buff["shoot_delay"].as<double>(result.shoot_delay);
-    result.rune_idle_duration =
-      buff["rune_idle_duration"].as<double>(result.rune_idle_duration);
-    result.rune_shoot_duration =
-      buff["rune_shoot_duration"].as<double>(result.rune_shoot_duration);
-    result.yaw_tolerance = buff["yaw_tolerance"].as<double>(result.yaw_tolerance);
-    result.pitch_tolerance = buff["pitch_tolerance"].as<double>(result.pitch_tolerance);
-  }
-  result.ballistic_model = yaml["ballistic_model"].as<std::string>(result.ballistic_model);
-  result.ballistic_config.njust_air_resistance = yaml["njust_air_resistance"].as<double>(
-    result.ballistic_config.njust_air_resistance);
-  result.yaw_offset = yaml["yaw_offset"].as<double>(0) * kPi / 180;
-  result.pitch_offset = yaml["pitch_offset"].as<double>(0) * kPi / 180;
-  result.bullet_speed_min = yaml["bullet_speed_min"].as<double>(result.bullet_speed_min);
-  result.bullet_speed_max = yaml["bullet_speed_max"].as<double>(result.bullet_speed_max);
-  result.bullet_speed_default =
-    yaml["bullet_speed_default"].as<double>(result.bullet_speed_default);
-  return result;
-}
 
 struct AimSolution
 {
@@ -100,7 +72,6 @@ BuffPlanner::BuffPlanner(Config config)
   ballistic_solver_(tools::make_ballistic_solver(config_.ballistic_model, config_.ballistic_config))
 {
 }
-BuffPlanner::BuffPlanner(const std::string & config_path) : BuffPlanner(load_config(config_path)) {}
 
 std::optional<BuffTrackingRequest> BuffPlanner::prepare(
   std::uint64_t target_generation, const std::optional<RuneState> & target, double bullet_speed,

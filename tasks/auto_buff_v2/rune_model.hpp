@@ -4,12 +4,12 @@
 #include <array>
 #include <chrono>
 #include <optional>
-#include <string>
 #include <vector>
 
 #include <Eigen/Geometry>
 #include <opencv2/core.hpp>
 
+#include "buff_config.hpp"
 #include "rune.hpp"
 #include "rune_energy_fitter.hpp"
 
@@ -50,25 +50,9 @@ struct RuneReprojectedFeature
 class RuneModel
 {
 public:
-  struct Config
-  {
-    double timeout_seconds = 1.5;
-    double noise_x = 1e-5;
-    double noise_y = 1e-5;
-    double noise_z = 1e-5;
-    double noise_rotation_speed = 1;
-    double noise_rotation_angle = 1e-3;
-    double noise_face_yaw = 1e-5;
-    double noise_observation = 20;
-    double gate_threshold = 13.816;
-    double init_seed_mean_error = 10;
-    double init_seed_max_error = 20;
-    double init_center_gate = 30;
-    double init_pitch_bound = 20;
-    double diverge_face_angle = 45;
-  };
+  using Config = BuffConfig::Model;
 
-  RuneModel(const std::string & config_path, bool big_rune);
+  RuneModel(BuffConfig::Camera camera, Config config, bool big_rune);
   void update_transform(const Eigen::Quaterniond & q_gimbal2world);
   bool update(const RuneElements & elements, Timestamp timestamp);
   void reset();

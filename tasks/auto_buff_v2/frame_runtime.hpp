@@ -2,13 +2,10 @@
 #define AUTO_BUFF_V2__FRAME_RUNTIME_HPP
 
 #include <optional>
-#include <string>
 #include <vector>
 
 #include <fmt/format.h>
 #include <opencv2/imgproc.hpp>
-#include <yaml-cpp/yaml.h>
-
 #include "io/gimbal/gimbal.hpp"
 #include "rune_detector.hpp"
 #include "rune_model.hpp"
@@ -21,24 +18,10 @@ class FrameRuntime
 {
 public:
   FrameRuntime(io::Camera & camera, io::Gimbal & gimbal, RuneModel & model,
-               const std::string & config_path)
+               BuffConfig::Detector detector_config)
   : frames_(camera, gimbal), model_(model)
   {
-    const auto yaml = YAML::LoadFile(config_path);
-    const auto intrinsics = yaml["camera_matrix"].as<std::vector<double>>();
-    detector_.config.fx = intrinsics[0];
-    detector_.config.fy = intrinsics[4];
-    const auto buff = yaml["buff_v2"];
-    if (buff) {
-      detector_.config.min_distance =
-        buff["min_distance"].as<double>(detector_.config.min_distance);
-      detector_.config.max_distance =
-        buff["max_distance"].as<double>(detector_.config.max_distance);
-      detector_.config.active_threshold =
-        buff["active_threshold"].as<double>(detector_.config.active_threshold);
-      detector_.config.match_threshold =
-        buff["match_threshold"].as<double>(detector_.config.match_threshold);
-    }
+    static_cast<BuffConfig::Detector &>(detector_.config) = std::move(detector_config);
   }
 
   bool next(tools::ProcessedFrame & result)

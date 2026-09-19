@@ -116,17 +116,16 @@ int main()
   assert(high_drag_solution->fly_time > low_drag_solution->fly_time);
   assert(high_drag_solution->pitch > low_drag_solution->pitch);
 
-  const char * njust_config_path = "/tmp/buff_v2_njust_ballistic_test.yaml";
-  const char * high_drag_config_path = "/tmp/buff_v2_high_drag_ballistic_test.yaml";
-  const char * vacuum_config_path = "/tmp/buff_v2_vacuum_ballistic_test.yaml";
-  std::ofstream(njust_config_path) <<
-    "ballistic_model: njust\nnjust_air_resistance: 0.001\n";
-  std::ofstream(high_drag_config_path) <<
-    "ballistic_model: njust\nnjust_air_resistance: 0.006\n";
-  std::ofstream(vacuum_config_path) << "ballistic_model: vacuum\n";
-  auto_buff_v2::BuffPlanner njust_planner(njust_config_path);
-  auto_buff_v2::BuffPlanner high_drag_planner(high_drag_config_path);
-  auto_buff_v2::BuffPlanner vacuum_planner(vacuum_config_path);
+  auto_buff_v2::BuffPlanner::Config njust_config;
+  njust_config.ballistic_model = "njust";
+  njust_config.ballistic_config.njust_air_resistance = 0.001;
+  auto_buff_v2::BuffPlanner::Config high_drag_planner_config = njust_config;
+  high_drag_planner_config.ballistic_config.njust_air_resistance = 0.006;
+  auto_buff_v2::BuffPlanner::Config vacuum_config = njust_config;
+  vacuum_config.ballistic_model = "vacuum";
+  auto_buff_v2::BuffPlanner njust_planner(njust_config);
+  auto_buff_v2::BuffPlanner high_drag_planner(high_drag_planner_config);
+  auto_buff_v2::BuffPlanner vacuum_planner(vacuum_config);
   const auto njust_request = njust_planner.prepare(1, target, 20, start);
   const auto high_drag_request = high_drag_planner.prepare(1, target, 20, start);
   const auto vacuum_request = vacuum_planner.prepare(1, target, 20, start);

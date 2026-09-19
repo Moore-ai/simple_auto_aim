@@ -14,6 +14,7 @@
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_buff_v2/buff_planner.hpp"
+#include "tasks/auto_buff_v2/buff_config.hpp"
 #include "tasks/auto_buff_v2/frame_runtime.hpp"
 #include "tools/detect_factory.hpp"
 #include "tools/exiter.hpp"
@@ -117,8 +118,9 @@ public:
   BuffSession(
     const std::string & config_path, bool big_buff, io::Camera & camera, io::Gimbal & gimbal,
     tools::FoxgloveVisualizer & foxglove)
-  : gimbal_(gimbal), planner_(config_path), model_(config_path, big_buff),
-    buff_planner_(config_path), runtime_(camera, gimbal, model_, config_path), foxglove_(foxglove)
+  : config_(auto_buff_v2::BuffConfig::load(config_path)), gimbal_(gimbal), planner_(config_path),
+    model_(config_.camera, config_.model, big_buff), buff_planner_(config_.planner),
+    runtime_(camera, gimbal, model_, config_.detector), foxglove_(foxglove)
   {
     target_queue_.push({0, Target{}});
     plan_thread_ = std::thread([this] { plan(); });
@@ -169,6 +171,7 @@ private:
     }
   }
 
+  auto_buff_v2::BuffConfig config_;
   io::Gimbal & gimbal_;
   auto_aim::Planner planner_;
   auto_buff_v2::RuneModel model_;

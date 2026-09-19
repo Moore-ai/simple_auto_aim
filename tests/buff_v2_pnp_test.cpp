@@ -4,6 +4,7 @@
 
 #include <opencv2/calib3d.hpp>
 
+#include "tasks/auto_buff_v2/buff_config.hpp"
 #include "tasks/auto_buff_v2/rune_model.hpp"
 
 int main()
@@ -16,6 +17,7 @@ int main()
     << "camera2gimbal_mode: matrix\n"
     << "R_camera2gimbal: [0, 0, 1, -1, 0, 0, 0, -1, 0]\n"
     << "t_camera2gimbal: [0, 0, 0]\n";
+  const auto config = auto_buff_v2::BuffConfig::load(path);
 
   cv::Mat camera = (cv::Mat_<double>(3, 3) << 1000, 0, 320, 0, 1000, 240, 0, 0, 1);
   cv::Mat rotation = (cv::Mat_<double>(3, 3) << 0, -1, 0, 0, 0, -1, 1, 0, 0);
@@ -33,7 +35,7 @@ int main()
   elements.icons.push_back({pixel[0], 1});
   elements.bullseyes.push_back(
     {bull_center[0], {pixel[2], pixel[3], pixel[4], pixel[1]}, false, 0.5});
-  auto_buff_v2::RuneModel model(path, false);
+  auto_buff_v2::RuneModel model(config.camera, config.model, false);
   model.update_transform(Eigen::Quaterniond::Identity());
   const auto now = std::chrono::steady_clock::now();
   assert(model.update(elements, now));
@@ -52,7 +54,7 @@ int main()
   auto_buff_v2::RuneElements candidates = elements;
   candidates.icons.insert(candidates.icons.begin(),
                           {pixel[0] + cv::Point2f(12, 0), 0.5});
-  auto_buff_v2::RuneModel selected(path, false);
+  auto_buff_v2::RuneModel selected(config.camera, config.model, false);
   selected.update_transform(Eigen::Quaterniond::Identity());
   assert(selected.update(candidates, now));
   assert((selected.state()->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
@@ -75,7 +77,7 @@ int main()
   layout.bullseyes.insert(layout.bullseyes.begin(),
                           {second_pixel[0], {second_pixel[2], second_pixel[3],
                                              second_pixel[4], second_pixel[1]}, false, 0.5});
-  auto_buff_v2::RuneModel layout_model(path, false);
+  auto_buff_v2::RuneModel layout_model(config.camera, config.model, false);
   layout_model.update_transform(Eigen::Quaterniond::Identity());
   assert(layout_model.update(layout, now));
   assert((layout_model.state()->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
@@ -83,14 +85,14 @@ int main()
 
   auto_buff_v2::RuneElements wrong_center = elements;
   wrong_center.bullseyes.front().center += cv::Point2f(35, 0);
-  auto_buff_v2::RuneModel gated(path, false);
+  auto_buff_v2::RuneModel gated(config.camera, config.model, false);
   gated.update_transform(Eigen::Quaterniond::Identity());
   assert(!gated.update(wrong_center, now));
 
   auto_buff_v2::RuneElements degenerate = elements;
   degenerate.bullseyes.front().corners[0] =
     degenerate.bullseyes.front().corners[2];
-  auto_buff_v2::RuneModel rejected(path, false);
+  auto_buff_v2::RuneModel rejected(config.camera, config.model, false);
   rejected.update_transform(Eigen::Quaterniond::Identity());
   assert(!rejected.update(degenerate, now));
 
@@ -106,7 +108,7 @@ int main()
   assert(cv::solvePnP(object, noisy_points, camera, cv::Mat::zeros(1, 5, CV_64F),
                       noisy_rvec, noisy_tvec, true, cv::SOLVEPNP_ITERATIVE));
   const Eigen::Vector3d raw_center(noisy_tvec[2], -noisy_tvec[0], -noisy_tvec[1]);
-  auto_buff_v2::RuneModel corrected_seed(path, false);
+  auto_buff_v2::RuneModel corrected_seed(config.camera, config.model, false);
   corrected_seed.update_transform(Eigen::Quaterniond::Identity());
   assert(corrected_seed.update(noisy, now));
   assert((corrected_seed.state()->center - raw_center).norm() > 0.002);
@@ -128,12 +130,12 @@ int main()
   tilted_elements.bullseyes.push_back(
     {tilted_center[0], {tilted_pixel[2], tilted_pixel[3], tilted_pixel[4], tilted_pixel[1]},
      false, 0.5});
-  auto_buff_v2::RuneModel tilted_model(path, false);
+  auto_buff_v2::RuneModel tilted_model(config.camera, config.model, false);
   tilted_model.update_transform(Eigen::Quaterniond::Identity());
   assert(tilted_model.update(tilted_elements, now));
   assert(std::abs(tilted_model.state()->rotation_angle - seed_angle) < 0.03);
 
-  auto_buff_v2::RuneModel big(path, true);
+  auto_buff_v2::RuneModel big(config.camera, config.model, true);
   big.update_transform(Eigen::Quaterniond::Identity());
   assert(big.update(elements, now));
   for (int i = 1; i <= 120; ++i) {

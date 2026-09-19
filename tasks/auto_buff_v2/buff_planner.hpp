@@ -6,6 +6,7 @@
 #include <string>
 
 #include "io/gimbal/gimbal.hpp"
+#include "buff_config.hpp"
 #include "rune_model.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
 #include "tools/ballistic_solver.hpp"
@@ -25,24 +26,9 @@ struct BuffTrackingRequest
 class BuffPlanner
 {
 public:
-  struct Config
-  {
-    double shoot_delay = 0.04;
-    double rune_idle_duration = 0.4;
-    double rune_shoot_duration = 0.2;
-    double yaw_tolerance = 0.07;
-    double pitch_tolerance = 0.04;
-    double yaw_offset = 0;
-    double pitch_offset = 0;
-    double bullet_speed_min = 10;
-    double bullet_speed_max = 25;
-    double bullet_speed_default = 23.4;
-    std::string ballistic_model = "njust";
-    tools::BallisticSolverConfig ballistic_config;
-  };
+  using Config = BuffConfig::Planner;
 
   explicit BuffPlanner(Config config);
-  explicit BuffPlanner(const std::string & config_path);
   std::optional<BuffTrackingRequest> prepare(
     std::uint64_t target_generation, const std::optional<RuneState> & target, double bullet_speed,
     Timestamp now);
