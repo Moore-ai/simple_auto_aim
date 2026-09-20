@@ -96,6 +96,7 @@ add_test(NAME auto_aim_frame_runtime_test COMMAND auto_aim_frame_runtime_test)
 add_executable(buff_v2_model_test tests/buff_v2_model_test.cpp)
 target_compile_options(buff_v2_model_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_model_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_model_test COMMAND buff_v2_model_test)
 
 add_executable(buff_v2_config_test tests/buff_v2_config_test.cpp)
 target_compile_options(buff_v2_config_test PRIVATE -UNDEBUG)
@@ -105,10 +106,12 @@ add_test(NAME buff_v2_config_test COMMAND buff_v2_config_test)
 add_executable(buff_v2_assignment_test tests/buff_v2_assignment_test.cpp)
 target_compile_options(buff_v2_assignment_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_assignment_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_assignment_test COMMAND buff_v2_assignment_test)
 
 add_executable(buff_v2_detector_test tests/buff_v2_detector_test.cpp)
 target_compile_options(buff_v2_detector_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_detector_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_detector_test COMMAND buff_v2_detector_test)
 
 add_executable(buff_v2_frame_processor_test tests/buff_v2_frame_processor_test.cpp)
 target_compile_options(buff_v2_frame_processor_test PRIVATE -UNDEBUG)
@@ -119,10 +122,12 @@ add_test(NAME buff_v2_frame_processor_test COMMAND buff_v2_frame_processor_test)
 add_executable(buff_v2_pnp_test tests/buff_v2_pnp_test.cpp)
 target_compile_options(buff_v2_pnp_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_pnp_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_pnp_test COMMAND buff_v2_pnp_test)
 
 add_executable(buff_v2_planner_test tests/buff_v2_planner_test.cpp)
 target_compile_options(buff_v2_planner_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_planner_test PRIVATE auto_buff_v2 fmt::fmt)
+add_test(NAME buff_v2_planner_test COMMAND buff_v2_planner_test)
 
 # 相机与手眼标定工具。
 add_executable(capture calibration/capture.cpp)

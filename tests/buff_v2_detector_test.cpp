@@ -60,6 +60,18 @@ int main()
   assert(shortest < 30);
   assert(longest > 35);
 
+  cv::Mat perspective = cv::Mat::zeros(400, 400, CV_8UC3);
+  cv::ellipse(perspective, {200, 200}, {80, 45}, 0, 0, 360, {90, 0, 0}, cv::FILLED);
+  cv::line(perspective, {122, 200}, {278, 200}, {255, 200, 0}, 8);
+  cv::line(perspective, {200, 157}, {200, 243}, {255, 200, 0}, 8);
+  const auto perspective_result = detector.detect(perspective);
+  assert(perspective_result.bullseyes.size() == 1);
+  double perspective_longest = 0;
+  for (const auto & tip : perspective_result.bullseyes.front().corners)
+    perspective_longest = std::max(
+      perspective_longest, cv::norm(tip - perspective_result.bullseyes.front().center));
+  assert(perspective_longest > 75);
+
   detector.config.enemy_red = true;
   assert(detector.detect(image).bullseyes.empty());
 }

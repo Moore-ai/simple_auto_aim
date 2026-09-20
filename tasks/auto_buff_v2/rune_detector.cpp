@@ -112,12 +112,19 @@ std::optional<RuneBullseye> bullseye_feature(
   image(roi).copyTo(masked, mask);
   cv::Mat gray;
   cv::cvtColor(masked, gray, cv::COLOR_BGR2GRAY);
-  const double radius = std::min(gray.rows, gray.cols) * 0.5;
+  const int square_size = std::max(gray.rows, gray.cols);
+  const int top = (square_size - gray.rows) / 2;
+  const int bottom = square_size - gray.rows - top;
+  const int left = (square_size - gray.cols) / 2;
+  const int right = square_size - gray.cols - left;
+  cv::copyMakeBorder(gray, gray, top, bottom, left, right, cv::BORDER_CONSTANT, 0);
+  const cv::Point2f local_center(center.x - roi.x + left, center.y - roi.y + top);
+  const double radius = square_size * 0.5;
   PolarBins polar{};
   for (int y = 0; y < gray.rows; ++y) {
     for (int x = 0; x < gray.cols; ++x) {
-      const double dx = x - (center.x - roi.x);
-      const double dy = y - (center.y - roi.y);
+      const double dx = x - local_center.x;
+      const double dy = y - local_center.y;
       const double r = std::hypot(dx, dy);
       if (r >= radius) continue;
       const int rb = std::clamp(static_cast<int>(r / radius * kRadialBins), 0, kRadialBins - 1);
