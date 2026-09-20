@@ -72,6 +72,22 @@ int main()
       perspective_longest, cv::norm(tip - perspective_result.bullseyes.front().center));
   assert(perspective_longest > 75);
 
+  cv::Mat icon_image = cv::Mat::zeros(400, 400, CV_8UC3);
+  cv::putText(icon_image, "R", {120, 260}, cv::FONT_HERSHEY_SIMPLEX, 3, {255, 0, 0}, 12,
+              cv::LINE_8);
+  cv::Mat icon_binary;
+  cv::inRange(icon_image, cv::Scalar(200, 0, 0), cv::Scalar(255, 0, 0), icon_binary);
+  cv::dilate(icon_binary, icon_binary, cv::getStructuringElement(cv::MORPH_ELLIPSE, {3, 3}));
+  std::vector<std::vector<cv::Point>> icon_contours;
+  cv::findContours(icon_binary, icon_contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+  assert(icon_contours.size() == 1);
+  const cv::Point2f expected_icon_center = cv::minAreaRect(icon_contours.front()).center;
+  detector.config.fx = 5000;
+  detector.config.fy = 5000;
+  const auto icon_result = detector.detect(icon_image);
+  assert(icon_result.icons.size() == 1);
+  assert(cv::norm(icon_result.icons.front().center - expected_icon_center) < 0.1);
+
   detector.config.enemy_red = true;
   assert(detector.detect(image).bullseyes.empty());
 }

@@ -64,9 +64,19 @@ double icon_score(const cv::Mat & image)
   std::vector<std::vector<cv::Point>> contours;
   std::vector<cv::Vec4i> hierarchy;
   cv::findContours(binary, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+  int largest_outer = -1;
+  double largest_area = 0;
+  for (std::size_t i = 0; i < contours.size(); ++i) {
+    if (hierarchy[i][3] != -1) continue;
+    const double area = cv::contourArea(contours[i]);
+    if (largest_outer == -1 || area > largest_area) {
+      largest_area = area;
+      largest_outer = static_cast<int>(i);
+    }
+  }
   int holes = 0;
   for (const auto & h : hierarchy)
-    if (h[3] != -1) ++holes;
+    if (h[3] == largest_outer) ++holes;
   if (endpoints >= 1 && lower_endpoints >= 1 && branches >= 8 && branches <= 50 && holes <= 2)
     return 0.5 + 0.1 * endpoints;
   return 0;
@@ -269,8 +279,7 @@ RuneElements RuneDetector::detect(const cv::Mat & image) const
     if (feature) result.bullseyes.push_back(*feature);
   }
   for (const auto & contour : icon_candidates) {
-    const auto moments = cv::moments(contour);
-    const cv::Point2f center(moments.m10 / moments.m00, moments.m01 / moments.m00);
+    const cv::Point2f center = cv::minAreaRect(contour).center;
     const bool inside_bull = std::any_of(selected_bulls.begin(), selected_bulls.end(),
                                          [&](const auto & bull) {
                                            return cv::pointPolygonTest(bull.contour, center,
