@@ -91,7 +91,7 @@ std::optional<BuffTrackingRequest> BuffPlanner::prepare(
   }
   if (bullet_speed < config_.bullet_speed_min || bullet_speed > config_.bullet_speed_max)
     bullet_speed = config_.bullet_speed_default;
-  const double distance = target->center.norm();
+  const double distance = std::hypot(target->center.x(), target->center.y());
   double fly_time = distance / bullet_speed;
   if (config_.fly_time_iteration_enabled) {
     for (int i = 0; i < config_.fly_time_iteration_max_iteration; ++i) {

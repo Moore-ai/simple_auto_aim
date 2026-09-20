@@ -21,7 +21,7 @@ int main()
   using namespace std::chrono_literals;
   const auto start = std::chrono::steady_clock::now();
   auto_buff_v2::RuneEstimate target;
-  target.center = {3, 0, 0};
+  target.center = {3, 0, 1};
   target.start_timestamp = start - 4s;
   target.timestamp = start;
   target.inactive[0] = true;
@@ -56,7 +56,8 @@ int main()
   auto_buff_v2::BuffPlanner planner(config);
   const auto request = planner.prepare(1, target, 20, start);
   assert(request);
-  assert(std::abs(request->fly_time - target.center.norm() / 20.0) < 1e-12);
+  assert(std::abs(request->distance - target.center.head<2>().norm()) < 1e-12);
+  assert(std::abs(request->fly_time - target.center.head<2>().norm() / 20.0) < 1e-12);
   const auto mpc_plan = mpc_planner.plan(request->trajectory, request->yaw0, request->distance);
   assert(mpc_plan.control && mpc_plan.debug_valid && !mpc_plan.fire);
   io::GimbalState gimbal;
