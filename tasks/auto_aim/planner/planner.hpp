@@ -8,6 +8,7 @@
 #include "tasks/auto_aim/target.hpp"
 #include "tinympc/types.hpp"
 #include "tools/adaptive_delay_controller.hpp"
+#include "tools/ballistic_solver.hpp"
 
 namespace auto_aim
 {
@@ -43,6 +44,8 @@ public:
   Eigen::Vector4d debug_xyza;
   Planner(const std::string & config_path);
 
+  // Run the shared yaw/pitch MPC. The trajectory's yaw row is relative to yaw0.
+  Plan plan(const Trajectory & trajectory, double yaw0, double distance);
   Plan plan(Target target, double bullet_speed);
   Plan plan(std::optional<Target> target, double bullet_speed);
 
@@ -68,6 +71,7 @@ private:
   double rho_;
   int max_iter_;
   double bullet_speed_min_, bullet_speed_max_, bullet_speed_default_;
+  std::unique_ptr<tools::BallisticSolver> ballistic_solver_;
 
   struct ManeuverAdaptConfig
   {

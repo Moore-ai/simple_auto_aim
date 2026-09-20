@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16.3)
 
 project(simple_auto_aim)
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -49,10 +51,11 @@ include_directories(${PROJECT_SOURCE_DIR})
 add_subdirectory(tools)
 add_subdirectory(io)
 add_subdirectory(tasks/auto_aim)
-add_subdirectory(tasks/auto_buff)
+add_subdirectory(tasks/auto_buff_v2)
 
 add_executable(standard
   src/standard.cpp
+  src/mode_runtime.cpp
   tools/detect_factory.cpp
   tools/foxglove_visualizer.cpp)
 target_link_libraries(standard PRIVATE
@@ -60,9 +63,76 @@ target_link_libraries(standard PRIVATE
   fmt::fmt
   yaml-cpp
   auto_aim
+  auto_buff_v2
   tools
   io
   foxglove_sdk)
+
+add_test(NAME standard_cli_test
+  COMMAND ${PROJECT_SOURCE_DIR}/tests/standard_cli_test.sh $<TARGET_FILE:standard>)
+
+add_test(NAME legacy_buff_ownership_test
+  COMMAND ${PROJECT_SOURCE_DIR}/tests/legacy_buff_ownership_test.sh ${CMAKE_BINARY_DIR})
+
+add_executable(mode_runtime_test tests/mode_runtime_test.cpp)
+target_compile_options(mode_runtime_test PRIVATE -UNDEBUG)
+add_test(NAME mode_runtime_test COMMAND mode_runtime_test)
+
+add_executable(processed_frame_test tests/processed_frame_test.cpp)
+target_compile_options(processed_frame_test PRIVATE -UNDEBUG)
+target_link_libraries(processed_frame_test PRIVATE io)
+add_test(NAME processed_frame_test COMMAND processed_frame_test)
+
+add_executable(frame_facts_test tests/frame_facts_test.cpp)
+target_compile_options(frame_facts_test PRIVATE -UNDEBUG)
+target_link_libraries(frame_facts_test PRIVATE ${OpenCV_LIBS} io)
+add_test(NAME frame_facts_test COMMAND frame_facts_test)
+
+add_executable(auto_aim_frame_runtime_test tests/auto_aim_frame_runtime_test.cpp)
+target_compile_options(auto_aim_frame_runtime_test PRIVATE -UNDEBUG)
+target_link_libraries(auto_aim_frame_runtime_test PRIVATE io)
+add_test(NAME auto_aim_frame_runtime_test COMMAND auto_aim_frame_runtime_test)
+
+add_executable(buff_v2_model_test tests/buff_v2_model_test.cpp)
+target_compile_options(buff_v2_model_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_model_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_model_test COMMAND buff_v2_model_test)
+
+add_executable(buff_v2_config_test tests/buff_v2_config_test.cpp)
+target_compile_options(buff_v2_config_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_config_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_config_test COMMAND buff_v2_config_test)
+
+add_executable(buff_v2_state_test tests/buff_v2_state_test.cpp)
+target_compile_options(buff_v2_state_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_state_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_state_test COMMAND buff_v2_state_test)
+
+add_executable(buff_v2_assignment_test tests/buff_v2_assignment_test.cpp)
+target_compile_options(buff_v2_assignment_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_assignment_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_assignment_test COMMAND buff_v2_assignment_test)
+
+add_executable(buff_v2_detector_test tests/buff_v2_detector_test.cpp)
+target_compile_options(buff_v2_detector_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_detector_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_detector_test COMMAND buff_v2_detector_test)
+
+add_executable(buff_v2_frame_processor_test tests/buff_v2_frame_processor_test.cpp)
+target_compile_options(buff_v2_frame_processor_test PRIVATE -UNDEBUG)
+target_link_libraries(
+  buff_v2_frame_processor_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_frame_processor_test COMMAND buff_v2_frame_processor_test)
+
+add_executable(buff_v2_pnp_test tests/buff_v2_pnp_test.cpp)
+target_compile_options(buff_v2_pnp_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_pnp_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_pnp_test COMMAND buff_v2_pnp_test)
+
+add_executable(buff_v2_planner_test tests/buff_v2_planner_test.cpp)
+target_compile_options(buff_v2_planner_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_planner_test PRIVATE auto_buff_v2 fmt::fmt)
+add_test(NAME buff_v2_planner_test COMMAND buff_v2_planner_test)
 
 # 相机与手眼标定工具。
 add_executable(capture calibration/capture.cpp)

@@ -6,9 +6,9 @@
 #include <vector>
 
 #include "tinympc/tiny_api.hpp"
+#include "tools/ballistic_solver.hpp"
 #include "tools/logger.hpp"
 #include "tools/math_tools.hpp"
-#include "tools/trajectory.hpp"
 #include "tools/yaml.hpp"
 
 using namespace std::chrono_literals;
@@ -41,6 +41,12 @@ Plan invalid_plan(const char * reason)
 Planner::Planner(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
+  const auto ballistic_model =
+    yaml["ballistic_model"].as<std::string>("vacuum");
+  tools::BallisticSolverConfig ballistic_config;
+  ballistic_config.njust_air_resistance =
+    yaml["njust_air_resistance"].as<double>(ballistic_config.njust_air_resistance);
+  ballistic_solver_ = tools::make_ballistic_solver(ballistic_model, ballistic_config);
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;
   fire_thresh_ = tools::read<double>(yaml, "fire_thresh");
@@ -131,6 +137,73 @@ Planner::Planner(const std::string & config_path)
   setup_pitch_solver(config_path);
 }
 
+Plan Planner::plan(const Trajectory & trajectory, double yaw0, double distance)
+{
+  if (!trajectory.allFinite() || !std::isfinite(yaw0) || !std::isfinite(distance)) {
+    return invalid_plan("invalid reference trajectory");
+  }
+
+  // 1. Solve yaw
+  Eigen::VectorXd x0(2);
+  x0 << trajectory(0, 0), trajectory(1, 0);
+  tiny_set_x0(yaw_solver_, x0);
+
+  yaw_solver_->work->Xref = trajectory.block(0, 0, 2, HORIZON);
+  const auto yaw_status = tiny_solve(yaw_solver_);
+  if (yaw_status != 0 && !yaw_nonconvergence_logged_) {
+    tools::logger()->warn(
+      "[Planner] Yaw MPC did not converge: status={}, iterations={}, using finite partial solution",
+      yaw_status,
+      yaw_solver_ ? yaw_solver_->solution->iter : 0);
+    yaw_nonconvergence_logged_ = true;
+  } else if (yaw_status == 0) {
+    yaw_nonconvergence_logged_ = false;
+  }
+  if (!finite_solver_result(yaw_solver_)) {
+    tools::logger()->warn(
+      "[Planner] Yaw MPC output is invalid: status={}, iterations={}", yaw_status,
+      yaw_solver_ ? yaw_solver_->solution->iter : 0);
+    return {};
+  }
+
+  // 2. Solve pitch
+  x0 << trajectory(2, 0), trajectory(3, 0);
+  tiny_set_x0(pitch_solver_, x0);
+
+  pitch_solver_->work->Xref = trajectory.block(2, 0, 2, HORIZON);
+  const auto pitch_status = tiny_solve(pitch_solver_);
+  if (pitch_status != 0 && !pitch_nonconvergence_logged_) {
+    tools::logger()->warn(
+      "[Planner] Pitch MPC did not converge: status={}, iterations={}, using finite partial solution",
+      pitch_status,
+      pitch_solver_ ? pitch_solver_->solution->iter : 0);
+    pitch_nonconvergence_logged_ = true;
+  } else if (pitch_status == 0) {
+    pitch_nonconvergence_logged_ = false;
+  }
+  if (!finite_solver_result(pitch_solver_)) {
+    tools::logger()->warn(
+      "[Planner] Pitch MPC output is invalid: status={}, iterations={}", pitch_status,
+      pitch_solver_ ? pitch_solver_->solution->iter : 0);
+    return {};
+  }
+
+  Plan result;
+  result.control = true;
+  result.target_yaw = tools::limit_rad(trajectory(0, HALF_HORIZON) + yaw0);
+  result.target_pitch = trajectory(2, HALF_HORIZON);
+  result.yaw = tools::limit_rad(yaw_solver_->work->x(0, HALF_HORIZON) + yaw0);
+  result.yaw_vel = yaw_solver_->work->x(1, HALF_HORIZON);
+  result.yaw_acc = yaw_solver_->work->u(0, HALF_HORIZON);
+  result.pitch = pitch_solver_->work->x(0, HALF_HORIZON);
+  result.pitch_vel = pitch_solver_->work->x(1, HALF_HORIZON);
+  result.pitch_acc = pitch_solver_->work->u(0, HALF_HORIZON);
+  result.distance = distance;
+  result.debug_valid = true;
+  if (!valid_plan(result)) return invalid_plan("non-finite MPC output");
+  return result;
+}
+
 Plan Planner::plan(Target target, double bullet_speed)
 {
   // 0. Check bullet speed
@@ -160,11 +233,11 @@ Plan Planner::plan(Target target, double bullet_speed)
       }
     }
   }
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  if (bullet_traj.unsolvable || !std::isfinite(bullet_traj.fly_time)) {
+  const auto bullet_traj = ballistic_solver_->solve(bullet_speed, min_dist, xyz.z());
+  if (!bullet_traj || !std::isfinite(bullet_traj->fly_time)) {
     return invalid_plan("invalid bullet trajectory");
   }
-  auto fly_time = bullet_traj.fly_time;
+  auto fly_time = bullet_traj->fly_time;
   if (fly_time_iteration_enabled_) {
     for (int i = 0; i < fly_time_iteration_max_iteration_; ++i) {
       auto future_target = target;
@@ -185,12 +258,12 @@ Plan Planner::plan(Target target, double bullet_speed)
         }
       }
       const auto future_bullet_traj =
-        tools::Trajectory(bullet_speed, future_min_dist, future_xyz.z());
-      if (future_bullet_traj.unsolvable || !std::isfinite(future_bullet_traj.fly_time)) {
+        ballistic_solver_->solve(bullet_speed, future_min_dist, future_xyz.z());
+      if (!future_bullet_traj || !std::isfinite(future_bullet_traj->fly_time)) {
         return invalid_plan("invalid iterative bullet trajectory");
       }
 
-      const auto next_fly_time = future_bullet_traj.fly_time;
+      const auto next_fly_time = future_bullet_traj->fly_time;
       const auto converged =
         std::abs(next_fly_time - fly_time) < fly_time_iteration_convergence_threshold_;
       fly_time = next_fly_time;
@@ -230,83 +303,25 @@ Plan Planner::plan(Target target, double bullet_speed)
     }
   }
 
-  // 4. Solve yaw
-  Eigen::VectorXd x0(2);
-  x0 << traj(0, 0), traj(1, 0);
-  tiny_set_x0(yaw_solver_, x0);
-
-  yaw_solver_->work->Xref = traj.block(0, 0, 2, HORIZON);
-  const auto yaw_status = tiny_solve(yaw_solver_);
-  if (yaw_status != 0 && !yaw_nonconvergence_logged_) {
-    tools::logger()->warn(
-      "[Planner] Yaw MPC did not converge: status={}, iterations={}, using finite partial solution",
-      yaw_status,
-      yaw_solver_ ? yaw_solver_->solution->iter : 0);
-    yaw_nonconvergence_logged_ = true;
-  } else if (yaw_status == 0) {
-    yaw_nonconvergence_logged_ = false;
-  }
-  if (!finite_solver_result(yaw_solver_)) {
-    tools::logger()->warn(
-      "[Planner] Yaw MPC output is invalid: status={}, iterations={}", yaw_status,
-      yaw_solver_ ? yaw_solver_->solution->iter : 0);
-    return {};
-  }
-
-  // 4. Solve pitch
-  x0 << traj(2, 0), traj(3, 0);
-  tiny_set_x0(pitch_solver_, x0);
-
-  pitch_solver_->work->Xref = traj.block(2, 0, 2, HORIZON);
-  const auto pitch_status = tiny_solve(pitch_solver_);
-  if (pitch_status != 0 && !pitch_nonconvergence_logged_) {
-    tools::logger()->warn(
-      "[Planner] Pitch MPC did not converge: status={}, iterations={}, using finite partial solution",
-      pitch_status,
-      pitch_solver_ ? pitch_solver_->solution->iter : 0);
-    pitch_nonconvergence_logged_ = true;
-  } else if (pitch_status == 0) {
-    pitch_nonconvergence_logged_ = false;
-  }
-  if (!finite_solver_result(pitch_solver_)) {
-    tools::logger()->warn(
-      "[Planner] Pitch MPC output is invalid: status={}, iterations={}", pitch_status,
-      pitch_solver_ ? pitch_solver_->solution->iter : 0);
-    return {};
-  }
-
-  Plan plan;
-  plan.control = true;
-  plan.debug_xyza = debug_xyza;
-  plan.debug_armor_pitch = armor_mount_pitch(target.name);
-  plan.fly_time = fly_time;
-  plan.debug_valid = true;
-  plan.anti_spin_active = anti_spin;
-
-  plan.target_yaw = tools::limit_rad(traj(0, HALF_HORIZON) + yaw0);
-  plan.target_pitch = traj(2, HALF_HORIZON);
-
-  plan.yaw = tools::limit_rad(yaw_solver_->work->x(0, HALF_HORIZON) + yaw0);
-  plan.yaw_vel = yaw_solver_->work->x(1, HALF_HORIZON);
-  plan.yaw_acc = yaw_solver_->work->u(0, HALF_HORIZON);
-
-  plan.pitch = pitch_solver_->work->x(0, HALF_HORIZON);
-  plan.pitch_vel = pitch_solver_->work->x(1, HALF_HORIZON);
-  plan.pitch_acc = pitch_solver_->work->u(0, HALF_HORIZON);
-  plan.distance = std::isfinite(target_center_distance) ? target_center_distance : -1.0;
+  auto result = this->plan(traj, yaw0, target_center_distance);
+  if (!result.control) return result;
+  result.debug_xyza = debug_xyza;
+  result.debug_armor_pitch = armor_mount_pitch(target.name);
+  result.fly_time = fly_time;
+  result.anti_spin_active = anti_spin;
 
   auto shoot_offset_ = 2;
   fire_target.predict(DT * shoot_offset_);
-  plan.fire =
+  result.fire =
     std::hypot(
       traj(0, HALF_HORIZON + shoot_offset_) - yaw_solver_->work->x(0, HALF_HORIZON + shoot_offset_),
       traj(2, HALF_HORIZON + shoot_offset_) -
         pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
   if (anti_spin) {
-    plan.fire = plan.fire && anti_spin_target_converged && anti_spin_fire_ready(fire_target);
+    result.fire = result.fire && anti_spin_target_converged && anti_spin_fire_ready(fire_target);
   }
-  if (!valid_plan(plan)) return invalid_plan("non-finite MPC output");
-  return plan;
+  if (!valid_plan(result)) return invalid_plan("non-finite MPC output");
+  return result;
 }
 
 Plan Planner::plan(std::optional<Target> target, double bullet_speed)
@@ -505,10 +520,10 @@ Eigen::Matrix<double, 2, 1> Planner::aim(
   debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), yaw);
 
   auto azim = std::atan2(xyz.y(), xyz.x());
-  auto bullet_traj = tools::Trajectory(bullet_speed, min_dist, xyz.z());
-  if (bullet_traj.unsolvable) throw std::runtime_error("Unsolvable bullet trajectory!");
+  const auto bullet_traj = ballistic_solver_->solve(bullet_speed, min_dist, xyz.z());
+  if (!bullet_traj) throw std::runtime_error("Unsolvable bullet trajectory!");
 
-  return {tools::limit_rad(azim + yaw_offset_), -bullet_traj.pitch - pitch_offset_};
+  return {tools::limit_rad(azim + yaw_offset_), -bullet_traj->pitch - pitch_offset_};
 }
 
 Trajectory Planner::get_trajectory(

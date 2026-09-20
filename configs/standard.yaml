@@ -222,7 +222,7 @@ fire_thresh: 0.0035              # 开火阈值（rad）：参考轨迹与规划
 rho: 1.0                         # ADMM 惩罚参数，影响收敛速度
 max_iter: 10                     # ADMM 最大迭代次数，越大求解越精确但耗时更长
 
-fly_time_iteration:
+fly_time_iteration:              # 自瞄与打符共用
   enable: true                   # 是否迭代求解预瞄点与弹丸飞行时间，关闭时保持单次预测
   max_iteration: 3               # 最大固定点迭代次数
   convergence_threshold: 1e-3    # s，相邻两次飞行时间差小于此值时停止迭代
@@ -243,6 +243,8 @@ armor_selection_hysteresis:
 bullet_speed_min: 10             # 弹速下限 (m/s)，低于此值视为无效
 bullet_speed_max: 25             # 弹速上限 (m/s)，高于此值视为无效
 bullet_speed_default: 23.4       # 弹速默认回退值 (m/s)，弹速无效时使用
+ballistic_model: "vacuum"        # 弹道模型：njust=南理工含空气阻力模型，vacuum=无空气阻力模型
+njust_air_resistance: 0.003      # 南理工二次空气阻力系数；仅 ballistic_model=njust 时生效
 
 #####-----AIMD自适应延迟(选配)-----#####
 aimd:
@@ -275,3 +277,28 @@ model: "assets/yolo11_buff_int8.xml"
 #####-----buff_aimer参数-----#####
 fire_gap_time: 0.700   # s
 predict_time: 0.120     # s
+
+buff_v2: # 新打符入口使用的源项目参数
+  min_distance: 1.7 # m，轮廓几何筛选的最近距离
+  max_distance: 5.0 # m，轮廓几何筛选的最远距离
+  active_threshold: 0.2 # PVD 靶心形状阈值
+  match_threshold: 0.5 # R 标骨架拓扑匹配阈值
+  shoot_delay: 0.04 # s，发射至出膛延迟
+  rune_idle_duration: 0.4 # s，符叶瞄准但禁止发射的周期
+  rune_shoot_duration: 0.2 # s，符叶允许发射的周期
+  yaw_tolerance: 0.07 # m，靶心附近允许的水平误差，超过 5 m 按 5 m 等效角宽
+  pitch_tolerance: 0.04 # m，靶心附近允许的竖直误差，超过 5 m 按 5 m 等效角宽
+  timeout_seconds: 1.5 # s，最后一次未激活符叶校正后的模型超时
+  noise_x: 0.00001 # EKF 每帧 x 过程噪声
+  noise_y: 0.00001 # EKF 每帧 y 过程噪声
+  noise_z: 0.00001 # EKF 每帧 z 过程噪声
+  noise_rotation_speed: 1.0 # EKF 每帧角速度过程噪声
+  noise_rotation_angle: 0.001 # EKF 每帧角度过程噪声
+  noise_face_yaw: 0.00001 # EKF 每帧符面 yaw 过程噪声
+  noise_observation: 20.0 # 像素重投影观测噪声
+  gate_threshold: 13.816 # Mahalanobis 距离平方关联阈值
+  init_seed_mean_error: 10.0 # px，PnP 种子平均重投影误差上限
+  init_seed_max_error: 20.0 # px，PnP 种子最大重投影误差上限
+  init_center_gate: 30.0 # px，初始叶片中心和其他未激活叶片的匹配阈值
+  init_pitch_bound: 20.0 # deg，符面倾角上限
+  diverge_face_angle: 45.0 # deg，符面朝向与符心方向最大偏差

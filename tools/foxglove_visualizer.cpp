@@ -549,6 +549,56 @@ void detail::draw_aim_overlay(
   if (locked_armor) draw_polygon(image, locked_armor->points, {0, 255, 255});
 }
 
+void detail::draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data)
+{
+  const cv::Scalar yellow{0, 255, 255};
+  const cv::Scalar green{0, 255, 0};
+  for (const auto & detection : debug_data.detections) {
+    cv::circle(image, detection.point, 5, green, 2, cv::LINE_AA);
+    for (const auto & corner : detection.corners)
+      cv::circle(image, corner, 3, green, 1, cv::LINE_AA);
+    if (!detection.label.empty())
+      cv::putText(image, detection.label, detection.point, cv::FONT_HERSHEY_SIMPLEX, 0.45, green,
+                  1, cv::LINE_AA);
+  }
+  for (const auto & point : debug_data.reprojected_features)
+    cv::circle(image, point, 4, yellow, 2, cv::LINE_AA);
+
+  if (debug_data.blade_polygon) {
+    std::vector<cv::Point2f> blades(
+      debug_data.blade_polygon->begin(), debug_data.blade_polygon->end());
+    draw_polygon(image, blades, yellow);
+    if (debug_data.icon) {
+      cv::Point2f center;
+      for (const auto & blade : *debug_data.blade_polygon) center += blade;
+      center *= 1.0F / static_cast<float>(debug_data.blade_polygon->size());
+      cv::line(image, *debug_data.icon, center, yellow, 2, cv::LINE_AA);
+    }
+  }
+  if (debug_data.info_anchor && !debug_data.info.empty())
+    cv::putText(image, debug_data.info, *debug_data.info_anchor, cv::FONT_HERSHEY_SIMPLEX, 0.45,
+                {255, 255, 255}, 1, cv::LINE_AA);
+  if (debug_data.aimpoint) {
+    const cv::Scalar aimpoint_color = debug_data.aimpoint_fire ? cv::Scalar{0, 0, 255} : green;
+    cv::circle(image, *debug_data.aimpoint, 5, aimpoint_color, -1, cv::LINE_AA);
+  }
+}
+
+std::optional<cv::Point2f> detail::buff_aimpoint(
+  const auto_aim::Plan & plan, std::uint64_t plan_target_generation,
+  std::uint64_t current_target_generation, auto_aim::Solver & solver)
+{
+  if (plan_target_generation != current_target_generation || !plan.control || !plan.debug_valid ||
+      !plan.debug_xyza.allFinite()) {
+    return std::nullopt;
+  }
+  const auto pixels = solver.world2pixel(
+    {{static_cast<float>(plan.debug_xyza.x()), static_cast<float>(plan.debug_xyza.y()),
+      static_cast<float>(plan.debug_xyza.z())}});
+  if (pixels.size() != 1) return std::nullopt;
+  return pixels.front();
+}
+
 std::optional<std::vector<cv::Point2f>> detail::anti_spin_hit_armor(
   const auto_aim::Plan & plan, std::uint64_t plan_target_generation,
   std::uint64_t current_target_generation, auto_aim::ArmorType armor_type,
@@ -731,12 +781,20 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
   if (impl_->image_limiter.should_publish(frame.timestamp)) {
     const auto * locked_armor =
       target_data.locked_armor ? &target_data.locked_armor.value() : nullptr;
+    auto buff_debug = frame.buff_debug;
     std::optional<std::vector<cv::Point2f>> hit_armor;
     if (latest_plan) {
       impl_->solver.set_R_gimbal2world(frame.gimbal_orientation);
       hit_armor = detail::anti_spin_hit_armor(
         latest_plan->second, latest_plan->first, frame.target_generation, target_data.armor_type,
         impl_->solver);
+      if (buff_debug.is_buff_mode) {
+        if (const auto aimpoint = detail::buff_aimpoint(
+              latest_plan->second, latest_plan->first, frame.target_generation, impl_->solver)) {
+          buff_debug.aimpoint = *aimpoint;
+          buff_debug.aimpoint_fire = latest_plan->second.fire;
+        }
+      }
     }
     const auto * anti_spin_hit_armor = hit_armor ? &hit_armor.value() : nullptr;
     cv::Mat image = frame.image.clone();
@@ -745,6 +803,7 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
     }
     detail::draw_aim_overlay(
       image, frame.detections.armors, impl_->enemy_color, locked_armor, anti_spin_hit_armor);
+    detail::draw_buff_overlay(image, buff_debug);
 
     cv::Mat detection_image = frame.image.clone();
     detail::draw_aim_overlay(

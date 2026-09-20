@@ -1,8 +1,10 @@
 #include <cassert>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstring>
 #include <list>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -110,6 +112,34 @@ int main()
   assert(predicted_hit_edge[2] > 0 && predicted_hit_edge[1] == 0);
   assert(predicted_hit_center == cv::Vec3b(0, 0, 0));
 
+  cv::Mat buff_image = cv::Mat::zeros(100, 120, CV_8UC3);
+  const std::vector<cv::Point2f> rune_features = {
+    {60, 20}, {90, 35}, {82, 75}, {40, 85}, {15, 55}, {30, 20}};
+  const std::array<cv::Point2f, 5> rune_blades = {
+    rune_features[1], rune_features[2], rune_features[3], rune_features[4], rune_features[5]};
+  tools::BuffDebugData buff_debug;
+  buff_debug.detections.push_back({{20, 20}, {}, "R: 0.890"});
+  buff_debug.reprojected_features = rune_features;
+  buff_debug.blade_polygon = rune_blades;
+  buff_debug.icon = rune_features.front();
+  buff_debug.info_anchor = {60, 55};
+  buff_debug.info = "spd_8(t)=+1.00+0.80*sin(+0.20+2.00t), e=0.001";
+  buff_debug.aimpoint = {105, 20};
+  tools::detail::draw_buff_overlay(buff_image, buff_debug);
+  const auto detected_feature = buff_image.at<cv::Vec3b>(15, 20);
+  assert(detected_feature[0] == 0 && detected_feature[1] > 0 && detected_feature[2] == 0);
+  const auto reprojected_feature = buff_image.at<cv::Vec3b>(16, 60);
+  assert(reprojected_feature[0] == 0 && reprojected_feature[1] > 0 && reprojected_feature[2] > 0);
+  const auto polygon_edge = buff_image.at<cv::Vec3b>(45, 88);
+  assert(polygon_edge[0] == 0 && polygon_edge[1] > 0 && polygon_edge[2] > 0);
+  const auto waiting_aimpoint = buff_image.at<cv::Vec3b>(20, 105);
+  assert(waiting_aimpoint[0] == 0 && waiting_aimpoint[1] > 0 && waiting_aimpoint[2] == 0);
+  buff_debug.aimpoint_fire = true;
+  tools::detail::draw_buff_overlay(buff_image, buff_debug);
+  const auto firing_aimpoint = buff_image.at<cv::Vec3b>(20, 105);
+  assert(firing_aimpoint[0] == 0 && firing_aimpoint[1] == 0 && firing_aimpoint[2] > 0);
+  assert(cv::countNonZero(buff_image.reshape(1)) > 100);
+
   auto_aim::Solver projection_solver("configs/standard.yaml");
   auto_aim::Plan inactive_plan;
   inactive_plan.debug_valid = true;
@@ -130,6 +160,11 @@ int main()
   assert(small_hit && small_hit->size() == 4);
   assert(big_hit && big_hit->size() == 4);
   assert(cv::norm((*big_hit)[0] - (*big_hit)[1]) > cv::norm((*small_hit)[0] - (*small_hit)[1]));
+
+  auto buff_plan = inactive_plan;
+  buff_plan.control = true;
+  assert(!tools::detail::buff_aimpoint(buff_plan, 2, 3, projection_solver));
+  assert(tools::detail::buff_aimpoint(buff_plan, 2, 2, projection_solver));
 
   const double yaw = 0.3;
   const double pitch = CV_PI / 12.0;
@@ -287,7 +322,8 @@ int main()
   assert(error_schema_json.at("properties").contains("pitch_tracking_error"));
 
   const auto command_packet = io::make_infantry_command_packet(
-    true, true, -0.5F, 0.2F, 3.0F, -0.1F, 0.4F, -0.2F, 0.8F);
+    true, io::InfantryFireCommand::continuous, -0.5F, 0.2F, 3.0F,
+    -0.1F, 0.4F, -0.2F, 0.8F);
   const auto command_packet_values = tools::detail::command_packet_values(command_packet);
   assert(command_packet_values.at("fire") == 1);
   assert(std::abs(command_packet_values.at("pitch").get<float>() - 0.5F) < 1e-6F);
