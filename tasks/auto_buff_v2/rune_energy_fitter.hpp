@@ -11,7 +11,7 @@ namespace auto_buff_v2
 class RuneEnergyFitter
 {
 public:
-  struct FitResult
+  struct SineFitResult
   {
     double C = 0;
     double v = 0;
@@ -21,7 +21,7 @@ public:
     double cost = std::numeric_limits<double>::max();
   };
 
-  struct LinearResult
+  struct LinearFitResult
   {
     double C = 0;
     double speed = 0;
@@ -31,8 +31,8 @@ public:
   void push(double t, double theta);
   void reset();
 
-  std::optional<LinearResult> fit_linear() const;
-  std::optional<FitResult> fit_sine() const;
+  std::optional<LinearFitResult> fit_linear() const;
+  std::optional<SineFitResult> fit_sine() const;
 
   static constexpr double kWindowSeconds = 6.0;
   static constexpr double kMinFitSeconds = 1.5;

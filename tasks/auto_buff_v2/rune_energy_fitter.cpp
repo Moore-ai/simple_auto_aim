@@ -44,7 +44,7 @@ double RuneEnergyFitter::compute_weighted_cost(
   return weighted_sum / weight_sum;
 }
 
-std::optional<RuneEnergyFitter::LinearResult> RuneEnergyFitter::fit_linear() const
+std::optional<RuneEnergyFitter::LinearFitResult> RuneEnergyFitter::fit_linear() const
 {
   if (buffer_.size() < 2) return std::nullopt;
   if (buffer_.back().t - buffer_.front().t < kMinFitSeconds) return std::nullopt;
@@ -70,10 +70,10 @@ std::optional<RuneEnergyFitter::LinearResult> RuneEnergyFitter::fit_linear() con
   auto pred   = [&](double dt) { return C + speed * dt; };
   double cost = compute_weighted_cost(buffer_, pred);
 
-  return LinearResult{C, speed, cost};
+  return LinearFitResult{C, speed, cost};
 }
 
-std::optional<RuneEnergyFitter::FitResult> RuneEnergyFitter::fit_sine() const
+std::optional<RuneEnergyFitter::SineFitResult> RuneEnergyFitter::fit_sine() const
 {
   if (buffer_.size() < 2) return std::nullopt;
   if (buffer_.back().t - buffer_.front().t < kMinFitSeconds) return std::nullopt;
@@ -135,7 +135,7 @@ std::optional<RuneEnergyFitter::FitResult> RuneEnergyFitter::fit_sine() const
   };
   double cost = compute_weighted_cost(buffer_, pred);
 
-  return FitResult{best_C, best_v, a, best_omega, phi, cost};
+  return SineFitResult{best_C, best_v, a, best_omega, phi, cost};
 }
 
 }  // namespace auto_buff_v2

@@ -1,9 +1,18 @@
 #include <cassert>
 #include <cmath>
+#include <type_traits>
+#include <utility>
 
 #include "tasks/auto_buff_v2/rune_energy_fitter.hpp"
 #include "tasks/auto_buff_v2/rune_model.hpp"
 #include "tasks/auto_buff_v2/rune_predictor.hpp"
+
+static_assert(std::is_same_v<
+              decltype(std::declval<auto_buff_v2::RuneEnergyFitter>().fit_linear()),
+              std::optional<auto_buff_v2::RuneEnergyFitter::LinearFitResult>>);
+static_assert(std::is_same_v<
+              decltype(std::declval<auto_buff_v2::RuneEnergyFitter>().fit_sine()),
+              std::optional<auto_buff_v2::RuneEnergyFitter::SineFitResult>>);
 
 int main()
 {
