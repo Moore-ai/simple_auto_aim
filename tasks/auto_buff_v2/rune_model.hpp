@@ -10,6 +10,7 @@
 #include <opencv2/core.hpp>
 
 #include "buff_config.hpp"
+#include "rune_ekf_state.hpp"
 #include "rune.hpp"
 #include "rune_energy_fitter.hpp"
 
@@ -75,7 +76,7 @@ private:
   std::optional<RuneEstimate> state_;
   RuneEnergyFitter fitter_;
   Eigen::Matrix<double, 6, 6> covariance_ = Eigen::Matrix<double, 6, 6>::Identity();
-  Eigen::Matrix<double, 6, 1> ekf_state_ = Eigen::Matrix<double, 6, 1>::Zero();
+  RuneEkfState ekf_state_;
   std::array<Timestamp, 5> inactive_timeout_{};
   Timestamp last_inactive_corrected_{};
   Timestamp force_sine_until_{};

@@ -103,6 +103,11 @@ target_compile_options(buff_v2_config_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_config_test PRIVATE auto_buff_v2)
 add_test(NAME buff_v2_config_test COMMAND buff_v2_config_test)
 
+add_executable(buff_v2_state_test tests/buff_v2_state_test.cpp)
+target_compile_options(buff_v2_state_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_state_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_state_test COMMAND buff_v2_state_test)
+
 add_executable(buff_v2_assignment_test tests/buff_v2_assignment_test.cpp)
 target_compile_options(buff_v2_assignment_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_assignment_test PRIVATE auto_buff_v2)

@@ -43,7 +43,7 @@ std::optional<RuneEstimate> RuneModel::state() const { return state_; }
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
-using Vector = Eigen::Matrix<double, 6, 1>;
+using Vector = RuneEkfState::Vector;
 using Matrix = Eigen::Matrix<double, 6, 6>;
 
 double normalize_angle(double angle)
@@ -58,24 +58,24 @@ double squared_pixel_error(const cv::Point2f & a, const cv::Point2f & b)
   return dx * dx + dy * dy;
 }
 
-Vector vector_from(const RuneEstimate & state)
+RuneEkfState ekf_state_from(const RuneEstimate & state)
 {
   Vector result;
   result << state.center.x(), state.center.y(), state.center.z(), state.rotation_speed,
     state.rotation_angle, state.face_yaw;
-  return result;
+  return RuneEkfState(result);
 }
 
-void vector_into(RuneEstimate & state, const Vector & value)
+void ekf_state_into(RuneEstimate & state, const RuneEkfState & value)
 {
-  state.center = value.head<3>();
-  state.rotation_speed = value[3];
-  state.rotation_angle = value[4];
-  state.face_yaw = normalize_angle(value[5]);
+  state.center = {value.center_x(), value.center_y(), value.center_z()};
+  state.rotation_speed = value.rotation_speed();
+  state.rotation_angle = value.rotation_angle();
+  state.face_yaw = normalize_angle(value.face_yaw());
 }
 
 std::optional<cv::Point2f> project_feature(
-  const Vector & value, int feature, const Eigen::Matrix3d & R_camera2world,
+  const RuneEkfState & value, int feature, const Eigen::Matrix3d & R_camera2world,
   const Eigen::Vector3d & t_camera2world, const cv::Mat & camera_matrix,
   const cv::Mat & distortion)
 {
@@ -83,12 +83,13 @@ std::optional<cv::Point2f> project_feature(
   if (feature == 0) {
     local = {-kRuneIconProminentDistance, 0, 0};
   } else {
-    const double angle = value[4] + (feature - 1) * 2 * kPi / 5;
+    const double angle = value.rotation_angle() + (feature - 1) * 2 * kPi / 5;
     local = {0, -kRuneGlobalRadius * std::sin(angle), kRuneGlobalRadius * std::cos(angle)};
   }
-  const Eigen::Vector3d world = value.head<3>() +
-                                Eigen::AngleAxisd(value[5], Eigen::Vector3d::UnitZ()) * local;
-  const Eigen::Vector3d camera = R_camera2world.transpose() * (world - t_camera2world);
+  const Eigen::Vector3d world(value.center_x(), value.center_y(), value.center_z());
+  const Eigen::Vector3d rotated_world =
+    world + Eigen::AngleAxisd(value.face_yaw(), Eigen::Vector3d::UnitZ()) * local;
+  const Eigen::Vector3d camera = R_camera2world.transpose() * (rotated_world - t_camera2world);
   if (camera.z() <= 0.1) return std::nullopt;
   std::vector<cv::Point2f> pixels;
   cv::projectPoints(std::vector<cv::Point3f>{{static_cast<float>(camera.x()),
@@ -99,7 +100,7 @@ std::optional<cv::Point2f> project_feature(
 }
 
 Eigen::Matrix<double, 2, 6> observation_jacobian(
-  const Vector & x, int feature, const Eigen::Matrix3d & R_camera2world,
+  const RuneEkfState & x, int feature, const Eigen::Matrix3d & R_camera2world,
   const Eigen::Vector3d & t_camera2world, const cv::Mat & camera_matrix,
   const cv::Mat & distortion)
 {
@@ -108,8 +109,8 @@ Eigen::Matrix<double, 2, 6> observation_jacobian(
                                           camera_matrix, distortion);
   if (!predicted) return H;
   for (int j = 0; j < 6; ++j) {
-    Vector perturb = x;
-    perturb[j] += 1e-4;
+    RuneEkfState perturb = x;
+    perturb.add_component(static_cast<RuneEkfStateComponent>(j), 1e-4);
     const auto p = project_feature(perturb, feature, R_camera2world, t_camera2world,
                                    camera_matrix, distortion);
     if (!p) continue;
@@ -191,7 +192,7 @@ bool solve_seed(const RuneIcon & icon, const RuneBullseye & bull, const cv::Mat 
          state.center.allFinite();
 }
 
-void correct_initial_observation(Vector & x, Matrix & covariance, int feature,
+void correct_initial_observation(RuneEkfState & x, Matrix & covariance, int feature,
                                   const cv::Point2f & observed,
                                   const Eigen::Matrix3d & R_camera2world,
                                   const Eigen::Vector3d & t_camera2world,
@@ -207,9 +208,9 @@ void correct_initial_observation(Vector & x, Matrix & covariance, int feature,
   const Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * observation_noise;
   const Eigen::Matrix2d S = H * covariance * H.transpose() + R;
   const Eigen::Matrix<double, 6, 2> K = covariance * H.transpose() * S.inverse();
-  Vector corrected = x + K * residual;
-  corrected[5] = normalize_angle(corrected[5]);
-  if (!corrected.allFinite()) return;
+  RuneEkfState corrected(x.vector() + K * residual);
+  corrected.set_face_yaw(normalize_angle(corrected.face_yaw()));
+  if (!corrected.all_finite()) return;
   const Matrix I = Matrix::Identity() - K * H;
   Matrix posterior = I * covariance * I.transpose() + K * R * K.transpose();
   posterior = 0.5 * (posterior + posterior.transpose());
@@ -226,7 +227,7 @@ std::vector<RuneReprojectedFeature> RuneModel::reprojected_features() const
                                           R_gimbal2imubody_ * R_camera2gimbal_;
   const Eigen::Vector3d t_camera2world = q_gimbal2world_ *
                                           R_gimbal2imubody_ * t_camera2gimbal_;
-  const auto state = vector_from(*state_);
+  const auto state = ekf_state_from(*state_);
   std::vector<RuneReprojectedFeature> result;
   result.reserve(6);
   for (int id = 0; id <= 5; ++id) {
@@ -272,8 +273,8 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
   const double dt = std::chrono::duration<double>(timestamp - state.timestamp).count();
   if (dt < 0) { reset(); return false; }
   state = RunePredictor{}.predict(state, timestamp);
-  Vector x = ekf_state_;
-  x[4] += x[3] * dt;
+  RuneEkfState x = ekf_state_;
+  x.add_rotation_angle(x.rotation_speed() * dt);
   Matrix F = Matrix::Identity();
   F(4, 3) = dt;
   Matrix Q = Matrix::Zero();
@@ -325,8 +326,8 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
                         Eigen::Matrix2d::Identity() * config_.noise_observation;
     if (residual.transpose() * S.inverse() * residual > kGate) continue;
     const Eigen::Matrix<double, 6, 2> K = covariance_ * H.transpose() * S.inverse();
-    x += K * residual;
-    x[5] = normalize_angle(x[5]);
+    x = RuneEkfState(x.vector() + K * residual);
+    x.set_face_yaw(normalize_angle(x.face_yaw()));
     const Matrix I = Matrix::Identity() - K * H;
     covariance_ = I * covariance_ * I.transpose() + K *
                    (Eigen::Matrix2d::Identity() * config_.noise_observation) * K.transpose();
@@ -341,7 +342,7 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
     }
   }
   ekf_state_ = x;
-  vector_into(state, x);
+  ekf_state_into(state, x);
   if (state.sine_valid)
     state.rotation_speed = state.sine_v + state.sine_a * std::sin(state.sine_phase);
   else if (state.has_fitted_motion)
@@ -390,7 +391,7 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
       double seed_sse = 0, seed_max_error = 0;
       if (!solve_seed(icon, bull, camera_matrix_, distort_coeffs_, R_camera2world,
                       t_camera2world, config_, seed, seed_sse, seed_max_error)) continue;
-      const Vector x = vector_from(seed);
+      const RuneEkfState x = ekf_state_from(seed);
       const auto projected_icon = project_feature(x, 0, R_camera2world, t_camera2world,
                                                    camera_matrix_, distort_coeffs_);
       const auto projected_seed = project_feature(x, 1, R_camera2world, t_camera2world,
@@ -436,7 +437,7 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
   seed.timestamp = timestamp;
   inactive_timeout_.fill(Timestamp{});
   state_ = seed;
-  ekf_state_ = vector_from(seed);
+  ekf_state_ = ekf_state_from(seed);
   last_inactive_corrected_ = timestamp;
   covariance_.diagonal() << 64, 64, 64, 100, 25, 10;
   correct_initial_observation(ekf_state_, covariance_, 0, best->icon_pixel,
@@ -445,7 +446,7 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
   correct_initial_observation(ekf_state_, covariance_, 1, best->seed_pixel,
                                R_camera2world, t_camera2world, camera_matrix_,
                                distort_coeffs_, config_.noise_observation);
-  vector_into(*state_, ekf_state_);
+  ekf_state_into(*state_, ekf_state_);
   fitter_.reset();
   return true;
 }
@@ -477,15 +478,16 @@ void RuneModel::update_motion_fit(RuneEstimate & state, double elapsed_seconds)
 
 bool RuneModel::diverged() const
 {
-  if (!ekf_state_.allFinite() || !covariance_.allFinite()) return true;
+  if (!ekf_state_.all_finite() || !covariance_.allFinite()) return true;
   if (covariance_(0, 0) > 150 || covariance_(1, 1) > 150 ||
-      std::abs(ekf_state_[0]) > 15 || std::abs(ekf_state_[1]) > 15 ||
-      std::abs(ekf_state_[2]) > 5 || std::abs(ekf_state_[3]) > 10 * kPi)
+      std::abs(ekf_state_.center_x()) > 15 || std::abs(ekf_state_.center_y()) > 15 ||
+      std::abs(ekf_state_.center_z()) > 5 ||
+      std::abs(ekf_state_.rotation_speed()) > 10 * kPi)
     return true;
-  const double radius = std::hypot(ekf_state_[0], ekf_state_[1]);
+  const double radius = std::hypot(ekf_state_.center_x(), ekf_state_.center_y());
   if (radius > 0.5) {
-    const double to_center = std::atan2(ekf_state_[1], ekf_state_[0]);
-    if (std::abs(normalize_angle(ekf_state_[5] - to_center)) >
+    const double to_center = std::atan2(ekf_state_.center_y(), ekf_state_.center_x());
+    if (std::abs(normalize_angle(ekf_state_.face_yaw() - to_center)) >
         config_.diverge_face_angle * kPi / 180) return true;
   }
   return false;
