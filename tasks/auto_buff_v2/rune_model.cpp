@@ -270,7 +270,7 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
     return initialize(elements, timestamp, R_camera2world, t_camera2world);
   }
   const double dt = std::chrono::duration<double>(timestamp - state.timestamp).count();
-  if (dt < 0 || dt > 0.5) { reset(); return false; }
+  if (dt < 0) { reset(); return false; }
   state = RunePredictor{}.predict(state, timestamp);
   Vector x = ekf_state_;
   x[4] += x[3] * dt;
@@ -326,6 +326,7 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
     if (residual.transpose() * S.inverse() * residual > kGate) continue;
     const Eigen::Matrix<double, 6, 2> K = covariance_ * H.transpose() * S.inverse();
     x += K * residual;
+    x[5] = normalize_angle(x[5]);
     const Matrix I = Matrix::Identity() - K * H;
     covariance_ = I * covariance_ * I.transpose() + K *
                    (Eigen::Matrix2d::Identity() * config_.noise_observation) * K.transpose();

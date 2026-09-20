@@ -51,6 +51,12 @@ int main()
   assert(cv::norm(reprojected.front().point - pixel.front()) < 2.0);
   assert(model.reprojected_center());
 
+  auto_buff_v2::RuneModel delayed(config.camera, config.model, false);
+  delayed.update_transform(Eigen::Quaterniond::Identity());
+  assert(delayed.update(elements, now));
+  assert(delayed.update(elements, now + std::chrono::milliseconds(600)));
+  assert(delayed.state());
+
   auto_buff_v2::RuneElements candidates = elements;
   candidates.icons.insert(candidates.icons.begin(),
                           {pixel[0] + cv::Point2f(12, 0), 0.5});
