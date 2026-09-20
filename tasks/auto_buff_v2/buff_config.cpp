@@ -1,5 +1,6 @@
 #include "buff_config.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -87,6 +88,15 @@ BuffConfig BuffConfig::load(const std::string & path)
     yaml["bullet_speed_max"].as<double>(result.planner.bullet_speed_max);
   result.planner.bullet_speed_default =
     yaml["bullet_speed_default"].as<double>(result.planner.bullet_speed_default);
+  if (const auto iteration_yaml = yaml["fly_time_iteration"]; iteration_yaml) {
+    result.planner.fly_time_iteration_enabled =
+      iteration_yaml["enable"].as<bool>(result.planner.fly_time_iteration_enabled);
+    result.planner.fly_time_iteration_max_iteration = std::max(
+      iteration_yaml["max_iteration"].as<int>(result.planner.fly_time_iteration_max_iteration), 1);
+    result.planner.fly_time_iteration_convergence_threshold = std::max(
+      iteration_yaml["convergence_threshold"].as<double>(
+        result.planner.fly_time_iteration_convergence_threshold), 0.0);
+  }
   return result;
 }
 }  // namespace auto_buff_v2

@@ -93,15 +93,20 @@ std::optional<BuffTrackingRequest> BuffPlanner::prepare(
     bullet_speed = config_.bullet_speed_default;
   const double distance = target->center.norm();
   double fly_time = distance / bullet_speed;
-  for (int i = 0; i < 5; ++i) {
-    const double future = config_.shoot_delay + fly_time;
-    const auto prediction_time = offset_time(now, future);
-    const auto solution = aim_solution(*target, prediction_time, bullet_speed,
-                                       config_.yaw_offset, config_.pitch_offset,
-                                       *ballistic_solver_);
-    if (!solution) return std::nullopt;
-    if (std::abs(solution->fly_time - fly_time) < 0.001) break;
-    fly_time = solution->fly_time;
+  if (config_.fly_time_iteration_enabled) {
+    for (int i = 0; i < config_.fly_time_iteration_max_iteration; ++i) {
+      const double future = config_.shoot_delay + fly_time;
+      const auto prediction_time = offset_time(now, future);
+      const auto solution = aim_solution(*target, prediction_time, bullet_speed,
+                                         config_.yaw_offset, config_.pitch_offset,
+                                         *ballistic_solver_);
+      if (!solution) return std::nullopt;
+      if (std::abs(solution->fly_time - fly_time) <
+          config_.fly_time_iteration_convergence_threshold) {
+        break;
+      }
+      fly_time = solution->fly_time;
+    }
   }
   const auto center_time = offset_time(now, config_.shoot_delay + fly_time);
   const auto center = aim_solution(*target, center_time, bullet_speed,

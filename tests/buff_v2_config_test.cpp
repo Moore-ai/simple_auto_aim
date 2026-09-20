@@ -21,6 +21,10 @@ int main()
     "bullet_speed_min: 11\n"
     "bullet_speed_max: 22\n"
     "bullet_speed_default: 20\n"
+    "fly_time_iteration:\n"
+    "  enable: false\n"
+    "  max_iteration: 7\n"
+    "  convergence_threshold: 0.002\n"
     "buff_v2:\n"
     "  min_distance: 2.1\n"
     "  max_distance: 4.8\n"
@@ -58,6 +62,9 @@ int main()
   assert(config.planner.ballistic_model == "vacuum");
   assert(config.planner.ballistic_config.njust_air_resistance == 0.006);
   assert(config.planner.bullet_speed_min == 11 && config.planner.bullet_speed_default == 20);
+  assert(!config.planner.fly_time_iteration_enabled);
+  assert(config.planner.fly_time_iteration_max_iteration == 7);
+  assert(config.planner.fly_time_iteration_convergence_threshold == 0.002);
   assert(std::abs(config.planner.yaw_offset - std::acos(-1) / 2) < 1e-12);
   assert(std::abs(config.planner.pitch_offset + std::acos(-1) / 4) < 1e-12);
   assert((config.camera.t_camera2gimbal - Eigen::Vector3d(0.1, 0.2, 0.3)).norm() < 1e-12);

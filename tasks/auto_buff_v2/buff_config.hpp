@@ -61,6 +61,9 @@ struct BuffConfig
     double bullet_speed_min = 10;
     double bullet_speed_max = 25;
     double bullet_speed_default = 23.4;
+    bool fly_time_iteration_enabled = false;
+    int fly_time_iteration_max_iteration = 3;
+    double fly_time_iteration_convergence_threshold = 1e-3;
     std::string ballistic_model = "njust";
     tools::BallisticSolverConfig ballistic_config;
   } planner;

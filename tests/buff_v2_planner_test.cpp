@@ -31,6 +31,7 @@ int main()
   config.rune_shoot_duration = 0.2;
   config.yaw_tolerance = 0.07;
   config.pitch_tolerance = 0.04;
+  config.fly_time_iteration_enabled = false;
   const char * mpc_config_path = "/tmp/buff_v2_mpc_test.yaml";
   std::ofstream(mpc_config_path) <<
     "ballistic_model: vacuum\n"
@@ -55,6 +56,7 @@ int main()
   auto_buff_v2::BuffPlanner planner(config);
   const auto request = planner.prepare(1, target, 20, start);
   assert(request);
+  assert(std::abs(request->fly_time - target.center.norm() / 20.0) < 1e-12);
   const auto mpc_plan = mpc_planner.plan(request->trajectory, request->yaw0, request->distance);
   assert(mpc_plan.control && mpc_plan.debug_valid && !mpc_plan.fire);
   io::GimbalState gimbal;
