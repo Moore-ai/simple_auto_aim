@@ -9,7 +9,7 @@
 
 namespace auto_buff_v2
 {
-// Turns one shared frame fact into the buff-specific processed frame.
+// 将共享帧事实转换为打符专用的处理帧。
 class BuffFrameProcessor
 {
 public:
