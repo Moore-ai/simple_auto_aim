@@ -23,6 +23,7 @@ tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & fact
   const auto target = model_.state();
 
   tools::BuffDebugData buff_debug;
+  buff_debug.is_buff_mode = true;
   for (const auto & icon : elements.icons)
     buff_debug.detections.push_back({icon.center, {}, fmt::format("R: {:.3f}", icon.score)});
   for (const auto & bull : elements.bullseyes) {

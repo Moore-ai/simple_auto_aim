@@ -578,6 +578,25 @@ void detail::draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data
   if (debug_data.info_anchor && !debug_data.info.empty())
     cv::putText(image, debug_data.info, *debug_data.info_anchor, cv::FONT_HERSHEY_SIMPLEX, 0.45,
                 {255, 255, 255}, 1, cv::LINE_AA);
+  if (debug_data.aimpoint) {
+    const cv::Scalar aimpoint_color = debug_data.aimpoint_fire ? cv::Scalar{0, 0, 255} : green;
+    cv::circle(image, *debug_data.aimpoint, 5, aimpoint_color, -1, cv::LINE_AA);
+  }
+}
+
+std::optional<cv::Point2f> detail::buff_aimpoint(
+  const auto_aim::Plan & plan, std::uint64_t plan_target_generation,
+  std::uint64_t current_target_generation, auto_aim::Solver & solver)
+{
+  if (plan_target_generation != current_target_generation || !plan.control || !plan.debug_valid ||
+      !plan.debug_xyza.allFinite()) {
+    return std::nullopt;
+  }
+  const auto pixels = solver.world2pixel(
+    {{static_cast<float>(plan.debug_xyza.x()), static_cast<float>(plan.debug_xyza.y()),
+      static_cast<float>(plan.debug_xyza.z())}});
+  if (pixels.size() != 1) return std::nullopt;
+  return pixels.front();
 }
 
 std::optional<std::vector<cv::Point2f>> detail::anti_spin_hit_armor(
@@ -762,12 +781,20 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
   if (impl_->image_limiter.should_publish(frame.timestamp)) {
     const auto * locked_armor =
       target_data.locked_armor ? &target_data.locked_armor.value() : nullptr;
+    auto buff_debug = frame.buff_debug;
     std::optional<std::vector<cv::Point2f>> hit_armor;
     if (latest_plan) {
       impl_->solver.set_R_gimbal2world(frame.gimbal_orientation);
       hit_armor = detail::anti_spin_hit_armor(
         latest_plan->second, latest_plan->first, frame.target_generation, target_data.armor_type,
         impl_->solver);
+      if (buff_debug.is_buff_mode) {
+        if (const auto aimpoint = detail::buff_aimpoint(
+              latest_plan->second, latest_plan->first, frame.target_generation, impl_->solver)) {
+          buff_debug.aimpoint = *aimpoint;
+          buff_debug.aimpoint_fire = latest_plan->second.fire;
+        }
+      }
     }
     const auto * anti_spin_hit_armor = hit_armor ? &hit_armor.value() : nullptr;
     cv::Mat image = frame.image.clone();
@@ -776,7 +803,7 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
     }
     detail::draw_aim_overlay(
       image, frame.detections.armors, impl_->enemy_color, locked_armor, anti_spin_hit_armor);
-    detail::draw_buff_overlay(image, frame.buff_debug);
+    detail::draw_buff_overlay(image, buff_debug);
 
     cv::Mat detection_image = frame.image.clone();
     detail::draw_aim_overlay(

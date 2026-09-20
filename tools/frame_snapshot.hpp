@@ -28,11 +28,14 @@ struct BuffDetectionDebug
 
 struct BuffDebugData
 {
+  bool is_buff_mode = false;
   std::vector<BuffDetectionDebug> detections;
   std::vector<cv::Point2f> reprojected_features;
   std::optional<std::array<cv::Point2f, 5>> blade_polygon;
   std::optional<cv::Point2f> icon;
   std::optional<cv::Point2f> info_anchor;
+  std::optional<cv::Point2f> aimpoint;
+  bool aimpoint_fire = false;
   std::string info;
 };
 
