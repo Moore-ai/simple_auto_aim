@@ -56,6 +56,7 @@ private:
   double yaw_offset_;
   double pitch_offset_;
   double fire_thresh_;
+  double anti_spin_fire_thresh_{0.0};
   double low_speed_delay_time_, high_speed_delay_time_, decision_speed_;
   double extra_delay_{0.015};
   double speed_hysteresis_{0.0};

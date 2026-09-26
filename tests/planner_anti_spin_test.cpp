@@ -16,7 +16,9 @@ constexpr double EPSILON = 1e-6;
 
 bool near(double lhs, double rhs) { return std::abs(lhs - rhs) < EPSILON; }
 
-std::filesystem::path write_test_config(const std::string & wait_armor, bool speed_enable = true)
+std::filesystem::path write_test_config(
+  const std::string & wait_armor, bool speed_enable = true,
+  double anti_spin_fire_thresh = 0.01)
 {
   static unsigned int config_id = 0;
   auto config = YAML::LoadFile("configs/standard.yaml");
@@ -30,6 +32,7 @@ std::filesystem::path write_test_config(const std::string & wait_armor, bool spe
   config["low_speed_delay_time"] = 0.0;
   config["anti_spin_enable"] = true;
   config["anti_spin_wait_armor"] = wait_armor;
+  config["anti_spin_fire_thresh"] = anti_spin_fire_thresh;
   config["max_iter"] = 100;
 
   const auto path = std::filesystem::temp_directory_path() /
@@ -142,6 +145,14 @@ int main()
   std::filesystem::remove(passing_config);
   const auto passing_plan = passing_planner.plan(converged_passing_target, bullet_speed);
   assert(passing_plan.fire);
+
+  const auto tight_gate_config = write_test_config("low", true, 0.0);
+  auto_aim::Planner tight_gate_planner(tight_gate_config.string());
+  std::filesystem::remove(tight_gate_config);
+  const auto tight_gate_plan = tight_gate_planner.plan(converged_passing_target, bullet_speed);
+  assert(tight_gate_plan.control);
+  assert(tight_gate_plan.anti_spin_active);
+  assert(!tight_gate_plan.fire);
 
   auto_aim::Target passing_high_armor = passing_low_armor;
   passing_high_armor.predict(M_PI_2 / 2.0);

@@ -60,6 +60,7 @@ Planner::Planner(const std::string & config_path)
     yaml["anti_spin_enable"] && yaml["anti_spin_enable"].as<bool>();
   anti_spin_enable_ = decision_speed_enable_ && anti_spin_requested;
   if (anti_spin_enable_) {
+    anti_spin_fire_thresh_ = tools::read<double>(yaml, "anti_spin_fire_thresh");
     const auto wait_armor = tools::read<std::string>(yaml, "anti_spin_wait_armor");
     if (wait_armor == "low") {
       anti_spin_wait_armor_ = WaitArmorHeight::low;
@@ -483,7 +484,7 @@ bool Planner::anti_spin_fire_ready(const Target & target) const
     if (std::abs(armor.z() - wait_height) > 1e-6) continue;
     if (armor.head<2>().norm() > center_dist) continue;
     const auto armor_yaw = std::atan2(armor.y(), armor.x());
-    if (std::abs(tools::limit_rad(armor_yaw - center_yaw)) < fire_thresh_) return true;
+    if (std::abs(tools::limit_rad(armor_yaw - center_yaw)) < anti_spin_fire_thresh_) return true;
   }
   return false;
 }
