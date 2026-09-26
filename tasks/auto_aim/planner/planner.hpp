@@ -36,6 +36,7 @@ struct Plan
   double fly_time{0.0};
   bool debug_valid{false};
   bool anti_spin_active{false};
+  std::optional<bool> high_speed_mode;
 };
 
 class Planner

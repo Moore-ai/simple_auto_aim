@@ -100,6 +100,16 @@ int main()
   assert(!disabled_plan.anti_spin_active);
   assert(!near(disabled_plan.debug_xyza.x(), 10.0) || !near(disabled_plan.debug_xyza.y(), 0.0));
 
+  const auto enabled_mode_plan =
+    low_planner.plan(std::optional<auto_aim::Target>{target}, bullet_speed);
+  assert(enabled_mode_plan.high_speed_mode == true);
+  const auto disabled_mode_plan =
+    disabled_planner.plan(std::optional<auto_aim::Target>{target}, bullet_speed);
+  assert(!disabled_mode_plan.high_speed_mode.has_value());
+  const auto idle_mode_plan =
+    low_planner.plan(std::optional<auto_aim::Target>{}, bullet_speed);
+  assert(!idle_mode_plan.high_speed_mode.has_value());
+
   auto_aim::Target slow_target(10.0, 0.5, 1.0, 0.5);
   const auto slow_config = write_test_config("low");
   auto_aim::Planner slow_planner(slow_config.string());
@@ -107,6 +117,9 @@ int main()
   const auto slow_plan = slow_planner.plan(slow_target, bullet_speed);
   assert(slow_plan.control);
   assert(!slow_plan.anti_spin_active);
+  const auto slow_mode_plan =
+    slow_planner.plan(std::optional<auto_aim::Target>{slow_target}, bullet_speed);
+  assert(slow_mode_plan.high_speed_mode == false);
   assert(!near(slow_plan.debug_xyza.x(), 10.0) || !near(slow_plan.debug_xyza.y(), 0.0));
 
   auto_aim::Target passing_low_armor(10.0, 2.0, 0.2, 0.5);

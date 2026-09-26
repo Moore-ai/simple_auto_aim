@@ -321,6 +321,36 @@ int main()
   assert(error_schema_json.at("properties").contains("yaw_planner_error"));
   assert(error_schema_json.at("properties").contains("pitch_tracking_error"));
 
+  assert(tools::detail::load_foxglove_config(
+           YAML::Load("decision_speed_enable: true")).decision_speed_enable);
+  assert(!tools::detail::load_foxglove_config(
+            YAML::Load("decision_speed_enable: false")).decision_speed_enable);
+  const auto low_speed_values = tools::detail::speed_mode_values(false);
+  const auto high_speed_values = tools::detail::speed_mode_values(true);
+  assert(low_speed_values.size() == 2);
+  assert(low_speed_values.at("high_speed").is_boolean());
+  assert(low_speed_values.at("high_speed") == false);
+  assert(low_speed_values.at("value").is_number_integer());
+  assert(low_speed_values.at("value") == 0);
+  assert(high_speed_values.size() == 2);
+  assert(high_speed_values.at("high_speed").is_boolean());
+  assert(high_speed_values.at("high_speed") == true);
+  assert(high_speed_values.at("value").is_number_integer());
+  assert(high_speed_values.at("value") == 1);
+  auto speed_channel_result = tools::detail::create_speed_mode_channel();
+  assert(speed_channel_result.has_value());
+  auto speed_channel = std::move(speed_channel_result.value());
+  assert(speed_channel.topic() == "/planner/speed_mode");
+  const auto speed_schema = speed_channel.schema();
+  assert(speed_schema.has_value());
+  const auto speed_schema_json = nlohmann::json::parse(
+    reinterpret_cast<const char *>(speed_schema->data),
+    reinterpret_cast<const char *>(speed_schema->data) + speed_schema->data_len);
+  assert(speed_schema_json.at("properties").at("high_speed").at("type") == "boolean");
+  assert(speed_schema_json.at("properties").at("value").at("type") == "integer");
+  assert(speed_schema_json.at("required") ==
+         nlohmann::json::array({"high_speed", "value"}));
+
   const auto command_packet = io::make_infantry_command_packet(
     true, io::InfantryFireCommand::continuous, -0.5F, 0.2F, 3.0F,
     -0.1F, 0.4F, -0.2F, 0.8F);

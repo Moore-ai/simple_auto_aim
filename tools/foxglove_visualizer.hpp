@@ -32,6 +32,7 @@ struct FoxgloveConfig
 {
   bool enable = true;
   double image_fps = 30.0;
+  bool decision_speed_enable = true;
 };
 
 FoxgloveConfig load_foxglove_config(const YAML::Node & yaml);
@@ -92,6 +93,8 @@ nlohmann::json feedback_packet_values(
 nlohmann::json angular_error_values(
   const auto_aim::Plan & plan, const io::GimbalState & gimbal_state);
 foxglove::FoxgloveResult<foxglove::RawChannel> create_angular_error_channel();
+nlohmann::json speed_mode_values(bool high_speed);
+foxglove::FoxgloveResult<foxglove::RawChannel> create_speed_mode_channel();
 foxglove::schemas::SceneUpdate target_scene_update(
   const auto_aim::TrackerDebugData & target_data);
 nlohmann::json target_values(const auto_aim::TrackerDebugData & target_data);

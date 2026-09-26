@@ -176,11 +176,28 @@ const std::string & angular_error_schema_data()
     .dump();
   return schema;
 }
+
+const std::string & speed_mode_schema_data()
+{
+  static const auto schema = Json{
+    {"$schema", "http://json-schema.org/draft-07/schema#"},
+    {"type", "object"},
+    {"properties",
+     {{"high_speed", {{"type", "boolean"}, {"description", "false=low, true=high"}}},
+      {"value", {{"type", "integer"}, {"description", "0=low, 1=high; plot this field"}}}}},
+    {"required", Json::array({"high_speed", "value"})},
+    {"additionalProperties", false}}
+    .dump();
+  return schema;
+}
 }  // namespace
 
 detail::FoxgloveConfig detail::load_foxglove_config(const YAML::Node & yaml)
 {
   FoxgloveConfig config;
+  if (yaml["decision_speed_enable"]) {
+    config.decision_speed_enable = yaml["decision_speed_enable"].as<bool>();
+  }
   const auto foxglove = yaml["foxglove"];
   if (foxglove) {
     if (foxglove["enable"]) config.enable = foxglove["enable"].as<bool>();
@@ -349,6 +366,20 @@ foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_angular_error_chan
     "simple_auto_aim.AngularError", "jsonschema",
     reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
   return foxglove::RawChannel::create("/planner/angular_error", "json", std::move(schema));
+}
+
+nlohmann::json detail::speed_mode_values(bool high_speed)
+{
+  return Json{{"high_speed", high_speed}, {"value", high_speed ? 1 : 0}};
+}
+
+foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_speed_mode_channel()
+{
+  const auto & schema_data = speed_mode_schema_data();
+  foxglove::Schema schema{
+    "simple_auto_aim.SpeedMode", "jsonschema",
+    reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
+  return foxglove::RawChannel::create("/planner/speed_mode", "json", std::move(schema));
 }
 
 Json detail::target_values(const auto_aim::TrackerDebugData & target_data)
@@ -620,12 +651,14 @@ class FoxgloveVisualizer::Impl
 {
 public:
   Impl(auto_aim::Solver & solver, detail::FoxgloveConfig config)
-  : solver{solver}, enabled{config.enable}, image_limiter{config.image_fps}
+  : solver{solver}, enabled{config.enable},
+    decision_speed_enable{config.decision_speed_enable}, image_limiter{config.image_fps}
   {
   }
 
   auto_aim::Solver solver;
   bool enabled;
+  bool decision_speed_enable;
   detail::ImagePublishLimiter image_limiter;
   detail::LatestFrameQueue frames;
   std::thread worker;
@@ -636,6 +669,7 @@ public:
   std::optional<foxglove::RawChannel> serial_send;
   std::optional<foxglove::RawChannel> angular_acceleration;
   std::optional<foxglove::RawChannel> angular_error;
+  std::optional<foxglove::RawChannel> speed_mode;
   std::optional<foxglove::schemas::CompressedImageChannel> image_raw;
   std::optional<foxglove::schemas::CompressedImageChannel> image;
   std::optional<foxglove::schemas::CompressedImageChannel> image_detection;
@@ -685,6 +719,9 @@ FoxgloveVisualizer::FoxgloveVisualizer(
     "/planner/angular_acceleration");
   create(
     impl_->angular_error, detail::create_angular_error_channel(), "/planner/angular_error");
+  if (impl_->decision_speed_enable) {
+    create(impl_->speed_mode, detail::create_speed_mode_channel(), "/planner/speed_mode");
+  }
   create(impl_->image_raw, foxglove::schemas::CompressedImageChannel::create("/image_raw"),
          "/image_raw");
   create(impl_->image, foxglove::schemas::CompressedImageChannel::create("/image"), "/image");
@@ -777,6 +814,10 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
     log_json(
       impl_->angular_error,
       detail::angular_error_values(latest_plan->second, serial_receive), log_time);
+  }
+  if (latest_plan && latest_plan->second.high_speed_mode) {
+    log_json(
+      impl_->speed_mode, detail::speed_mode_values(*latest_plan->second.high_speed_mode), log_time);
   }
   if (impl_->image_limiter.should_publish(frame.timestamp)) {
     const auto * locked_armor =

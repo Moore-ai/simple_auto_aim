@@ -357,6 +357,7 @@ Plan Planner::plan(std::optional<Target> target, double bullet_speed)
   target->predict(future);
 
   auto result = plan(*target, bullet_speed);
+  if (decision_speed_enable_) result.high_speed_mode = high_speed_state_;
   last_fire_advice_ = result.fire;
   return result;
 }
