@@ -14,7 +14,7 @@
 #include "tasks/auto_aim/planner/planner.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_buff_v2/buff_planner.hpp"
+#include "tasks/auto_buff_v2/buff_planner_factory.hpp"
 #include "tasks/auto_buff_v2/buff_config.hpp"
 #include "tasks/auto_buff_v2/frame_runtime.hpp"
 #include "tools/detect_factory.hpp"
@@ -118,8 +118,9 @@ public:
   BuffSession(
     const std::string & config_path, bool big_buff, io::Camera & camera, io::Gimbal & gimbal,
     tools::FoxgloveVisualizer & foxglove)
-  : config_(auto_buff_v2::BuffConfig::load(config_path)), gimbal_(gimbal), planner_(config_path),
-    model_(config_.camera, config_.model, big_buff), buff_planner_(config_.planner),
+  : config_(auto_buff_v2::BuffConfig::load(config_path)), gimbal_(gimbal),
+    model_(config_.camera, config_.model, big_buff),
+    buff_planner_(auto_buff_v2::make_buff_planner(config_.planner, config_path)),
     runtime_(camera, gimbal, model_, config_.detector), foxglove_(foxglove)
   {
     target_queue_.push({0, Target{}});
@@ -155,15 +156,7 @@ private:
       const auto [target_generation, target] = target_queue_.front();
       const auto state = gimbal_.state();
       const auto now = std::chrono::steady_clock::now();
-      auto_aim::Plan plan;
-      if (const auto request =
-            buff_planner_.prepare(target_generation, target, state.bullet_speed, now)) {
-        plan = planner_.plan(request->trajectory, request->yaw0, request->distance);
-        plan.debug_xyza = {
-          request->aimpoint.x(), request->aimpoint.y(), request->aimpoint.z(), request->yaw0};
-        plan.fly_time = request->fly_time;
-        plan.fire = buff_planner_.fire_advice(*request, plan, state, now);
-      }
+      const auto plan = buff_planner_->plan(target_generation, target, state.bullet_speed, state, now);
       foxglove_.update_plan(target_generation, plan);
       const auto fire = plan.fire ? io::InfantryFireCommand::single : io::InfantryFireCommand::none;
       send_plan(gimbal_, plan, fire);
@@ -173,9 +166,8 @@ private:
 
   auto_buff_v2::BuffConfig config_;
   io::Gimbal & gimbal_;
-  auto_aim::Planner planner_;
   auto_buff_v2::RuneModel model_;
-  auto_buff_v2::BuffPlanner buff_planner_;
+  std::unique_ptr<auto_buff_v2::BuffPlanStrategy> buff_planner_;
   auto_buff_v2::FrameRuntime runtime_;
   tools::FoxgloveVisualizer & foxglove_;
   tools::ThreadSafeQueue<Request, true> target_queue_{1};

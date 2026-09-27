@@ -51,6 +51,7 @@ struct BuffConfig
 
   struct Planner
   {
+    std::string mode = "mpc";
     double shoot_delay = 0.04;
     double rune_idle_duration = 0.4;
     double rune_shoot_duration = 0.2;

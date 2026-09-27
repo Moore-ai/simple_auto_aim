@@ -134,6 +134,11 @@ target_compile_options(buff_v2_planner_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_planner_test PRIVATE auto_buff_v2 fmt::fmt)
 add_test(NAME buff_v2_planner_test COMMAND buff_v2_planner_test)
 
+add_executable(buff_v2_planner_factory_test tests/buff_v2_planner_factory_test.cpp)
+target_compile_options(buff_v2_planner_factory_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_planner_factory_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_planner_factory_test COMMAND buff_v2_planner_factory_test)
+
 # 相机与手眼标定工具。
 add_executable(capture calibration/capture.cpp)
 add_executable(calibrate_camera calibration/calibrate_camera.cpp)

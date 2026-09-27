@@ -66,6 +66,7 @@ BuffConfig BuffConfig::load(const std::string & path)
       buff["init_pitch_bound"].as<double>(result.model.init_pitch_bound);
     result.model.diverge_face_angle =
       buff["diverge_face_angle"].as<double>(result.model.diverge_face_angle);
+    result.planner.mode = buff["planner_mode"].as<std::string>(result.planner.mode);
     result.planner.shoot_delay = buff["shoot_delay"].as<double>(result.planner.shoot_delay);
     result.planner.rune_idle_duration =
       buff["rune_idle_duration"].as<double>(result.planner.rune_idle_duration);

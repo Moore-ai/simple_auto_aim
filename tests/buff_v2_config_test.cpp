@@ -26,6 +26,7 @@ int main()
     "  max_iteration: 7\n"
     "  convergence_threshold: 0.002\n"
     "buff_v2:\n"
+    "  planner_mode: njust\n"
     "  min_distance: 2.1\n"
     "  max_distance: 4.8\n"
     "  active_threshold: 0.3\n"
@@ -58,6 +59,7 @@ int main()
   assert(config.detector.min_distance == 2.1 && config.detector.match_threshold == 0.6);
   assert(config.model.timeout_seconds == 1.2 && config.model.noise_rotation_angle == 0.002);
   assert(config.model.diverge_face_angle == 40);
+  assert(config.planner.mode == "njust");
   assert(config.planner.shoot_delay == 0.07 && config.planner.rune_shoot_duration == 0.3);
   assert(config.planner.ballistic_model == "vacuum");
   assert(config.planner.ballistic_config.njust_air_resistance == 0.006);
