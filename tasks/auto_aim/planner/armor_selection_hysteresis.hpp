@@ -12,7 +12,6 @@ namespace auto_aim
 struct ArmorSelectionHysteresisConfig
 {
   bool enable = true;
-  double switch_margin = 0.02;
   int switch_confirm_frames = 3;
 };
 
@@ -34,8 +33,7 @@ public:
       reset(best);
       return best;
     }
-    if (best == *locked_ ||
-        scores[best] + config_.switch_margin >= scores[*locked_]) {
+    if (best == *locked_) {
       pending_.reset();
       pending_count_ = 0;
       return *locked_;

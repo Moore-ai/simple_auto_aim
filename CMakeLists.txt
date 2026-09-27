@@ -142,6 +142,10 @@ target_link_libraries(capture PRIVATE ${OpenCV_LIBS} fmt::fmt tools io)
 target_link_libraries(calibrate_camera PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
 target_link_libraries(calibrate_handeye PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp tools)
 
+add_executable(armor_selection_hysteresis_test tests/armor_selection_hysteresis_test.cpp)
+target_compile_options(armor_selection_hysteresis_test PRIVATE -UNDEBUG)
+add_test(NAME armor_selection_hysteresis_test COMMAND armor_selection_hysteresis_test)
+
 add_executable(planner_fly_time_iteration_test tests/planner_fly_time_iteration_test.cpp)
 target_compile_options(planner_fly_time_iteration_test PRIVATE -UNDEBUG)
 target_link_libraries(planner_fly_time_iteration_test PRIVATE

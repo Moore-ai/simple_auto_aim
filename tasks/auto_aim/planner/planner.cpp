@@ -84,7 +84,6 @@ Planner::Planner(const std::string & config_path)
   if (const auto selection_yaml = yaml["armor_selection_hysteresis"]; selection_yaml) {
     ArmorSelectionHysteresisConfig selection_config;
     selection_config.enable = tools::read<bool>(selection_yaml, "enable");
-    selection_config.switch_margin = tools::read<double>(selection_yaml, "switch_margin");
     selection_config.switch_confirm_frames =
       tools::read<int>(selection_yaml, "switch_confirm_frames");
     armor_selection_hysteresis_enabled_ = selection_config.enable;
