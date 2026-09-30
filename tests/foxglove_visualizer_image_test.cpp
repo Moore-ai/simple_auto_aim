@@ -140,6 +140,13 @@ int main()
   assert(firing_aimpoint[0] == 0 && firing_aimpoint[1] == 0 && firing_aimpoint[2] > 0);
   assert(cv::countNonZero(buff_image.reshape(1)) > 100);
 
+  // An incomplete detection must still leave a visible diagnostic on /image.
+  tools::BuffDebugData incomplete_buff;
+  incomplete_buff.is_buff_mode = true;
+  cv::Mat incomplete_image = cv::Mat::zeros(100, 120, CV_8UC3);
+  tools::detail::draw_buff_overlay(incomplete_image, incomplete_buff);
+  assert(cv::countNonZero(incomplete_image.reshape(1)) > 0);
+
   auto_aim::Solver projection_solver("configs/standard.yaml");
   auto_aim::Plan inactive_plan;
   inactive_plan.debug_valid = true;

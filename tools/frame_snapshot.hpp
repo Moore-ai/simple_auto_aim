@@ -29,6 +29,8 @@ struct BuffDetectionDebug
 struct BuffDebugData
 {
   bool is_buff_mode = false;
+  std::size_t bullseye_count = 0;
+  std::size_t icon_count = 0;
   std::vector<BuffDetectionDebug> detections;
   std::vector<cv::Point2f> reprojected_features;
   std::optional<std::array<cv::Point2f, 5>> blade_polygon;

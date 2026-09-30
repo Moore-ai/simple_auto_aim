@@ -584,6 +584,12 @@ void detail::draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data
 {
   const cv::Scalar yellow{0, 255, 255};
   const cv::Scalar green{0, 255, 0};
+  if (debug_data.is_buff_mode) {
+    const std::string status = "Buff B:" + std::to_string(debug_data.bullseye_count) +
+      "/5 R:" + std::to_string(debug_data.icon_count);
+    cv::putText(image, status, {10, 25}, cv::FONT_HERSHEY_SIMPLEX, 0.6, yellow, 2,
+                cv::LINE_AA);
+  }
   for (const auto & detection : debug_data.detections) {
     cv::circle(image, detection.point, 5, green, 2, cv::LINE_AA);
     for (const auto & corner : detection.corners)
