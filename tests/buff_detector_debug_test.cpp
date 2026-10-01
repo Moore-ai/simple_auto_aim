@@ -51,6 +51,12 @@ int main()
     assert(debug->info.empty());
   }
   const auto icon_image = tools::detail::buff_detector_debug_image(icon_frame);
+  // The R scoring crop extends five pixels beyond the dilated R contour.
+  // Its top edge is y=185 for this fixture; it must be drawn in observation green.
+  const auto roi_pixel = icon_image.at<cv::Vec3b>(185, 150);
+  assert(roi_pixel == cv::Vec3b(0, 255, 0));
+  const auto no_roi_image = tools::detail::buff_detector_debug_image(icon_frame, false);
+  assert(no_roi_image.at<cv::Vec3b>(185, 150) == mixed.at<cv::Vec3b>(185, 150));
   const auto bull_image = tools::detail::buff_detector_debug_image(bull_frame);
   const cv::Rect bull_roi(420, 170, 360, 360);
   const cv::Rect icon_roi(80, 140, 160, 160);
@@ -70,6 +76,7 @@ int main()
   const auto no_icon = icon_processor.process(mixed_facts);
   assert(no_icon.snapshot.buff_debug.detections.empty());
   assert(no_icon.measurements.candidates.empty());
+  assert(no_icon.measurements.icon_rois.empty());
   cv::Mat icon_only = mixed.clone();
   icon_only(cv::Rect(420, 170, 360, 360)).setTo(cv::Scalar{});
   mixed_facts.image = icon_only;

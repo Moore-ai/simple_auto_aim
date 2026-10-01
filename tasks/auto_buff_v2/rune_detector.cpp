@@ -308,7 +308,10 @@ RuneElements RuneDetector::detect(
     roi.height += 10;
     roi &= cv::Rect(0, 0, image.cols, image.rows);
     const double score = icon_score(image(roi));
-    if (score >= config.match_threshold) result.icons.push_back({center, score});
+    if (score >= config.match_threshold) {
+      result.icons.push_back({center, score});
+      if (measurements) measurements->icon_rois.push_back(roi);
+    }
   }
   return result;
 }

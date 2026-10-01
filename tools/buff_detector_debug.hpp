@@ -36,7 +36,7 @@ namespace detail
 {
 nlohmann::json buff_detector_values(const auto_buff_v2::RuneDetectorMeasurements & measurements);
 foxglove::FoxgloveResult<foxglove::RawChannel> create_buff_detector_channel();
-cv::Mat buff_detector_debug_image(const BuffDetectorDebugFrame & frame);
+cv::Mat buff_detector_debug_image(const BuffDetectorDebugFrame & frame, bool draw_roi = true);
 }
 
 class BuffDetectorDebugVisualizer

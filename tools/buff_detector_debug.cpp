@@ -96,7 +96,7 @@ foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_buff_detector_chan
   return foxglove::RawChannel::create("/buff_v2/detector", "json", std::move(schema));
 }
 
-cv::Mat detail::buff_detector_debug_image(const BuffDetectorDebugFrame & frame)
+cv::Mat detail::buff_detector_debug_image(const BuffDetectorDebugFrame & frame, bool draw_roi)
 {
   auto image = frame.snapshot.image.clone();
   const cv::Scalar yellow{0, 255, 255};
@@ -115,6 +115,10 @@ cv::Mat detail::buff_detector_debug_image(const BuffDetectorDebugFrame & frame)
   cv::putText(image, status, {10, 25}, cv::FONT_HERSHEY_SIMPLEX, 0.6, yellow, 2, cv::LINE_AA);
   // Use the main chain's green observation drawing, without its joint-model status.
   detail::draw_buff_overlay(image, debug);
+  if (draw_roi && frame.target == BuffDetectorDebugTarget::icon) {
+    for (const auto & roi : frame.measurements.icon_rois)
+      cv::rectangle(image, roi, {0, 255, 0}, 2, cv::LINE_AA);
+  }
   return image;
 }
 
@@ -128,6 +132,7 @@ public:
   std::optional<foxglove::schemas::CompressedImageChannel> image;
   std::optional<foxglove::schemas::CompressedImageChannel> image_raw;
   detail::ImagePublishLimiter limiter;
+  bool draw_roi = true;
   std::mutex mutex;
   std::condition_variable ready;
   std::optional<BuffDetectorDebugFrame> latest;
@@ -160,14 +165,17 @@ public:
       channel->log(message, log_time);
     };
     log_image(image_raw, frame.snapshot.image);
-    log_image(image, detail::buff_detector_debug_image(frame));
+    log_image(image, detail::buff_detector_debug_image(frame, draw_roi));
   }
 };
 
 BuffDetectorDebugVisualizer::BuffDetectorDebugVisualizer(const std::string & config_path)
 {
-  const auto config = detail::load_foxglove_config(tools::load(config_path));
+  const auto yaml = tools::load(config_path);
+  const auto config = detail::load_foxglove_config(yaml);
   impl_ = std::make_unique<Impl>(config);
+  if (const auto foxglove = yaml["foxglove"])
+    impl_->draw_roi = foxglove["draw_roi"].as<bool>(true);
   if (!config.enable) return;
   foxglove::WebSocketServerOptions options;
   options.host = "0.0.0.0";

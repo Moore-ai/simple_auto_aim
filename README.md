@@ -217,6 +217,8 @@ cmake --build build --target buff_v2_r_detector_debug -j2
 检测成功的 R 标复用主链路的绿色圆圈和 `R: 得分` 标注；仅检测到 R 标、尚未建立
 完整打符模型时也会显示。此入口只标注 R 标，不发布靶心观测或联合模型重投影标注。
 `/image_raw` 发布原始图像，`/image` 发布带标注的图像。
+`foxglove.draw_roi: true`（默认开启）会在 `/image` 上用同样的绿色绘制每个已识别 R 标
+用于骨架评分的局部 ROI 框；设为 `false` 可关闭。框包含轮廓外扩的 5 像素，并裁剪到图像边界。
 编号随每帧轮廓顺序变化，不代表跨帧跟踪 ID。
 
 记录点位于 `RuneDetector::detect` 中计算 `radius` 和 `area` 后、形状与尺寸筛选之前，
