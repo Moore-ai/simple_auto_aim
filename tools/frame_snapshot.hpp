@@ -15,7 +15,6 @@
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/armor.hpp"
 #include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_buff_v2/rune_detector.hpp"
 
 namespace tools
 {
@@ -40,7 +39,6 @@ struct BuffDebugData
   std::optional<cv::Point2f> aimpoint;
   bool aimpoint_fire = false;
   std::string info;
-  std::optional<auto_buff_v2::RuneDetectorDebug> detector;
 };
 
 // Data captured while processing one camera frame.

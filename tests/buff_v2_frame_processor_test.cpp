@@ -33,13 +33,6 @@ int main()
   assert(processed.snapshot.buff_debug.detections.size() == 1);
   assert(processed.snapshot.buff_debug.detections.front().label.rfind("B: ", 0) == 0);
   assert(processed.targets.empty());
-  assert(!processed.snapshot.buff_debug.detector);
-  auto_buff_v2::BuffFrameProcessor debug_processor(rune_model, detector, true);
-  const auto debug_frame = debug_processor.process(facts);
-  assert(debug_frame.snapshot.buff_debug.detector);
-  assert(debug_frame.snapshot.buff_debug.detector->candidates.size() == 1);
-  assert(debug_frame.snapshot.buff_debug.detector->candidates.front().radius > 40);
-
   facts.received.state.mode = static_cast<std::uint8_t>(io::InfantryEnemyColor::red);
   assert(processor.process(facts).snapshot.buff_debug.detections.empty());
   facts.target_color_override = io::InfantryEnemyColor::blue;

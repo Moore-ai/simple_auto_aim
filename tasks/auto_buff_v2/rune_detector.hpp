@@ -8,7 +8,7 @@
 
 namespace auto_buff_v2
 {
-struct RuneContourDebug
+struct RuneContourMeasurement
 {
   cv::Point2f center;
   double radius = 0;
@@ -17,13 +17,13 @@ struct RuneContourDebug
   bool icon_area_pass = false;
 };
 
-struct RuneDetectorDebug
+struct RuneDetectorMeasurements
 {
   double min_radius = 0;
   double max_radius = 0;
   double min_icon_area = 0;
   double max_icon_area = 0;
-  std::vector<RuneContourDebug> candidates;
+  std::vector<RuneContourMeasurement> candidates;
 };
 
 class RuneDetector
@@ -35,7 +35,7 @@ public:
     double max_perspective = 60.0;
   } config;
 
-  RuneElements detect(const cv::Mat & image, RuneDetectorDebug * debug = nullptr) const;
+  RuneElements detect(const cv::Mat & image, RuneDetectorMeasurements * measurements = nullptr) const;
 };
 }  // namespace auto_buff_v2
 

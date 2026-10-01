@@ -7,9 +7,8 @@
 
 namespace auto_buff_v2
 {
-BuffFrameProcessor::BuffFrameProcessor(RuneModel & model, BuffConfig::Detector detector_config,
-                                       bool detector_debug)
-: model_(model), detector_debug_(detector_debug)
+BuffFrameProcessor::BuffFrameProcessor(RuneModel & model, BuffConfig::Detector detector_config)
+: model_(model)
 {
   static_cast<BuffConfig::Detector &>(detector_.config) = std::move(detector_config);
 }
@@ -20,9 +19,7 @@ tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & fact
     detector_.config.enemy_red = *color == io::InfantryEnemyColor::red;
   model_.set_q_gimbal2world(facts.q_gimbal2world);
   tools::BuffDebugData buff_debug;
-  if (detector_debug_) buff_debug.detector.emplace();
-  const auto elements = detector_.detect(
-    facts.image, buff_debug.detector ? &*buff_debug.detector : nullptr);
+  const auto elements = detector_.detect(facts.image);
   model_.update(elements, facts.timestamp);
   const auto target = model_.state();
 

@@ -17,33 +17,6 @@
 
 int main()
 {
-  auto_buff_v2::RuneDetectorDebug detector_debug;
-  detector_debug.min_radius = 1.35;
-  detector_debug.max_radius = 16.5;
-  detector_debug.min_icon_area = 0.28;
-  detector_debug.max_icon_area = 43.2;
-  detector_debug.candidates.push_back({{20, 30}, 20, 1256, false, false});
-  const auto detector_values = tools::detail::buff_detector_values(detector_debug);
-  assert(detector_values.at("min_radius") == 1.35);
-  assert(detector_values.at("max_radius") == 16.5);
-  assert(detector_values.at("min_icon_area") == 0.28);
-  assert(detector_values.at("max_icon_area") == 43.2);
-  assert(detector_values.at("candidates").at(0).at("radius") == 20);
-  assert(detector_values.at("candidates").at(0).at("area") == 1256);
-  assert(detector_values.at("candidates").at(0).at("center_x") == 20);
-  detector_debug.candidates.clear();
-  assert(tools::detail::buff_detector_values(detector_debug).at("candidates").empty());
-  auto detector_channel = tools::detail::create_buff_detector_channel();
-  assert(detector_channel.has_value());
-  assert(detector_channel.value().topic() == "/buff_v2/detector");
-  const auto detector_schema = detector_channel.value().schema();
-  assert(detector_schema);
-  const auto detector_schema_json = nlohmann::json::parse(
-    reinterpret_cast<const char *>(detector_schema->data),
-    reinterpret_cast<const char *>(detector_schema->data) + detector_schema->data_len);
-  assert(detector_schema_json.at("properties").at("candidates").at("items")
-           .at("properties").at("radius").at("type") == "number");
-
   const auto default_config = tools::detail::load_foxglove_config(YAML::Load("{}"));
   assert(default_config.enable);
   assert(default_config.image_fps == 30.0);

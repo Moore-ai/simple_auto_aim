@@ -89,7 +89,7 @@ int main()
   assert(cv::norm(icon_result.icons.front().center - expected_icon_center) < 0.1);
 
   // Diagnostics must retain measurements even when the size gates reject the R.
-  auto_buff_v2::RuneDetectorDebug debug;
+  auto_buff_v2::RuneDetectorMeasurements debug;
   detector.config.fx = 100;
   detector.config.fy = 100;
   const auto rejected_icon = detector.detect(icon_image, &debug);

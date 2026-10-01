@@ -203,10 +203,11 @@ std::optional<RuneBullseye> bullseye_feature(
 }
 }  // namespace
 
-RuneElements RuneDetector::detect(const cv::Mat & image, RuneDetectorDebug * debug) const
+RuneElements RuneDetector::detect(
+  const cv::Mat & image, RuneDetectorMeasurements * measurements) const
 {
   RuneElements result;
-  if (debug) *debug = {};
+  if (measurements) *measurements = {};
   if (image.empty() || image.type() != CV_8UC3 || config.fx <= 0 || config.fy <= 0) return result;
   auto binary = extract_channel(image, config.enemy_red);
   std::vector<std::vector<cv::Point>> contours;
@@ -221,11 +222,11 @@ RuneElements RuneDetector::detect(const cv::Mat & image, RuneDetectorDebug * deb
                                (config.max_distance * config.max_distance) * 0.9 * kPi * 0.2;
   const double max_icon_area = focal * focal * 0.05 * 0.05 /
                                (config.min_distance * config.min_distance * cosine) * 1.1 * kPi;
-  if (debug) {
-    debug->min_radius = min_radius;
-    debug->max_radius = max_radius;
-    debug->min_icon_area = min_icon_area;
-    debug->max_icon_area = max_icon_area;
+  if (measurements) {
+    measurements->min_radius = min_radius;
+    measurements->max_radius = max_radius;
+    measurements->min_icon_area = min_icon_area;
+    measurements->max_icon_area = max_icon_area;
   }
   struct BullCandidate
   {
@@ -241,10 +242,11 @@ RuneElements RuneDetector::detect(const cv::Mat & image, RuneDetectorDebug * deb
     const double perimeter = cv::arcLength(contour, true);
     if (area <= 0 || perimeter <= 0) continue;
     const double radius = std::sqrt(area / kPi);
-    if (debug) {
-      debug->candidates.push_back(
+    const bool radius_pass = radius >= min_radius && radius <= max_radius;
+    if (measurements) {
+      measurements->candidates.push_back(
         {cv::minAreaRect(contour).center, radius, area,
-         radius >= min_radius && radius <= max_radius,
+         radius_pass,
          area >= min_icon_area && area <= max_icon_area});
     }
     const auto ellipse = cv::fitEllipse(contour);

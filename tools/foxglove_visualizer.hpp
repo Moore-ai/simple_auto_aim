@@ -98,8 +98,6 @@ foxglove::FoxgloveResult<foxglove::RawChannel> create_speed_mode_channel();
 foxglove::schemas::SceneUpdate target_scene_update(
   const auto_aim::TrackerDebugData & target_data);
 nlohmann::json target_values(const auto_aim::TrackerDebugData & target_data);
-nlohmann::json buff_detector_values(const auto_buff_v2::RuneDetectorDebug & debug);
-foxglove::FoxgloveResult<foxglove::RawChannel> create_buff_detector_channel();
 }
 
 class FoxgloveVisualizer

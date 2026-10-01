@@ -71,11 +71,22 @@ target_link_libraries(standard PRIVATE
 add_test(NAME standard_cli_test
   COMMAND ${PROJECT_SOURCE_DIR}/tests/standard_cli_test.sh $<TARGET_FILE:standard>)
 
-add_executable(buff_v2_r_detector_debug
-  src/buff_v2_r_detector_debug.cpp
+# Standalone detector debug support is not linked into standard.
+add_library(buff_detector_debug STATIC
+  tools/buff_detector_debug.cpp
   tools/foxglove_visualizer.cpp)
-target_link_libraries(buff_v2_r_detector_debug PRIVATE
-  ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff_v2 tools io foxglove_sdk)
+target_link_libraries(buff_detector_debug PUBLIC
+  auto_buff_v2 auto_aim tools io foxglove_sdk ${OpenCV_LIBS} fmt::fmt yaml-cpp)
+
+add_executable(buff_v2_r_detector_debug src/buff_v2_r_detector_debug.cpp)
+target_link_libraries(buff_v2_r_detector_debug PRIVATE buff_detector_debug)
+add_executable(buff_v2_bullseye_detector_debug src/buff_v2_bullseye_detector_debug.cpp)
+target_link_libraries(buff_v2_bullseye_detector_debug PRIVATE buff_detector_debug)
+
+add_executable(buff_detector_debug_test tests/buff_detector_debug_test.cpp)
+target_compile_options(buff_detector_debug_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_detector_debug_test PRIVATE buff_detector_debug)
+add_test(NAME buff_detector_debug_test COMMAND buff_detector_debug_test)
 
 add_test(NAME legacy_buff_ownership_test
   COMMAND ${PROJECT_SOURCE_DIR}/tests/legacy_buff_ownership_test.sh ${CMAKE_BINARY_DIR})
