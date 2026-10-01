@@ -54,10 +54,11 @@ class AutoAimSession final : public ModeSession
 {
 public:
   AutoAimSession(const std::string & config_path, io::Camera & camera, io::Gimbal & gimbal,
-                 auto_aim::Solver & solver, tools::FoxgloveVisualizer & foxglove)
+                 auto_aim::Solver & solver, tools::FoxgloveVisualizer & foxglove,
+                 std::optional<io::InfantryEnemyColor> target_color_override)
   : gimbal_(gimbal), tracker_(config_path, solver), planner_(config_path),
     detector_(tools::create_detector(config_path)),
-    runtime_(camera, gimbal, solver, tracker_, *detector_), foxglove_(foxglove)
+    runtime_(camera, gimbal, solver, tracker_, *detector_, target_color_override), foxglove_(foxglove)
   {
     target_queue_.push({0, Target{}});
     plan_thread_ = std::thread([this] { plan(); });
@@ -117,11 +118,12 @@ class BuffSession final : public ModeSession
 public:
   BuffSession(
     const std::string & config_path, bool big_buff, io::Camera & camera, io::Gimbal & gimbal,
-    tools::FoxgloveVisualizer & foxglove)
+    tools::FoxgloveVisualizer & foxglove,
+    std::optional<io::InfantryEnemyColor> target_color_override)
   : config_(auto_buff_v2::BuffConfig::load(config_path)), gimbal_(gimbal),
     model_(config_.camera, config_.model, big_buff),
     buff_planner_(auto_buff_v2::make_buff_planner(config_.planner, config_path)),
-    runtime_(camera, gimbal, model_, config_.detector), foxglove_(foxglove)
+    runtime_(camera, gimbal, model_, config_.detector, target_color_override), foxglove_(foxglove)
   {
     target_queue_.push({0, Target{}});
     plan_thread_ = std::thread([this] { plan(); });
@@ -178,23 +180,30 @@ private:
 std::unique_ptr<ModeSession> make_session(Mode mode, const std::string & config_path,
                                           io::Camera & camera, io::Gimbal & gimbal,
                                           auto_aim::Solver & solver,
-                                          tools::FoxgloveVisualizer & foxglove)
+                                          tools::FoxgloveVisualizer & foxglove,
+                                          std::optional<io::InfantryEnemyColor> target_color_override)
 {
   switch (mode) {
     case Mode::auto_aim:
-      return std::make_unique<AutoAimSession>(config_path, camera, gimbal, solver, foxglove);
+      return std::make_unique<AutoAimSession>(
+        config_path, camera, gimbal, solver, foxglove, target_color_override);
     case Mode::small_buff:
-      return std::make_unique<BuffSession>(config_path, false, camera, gimbal, foxglove);
+      return std::make_unique<BuffSession>(
+        config_path, false, camera, gimbal, foxglove, target_color_override);
     case Mode::big_buff:
-      return std::make_unique<BuffSession>(config_path, true, camera, gimbal, foxglove);
+      return std::make_unique<BuffSession>(
+        config_path, true, camera, gimbal, foxglove, target_color_override);
   }
-  return std::make_unique<AutoAimSession>(config_path, camera, gimbal, solver, foxglove);
+  return std::make_unique<AutoAimSession>(
+    config_path, camera, gimbal, solver, foxglove, target_color_override);
 }
 
 }  // namespace
 
-ModeRuntime::ModeRuntime(std::string config_path, ModeReader mode_reader)
-: config_path_(std::move(config_path)), mode_reader_(std::move(mode_reader))
+ModeRuntime::ModeRuntime(std::string config_path, ModeReader mode_reader,
+                         std::optional<io::InfantryEnemyColor> target_color_override)
+: config_path_(std::move(config_path)), mode_reader_(std::move(mode_reader)),
+  target_color_override_(target_color_override)
 {
 }
 
@@ -208,13 +217,15 @@ int ModeRuntime::run()
   tools::FoxgloveVisualizer foxglove(solver, config_path_);
 
   auto mode = mode_reader_(gimbal);
-  auto session = make_session(mode, config_path_, camera, gimbal, solver, foxglove);
+  auto session = make_session(
+    mode, config_path_, camera, gimbal, solver, foxglove, target_color_override_);
   while (!exiter.exit()) {
     const auto next_mode = mode_reader_(gimbal);
     if (next_mode != mode) {
       session.reset();
       mode = next_mode;
-      session = make_session(mode, config_path_, camera, gimbal, solver, foxglove);
+      session = make_session(
+        mode, config_path_, camera, gimbal, solver, foxglove, target_color_override_);
     }
 
     tools::ProcessedFrame processed;

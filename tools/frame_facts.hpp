@@ -2,6 +2,7 @@
 #define TOOLS__FRAME_FACTS_HPP
 
 #include <cstdint>
+#include <optional>
 #include <utility>
 
 #include "io/camera.hpp"
@@ -18,6 +19,13 @@ struct FrameFacts
   cv::Mat image;
   Eigen::Quaterniond q_gimbal2world;
   io::GimbalStatePacket received;
+  std::optional<io::InfantryEnemyColor> target_color_override;
+
+  std::optional<io::InfantryEnemyColor> enemy_color() const
+  {
+    return target_color_override ? target_color_override :
+                                   io::infantry_enemy_color(received.state.mode);
+  }
 
   FrameSnapshot snapshot(
     const io::GimbalCommandPacket & sent, auto_aim::DetectionResult detections,
@@ -33,12 +41,16 @@ struct FrameFacts
 class FrameCapture
 {
 public:
-  FrameCapture(io::Camera & camera, io::Gimbal & gimbal) : camera_(camera), gimbal_(gimbal) {}
+  FrameCapture(io::Camera & camera, io::Gimbal & gimbal,
+               std::optional<io::InfantryEnemyColor> target_color_override = std::nullopt)
+  : camera_(camera), gimbal_(gimbal), target_color_override_(target_color_override)
+  {}
 
   bool next(FrameFacts & facts)
   {
     if (!camera_.read(facts.image, facts.timestamp)) return false;
     facts.received = gimbal_.state_with_packet();
+    facts.target_color_override = target_color_override_;
     facts.q_gimbal2world = gimbal_.q_gimbal2world(facts.timestamp);
     return true;
   }
@@ -58,6 +70,7 @@ public:
 private:
   io::Camera & camera_;
   io::Gimbal & gimbal_;
+  std::optional<io::InfantryEnemyColor> target_color_override_;
   std::uint64_t target_generation_ = 0;
   bool had_target_ = false;
 };

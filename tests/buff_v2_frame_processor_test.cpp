@@ -33,4 +33,12 @@ int main()
   assert(processed.snapshot.buff_debug.detections.size() == 1);
   assert(processed.snapshot.buff_debug.detections.front().label.rfind("B: ", 0) == 0);
   assert(processed.targets.empty());
+
+  facts.received.state.mode = static_cast<std::uint8_t>(io::InfantryEnemyColor::red);
+  assert(processor.process(facts).snapshot.buff_debug.detections.empty());
+  facts.target_color_override = io::InfantryEnemyColor::blue;
+  assert(processor.process(facts).snapshot.buff_debug.detections.size() == 1);
+  facts.target_color_override = io::InfantryEnemyColor::red;
+  facts.received.state.mode = static_cast<std::uint8_t>(io::InfantryEnemyColor::blue);
+  assert(processor.process(facts).snapshot.buff_debug.detections.empty());
 }

@@ -2,7 +2,10 @@
 #define STANDARD__MODE_RUNTIME_HPP
 
 #include <functional>
+#include <optional>
 #include <string>
+
+#include "io/gimbal/infantry_protocol.hpp"
 
 namespace io
 {
@@ -31,13 +34,15 @@ class ModeRuntime
 public:
   using ModeReader = std::function<Mode(const io::Gimbal &)>;
 
-  ModeRuntime(std::string config_path, ModeReader mode_reader);
+  ModeRuntime(std::string config_path, ModeReader mode_reader,
+              std::optional<io::InfantryEnemyColor> target_color_override = std::nullopt);
 
   int run();
 
 private:
   std::string config_path_;
   ModeReader mode_reader_;
+  std::optional<io::InfantryEnemyColor> target_color_override_;
 };
 
 }  // namespace standard

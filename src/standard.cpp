@@ -8,7 +8,8 @@
 const std::string keys =
   "{help h usage ? | | 输出命令行参数说明}"
   "{@config-path   | | yaml配置文件路径 }"
-  "{mode           |0| 0=自瞄普通目标和前哨站，1=小符，2=大符 }";
+  "{mode           |0| 0=自瞄普通目标和前哨站，1=小符，2=大符 }"
+  "{target-color   | | 必填：red 或 blue 指定目标颜色，none 表示由下位机决定 }";
 
 int main(int argc, char * argv[])
 {
@@ -25,7 +26,17 @@ int main(int argc, char * argv[])
     return 2;
   }
   const auto mode = standard::mode_from_value(mode_value);
+  std::optional<io::InfantryEnemyColor> target_color_override;
+  const auto color = cli.get<std::string>("target-color");
+  if (color == "red") {
+    target_color_override = io::InfantryEnemyColor::red;
+  } else if (color == "blue") {
+    target_color_override = io::InfantryEnemyColor::blue;
+  } else if (color != "none") {
+    std::cerr << "target-color 为必填参数，必须为 red、blue 或 none\n";
+    return 2;
+  }
   const standard::ModeRuntime::ModeReader mode_reader =
     [mode](const io::Gimbal &) { return mode; };
-  return standard::ModeRuntime(std::move(config_path), mode_reader).run();
+  return standard::ModeRuntime(std::move(config_path), mode_reader, target_color_override).run();
 }

@@ -25,5 +25,23 @@ int main()
   assert(frame.gimbal_command.pitch == -0.5F);
   assert(frame.serial_receive_packet[0] == 42);
   assert(frame.serial_send_packet[0] == 24);
+
+  auto color_facts = facts;
+  color_facts.received.state.mode = 0;
+  assert(color_facts.enemy_color() == io::InfantryEnemyColor::red);
+  color_facts.received.state.mode = 1;
+  assert(color_facts.enemy_color() == io::InfantryEnemyColor::blue);
+  color_facts.received.state.mode = 2;
+  assert(!color_facts.enemy_color());
+
+  color_facts.target_color_override = io::InfantryEnemyColor::red;
+  color_facts.received.state.mode = 1;
+  assert(color_facts.enemy_color() == io::InfantryEnemyColor::red);
+  color_facts.target_color_override = io::InfantryEnemyColor::blue;
+  color_facts.received.state.mode = 0;
+  assert(color_facts.enemy_color() == io::InfantryEnemyColor::blue);
+  color_facts.received.state.mode = 2;
+  assert(color_facts.enemy_color() == io::InfantryEnemyColor::blue);
+  assert(color_facts.snapshot(sent, {}, {}).gimbal_state.mode == 2);
   return 0;
 }

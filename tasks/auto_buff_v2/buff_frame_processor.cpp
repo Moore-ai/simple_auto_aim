@@ -15,7 +15,7 @@ BuffFrameProcessor::BuffFrameProcessor(RuneModel & model, BuffConfig::Detector d
 
 tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & facts)
 {
-  if (const auto color = io::infantry_enemy_color(facts.received.state.mode))
+  if (const auto color = facts.enemy_color())
     detector_.config.enemy_red = *color == io::InfantryEnemyColor::red;
   model_.set_q_gimbal2world(facts.q_gimbal2world);
   const auto elements = detector_.detect(facts.image);

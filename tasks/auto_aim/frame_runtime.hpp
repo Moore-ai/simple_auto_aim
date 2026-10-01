@@ -17,8 +17,10 @@ class FrameRuntime
 public:
   FrameRuntime(
     io::Camera & camera, io::Gimbal & gimbal, Solver & solver, Tracker & tracker,
-    tools::DetectionBackend & detector)
-  : frames_{camera, gimbal}, solver_{solver}, tracker_{tracker}, detector_{detector}
+    tools::DetectionBackend & detector,
+    std::optional<io::InfantryEnemyColor> target_color_override = std::nullopt)
+  : frames_{camera, gimbal, target_color_override}, solver_{solver}, tracker_{tracker},
+    detector_{detector}
   {}
 
   bool next(tools::ProcessedFrame & result)
@@ -26,7 +28,7 @@ public:
     tools::FrameFacts facts;
     if (!frames_.next(facts)) return false;
 
-    if (const auto color = io::infantry_enemy_color(facts.received.state.mode)) {
+    if (const auto color = facts.enemy_color()) {
       tracker_.set_enemy_color(
         *color == io::InfantryEnemyColor::red ? Color::red : Color::blue);
     }
