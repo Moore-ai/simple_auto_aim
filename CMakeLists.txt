@@ -71,6 +71,12 @@ target_link_libraries(standard PRIVATE
 add_test(NAME standard_cli_test
   COMMAND ${PROJECT_SOURCE_DIR}/tests/standard_cli_test.sh $<TARGET_FILE:standard>)
 
+add_executable(buff_v2_r_detector_debug
+  src/buff_v2_r_detector_debug.cpp
+  tools/foxglove_visualizer.cpp)
+target_link_libraries(buff_v2_r_detector_debug PRIVATE
+  ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim auto_buff_v2 tools io foxglove_sdk)
+
 add_test(NAME legacy_buff_ownership_test
   COMMAND ${PROJECT_SOURCE_DIR}/tests/legacy_buff_ownership_test.sh ${CMAKE_BINARY_DIR})
 

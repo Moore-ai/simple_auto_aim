@@ -88,6 +88,29 @@ int main()
   assert(icon_result.icons.size() == 1);
   assert(cv::norm(icon_result.icons.front().center - expected_icon_center) < 0.1);
 
+  // Diagnostics must retain measurements even when the size gates reject the R.
+  auto_buff_v2::RuneDetectorDebug debug;
+  detector.config.fx = 100;
+  detector.config.fy = 100;
+  const auto rejected_icon = detector.detect(icon_image, &debug);
+  assert(rejected_icon.icons.empty());
+  assert(debug.candidates.size() == 1);
+  assert(debug.candidates.front().area > debug.max_icon_area);
+  assert(debug.candidates.front().radius > debug.max_radius);
+  assert(!debug.candidates.front().icon_area_pass);
+  assert(std::abs(debug.min_radius - 1.35) < 1e-6);
+  assert(std::abs(debug.max_radius - 16.5) < 1e-6);
+  assert(std::abs(debug.min_icon_area - 0.09 * 3.14159265358979323846) < 1e-6);
+  assert(std::abs(debug.max_icon_area - 13.75 * 3.14159265358979323846) < 1e-6);
+  assert(std::abs(debug.candidates.front().radius -
+                  std::sqrt(debug.candidates.front().area / 3.14159265358979323846)) < 1e-6);
+  detector.detect(cv::Mat::zeros(400, 400, CV_8UC3), &debug);
+  assert(debug.candidates.empty());
+  assert(debug.max_radius > 0);
+  detector.detect(cv::Mat{}, &debug);
+  assert(debug.candidates.empty());
+  assert(debug.max_radius == 0);
+
   detector.config.enemy_red = true;
   assert(detector.detect(image).bullseyes.empty());
 }

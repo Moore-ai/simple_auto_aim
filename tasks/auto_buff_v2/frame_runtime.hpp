@@ -14,8 +14,10 @@ class FrameRuntime
 public:
   FrameRuntime(io::Camera & camera, io::Gimbal & gimbal, RuneModel & model,
                BuffConfig::Detector detector_config,
-               std::optional<io::InfantryEnemyColor> target_color_override = std::nullopt)
-  : frames_(camera, gimbal, target_color_override), processor_(model, std::move(detector_config))
+               std::optional<io::InfantryEnemyColor> target_color_override = std::nullopt,
+               bool detector_debug = false)
+  : frames_(camera, gimbal, target_color_override),
+    processor_(model, std::move(detector_config), detector_debug)
   {}
 
   bool next(tools::ProcessedFrame & result)

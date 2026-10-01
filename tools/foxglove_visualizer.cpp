@@ -580,10 +580,58 @@ void detail::draw_aim_overlay(
   if (locked_armor) draw_polygon(image, locked_armor->points, {0, 255, 255});
 }
 
+nlohmann::json detail::buff_detector_values(const auto_buff_v2::RuneDetectorDebug & debug)
+{
+  Json candidates = Json::array();
+  for (const auto & candidate : debug.candidates) {
+    candidates.push_back({
+      {"radius", candidate.radius}, {"area", candidate.area},
+      {"center_x", candidate.center.x}, {"center_y", candidate.center.y},
+      {"radius_pass", candidate.radius_pass}, {"icon_area_pass", candidate.icon_area_pass}});
+  }
+  return {{"min_radius", debug.min_radius}, {"max_radius", debug.max_radius},
+          {"min_icon_area", debug.min_icon_area}, {"max_icon_area", debug.max_icon_area},
+          {"candidates", std::move(candidates)}};
+}
+
+foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_buff_detector_channel()
+{
+  Json properties;
+  for (const auto * name : {"min_radius", "max_radius", "min_icon_area", "max_icon_area"})
+    properties[name] = {{"type", "number"}};
+  Json candidate_properties;
+  for (const auto * name : {"radius", "area", "center_x", "center_y"})
+    candidate_properties[name] = {{"type", "number"}};
+  for (const auto * name : {"radius_pass", "icon_area_pass"})
+    candidate_properties[name] = {{"type", "boolean"}};
+  properties["candidates"] = {
+    {"type", "array"},
+    {"items", {{"type", "object"}, {"properties", candidate_properties}}}};
+  const auto schema_data = Json{
+    {"$schema", "http://json-schema.org/draft-07/schema#"},
+    {"type", "object"}, {"properties", properties}}.dump();
+  foxglove::Schema schema{
+    "simple_auto_aim.BuffDetector", "jsonschema",
+    reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
+  return foxglove::RawChannel::create("/buff_v2/detector", "json", std::move(schema));
+}
+
 void detail::draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data)
 {
   const cv::Scalar yellow{0, 255, 255};
   const cv::Scalar green{0, 255, 0};
+  if (debug_data.detector) {
+    const auto & candidates = debug_data.detector->candidates;
+    for (std::size_t i = 0; i < candidates.size(); ++i) {
+      const auto & candidate = candidates[i];
+      cv::circle(image, candidate.center, cvRound(candidate.radius), yellow, 1, cv::LINE_AA);
+      cv::putText(
+        image, "#" + std::to_string(i) + " r=" + std::to_string(cvRound(candidate.radius)) +
+                 " a=" + std::to_string(cvRound(candidate.area)),
+        candidate.center + cv::Point2f(0, 18), cv::FONT_HERSHEY_SIMPLEX, 0.45, yellow, 1,
+        cv::LINE_AA);
+    }
+  }
   if (debug_data.is_buff_mode) {
     const std::string status = "Buff B:" + std::to_string(debug_data.bullseye_count) +
       "/5 R:" + std::to_string(debug_data.icon_count);
@@ -676,6 +724,7 @@ public:
   std::optional<foxglove::RawChannel> angular_acceleration;
   std::optional<foxglove::RawChannel> angular_error;
   std::optional<foxglove::RawChannel> speed_mode;
+  std::optional<foxglove::RawChannel> buff_detector;
   std::optional<foxglove::schemas::CompressedImageChannel> image_raw;
   std::optional<foxglove::schemas::CompressedImageChannel> image;
   std::optional<foxglove::schemas::CompressedImageChannel> image_detection;
@@ -720,6 +769,7 @@ FoxgloveVisualizer::FoxgloveVisualizer(
   create(impl_->serial_receive, foxglove::RawChannel::create("/serial/receive", "json"),
          "/serial/receive");
   create(impl_->serial_send, foxglove::RawChannel::create("/serial/send", "json"), "/serial/send");
+  create(impl_->buff_detector, detail::create_buff_detector_channel(), "/buff_v2/detector");
   create(
     impl_->angular_acceleration, detail::create_angular_acceleration_channel(),
     "/planner/angular_acceleration");
@@ -794,6 +844,8 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
   const auto & serial_receive = frame.gimbal_state;
   const auto & serial_send = frame.gimbal_command;
   const auto & target_data = frame.tracker;
+  if (frame.buff_debug.detector)
+    log_json(impl_->buff_detector, detail::buff_detector_values(*frame.buff_debug.detector), log_time);
 
   if (const auto color = io::infantry_enemy_color(serial_receive.mode)) {
     impl_->enemy_color = *color == io::InfantryEnemyColor::red ?

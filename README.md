@@ -182,3 +182,45 @@ ssh -Y hfut@192.168.xxx.xx
 cd ~/simple_auto_aim
 ./build/capture
 ```
+
+## 9 buff_v2 R 标检测调试
+
+独立入口为 `src/buff_v2_r_detector_debug.cpp`。它复用 `standard` 的相机、云台反馈、
+`BuffConfig`、颜色选择、`FrameRuntime`、`RuneDetector` 和 Foxglove 发布机制。
+调试入口运行检测与状态估计，不启动云台规划或发射线程。
+
+```bash
+cmake -S . -B build
+cmake --build build --target buff_v2_r_detector_debug -j2
+./build/buff_v2_r_detector_debug configs/standard.yaml --mode=1 --target-color=blue
+```
+
+`--mode=2` 使用大符模型。`--target-color=red` 检测红色，`--target-color=none`
+由下位机反馈决定颜色，与主入口相同。检测参数直接读取同一份配置中的相机内参和
+`buff_v2` 下的检测参数，无需维护第二份参数。配置中的 `foxglove.enable` 需要开启。
+
+在 Foxglove 中连接 `ws://localhost:8765`，新增 Plot 面板并添加以下路径：
+
+| 数据 | 路径 | 单位 |
+| --- | --- | --- |
+| 当前帧轮廓半径 | `/buff_v2/detector.candidates[:].radius` | 像素 |
+| 靶心半径下限 | `/buff_v2/detector.min_radius` | 像素 |
+| 靶心半径上限 | `/buff_v2/detector.max_radius` | 像素 |
+| 当前帧轮廓面积 | `/buff_v2/detector.candidates[:].area` | 像素² |
+| R 标面积下限 | `/buff_v2/detector.min_icon_area` | 像素² |
+| R 标面积上限 | `/buff_v2/detector.max_icon_area` | 像素² |
+
+建议分别建立半径图和面积图。用 `candidates[0].radius` 等路径可以只查看某个编号。
+新增 Image 面板选择 `/image`，黄色圆圈及 `#0`、`#1` 等标注对应当前帧的候选数组下标。
+检测成功的 R 标复用主链路的绿色圆圈和 `R: 得分` 标注；仅检测到 R 标、尚未建立
+完整打符模型时也会显示。`/image_raw` 发布原始图像，`/image` 发布带标注的图像。
+编号随每帧轮廓顺序变化，不代表跨帧跟踪 ID。
+
+记录点位于 `RuneDetector::detect` 中计算 `radius` 和 `area` 后、形状与尺寸筛选之前，
+因此被过滤的有效轮廓也可观察。`radius_pass` 和 `icon_area_pass` 分别表示尺寸阈值
+是否通过，不代表最终识别成功；实际识别还会检查形状、靶心分支及 R 标骨架得分。
+半径阈值属于靶心分支，R 标面积分支只在半径范围不匹配时进入。
+
+无候选时数组为空，阈值继续发布。数值数据按处理帧发布，图像受
+`foxglove.image_fps` 限制；发布队列沿用主链路的最新帧机制，客户端较慢时可能跳帧。
+`standard` 默认不采集这些候选诊断数据。两个入口使用相同端口，应分别运行。

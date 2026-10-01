@@ -13,13 +13,15 @@ namespace auto_buff_v2
 class BuffFrameProcessor
 {
 public:
-  BuffFrameProcessor(RuneModel & model, BuffConfig::Detector detector_config);
+  BuffFrameProcessor(RuneModel & model, BuffConfig::Detector detector_config,
+                     bool detector_debug = false);
 
   tools::ProcessedFrame process(const tools::FrameFacts & facts);
 
 private:
   RuneModel & model_;
   RuneDetector detector_;
+  bool detector_debug_;
 };
 }  // namespace auto_buff_v2
 
