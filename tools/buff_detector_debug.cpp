@@ -36,7 +36,12 @@ BuffDetectorDebugFrame BuffDetectorDebug::process(const FrameFacts & facts)
   const auto elements = detector_.detect(facts.image, &frame.measurements);
   auto & candidates = frame.measurements.candidates;
   candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&](const auto & item) {
-    return item.radius_pass != (target_ == BuffDetectorDebugTarget::bullseye);
+    if (target_ == BuffDetectorDebugTarget::bullseye) return !item.radius_pass;
+    // An icon and its contour measurement use the same minAreaRect center. Keep only
+    // contours that passed the main detector's area, shape and R-skeleton checks.
+    return std::none_of(elements.icons.begin(), elements.icons.end(), [&](const auto & icon) {
+      return item.center == icon.center;
+    });
   }), candidates.end());
 
   BuffDebugData debug;

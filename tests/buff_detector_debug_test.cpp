@@ -77,6 +77,34 @@ int main()
   assert(no_bull.snapshot.buff_debug.detections.empty());
   assert(no_bull.measurements.candidates.empty());
 
+  // Small bright fragments and non-R contours must never appear as R observations.
+  cv::Mat cluttered = mixed.clone();
+  for (int i = 0; i < 12; ++i)
+    cv::circle(cluttered, {20 + i * 30, 550}, 2, {255, 0, 0}, cv::FILLED);
+  // This disk passes the R area gate but has no R skeleton features.
+  cv::circle(cluttered, {300, 400}, 20, {255, 0, 0}, cv::FILLED);
+  cv::ellipse(cluttered, {200, 450}, {45, 8}, 0, 0, 360, {255, 0, 0}, cv::FILLED);
+  mixed_facts.image = cluttered;
+  const auto clean_icon = icon_processor.process(mixed_facts);
+  assert(clean_icon.snapshot.buff_debug.icon_count == 1);
+  assert(clean_icon.measurements.candidates.size() == 1);
+  assert(cv::norm(clean_icon.measurements.candidates.front().center -
+                  joint.icons.front().center) < 2);
+  const auto clean_values = tools::detail::buff_detector_values(clean_icon.measurements);
+  assert(clean_values.at("candidates").size() == 1);
+  const auto clean_image = tools::detail::buff_detector_debug_image(clean_icon);
+  const cv::Rect clutter_roi(0, 360, 360, 240);
+  assert(cv::norm(clean_image(clutter_roi), cluttered(clutter_roi), cv::NORM_INF) == 0);
+  assert(cv::norm(clean_image(bull_roi), cluttered(bull_roi), cv::NORM_INF) == 0);
+
+  // Even an area-eligible shape alone must yield an empty R observation array.
+  mixed_facts.image = cv::Mat::zeros(700, 900, CV_8UC3);
+  cv::circle(mixed_facts.image, {300, 400}, 20, {255, 0, 0}, cv::FILLED);
+  const auto not_an_icon = icon_processor.process(mixed_facts);
+  assert(not_an_icon.snapshot.buff_debug.detections.empty());
+  assert(not_an_icon.measurements.candidates.empty());
+  assert(not_an_icon.measurements.min_icon_area > 0);
+
   auto_buff_v2::RuneDetectorMeasurements detector_debug;
   detector_debug.min_radius = 1.35;
   detector_debug.max_radius = 16.5;
