@@ -17,14 +17,13 @@ RuneModel::RuneModel(BuffConfig::Camera camera, Config config, bool big_rune)
 : camera_matrix_(std::move(camera.camera_matrix)),
   distort_coeffs_(std::move(camera.distort_coeffs)),
   R_camera2gimbal_(camera.R_camera2gimbal),
-  R_gimbal2imubody_(camera.R_gimbal2imubody),
   t_camera2gimbal_(camera.t_camera2gimbal),
   big_rune_(big_rune),
   config_(std::move(config))
 {
 }
 
-void RuneModel::update_transform(const Eigen::Quaterniond & q_gimbal2world)
+void RuneModel::set_q_gimbal2world(const Eigen::Quaterniond & q_gimbal2world)
 {
   q_gimbal2world_ = q_gimbal2world;
 }
@@ -223,10 +222,8 @@ void correct_initial_observation(RuneEkfState & x, Matrix & covariance, int feat
 std::vector<RuneReprojectedFeature> RuneModel::reprojected_features() const
 {
   if (!state_) return {};
-  const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() *
-                                          R_gimbal2imubody_ * R_camera2gimbal_;
-  const Eigen::Vector3d t_camera2world = q_gimbal2world_ *
-                                          R_gimbal2imubody_ * t_camera2gimbal_;
+  const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() * R_camera2gimbal_;
+  const Eigen::Vector3d t_camera2world = q_gimbal2world_ * t_camera2gimbal_;
   const auto state = ekf_state_from(*state_);
   std::vector<RuneReprojectedFeature> result;
   result.reserve(6);
@@ -241,10 +238,8 @@ std::vector<RuneReprojectedFeature> RuneModel::reprojected_features() const
 std::optional<cv::Point2f> RuneModel::reprojected_center() const
 {
   if (!state_) return std::nullopt;
-  const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() *
-                                          R_gimbal2imubody_ * R_camera2gimbal_;
-  const Eigen::Vector3d t_camera2world = q_gimbal2world_ *
-                                          R_gimbal2imubody_ * t_camera2gimbal_;
+  const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() * R_camera2gimbal_;
+  const Eigen::Vector3d t_camera2world = q_gimbal2world_ * t_camera2gimbal_;
   const Eigen::Vector3d camera =
     R_camera2world.transpose() * (state_->center - t_camera2world);
   if (camera.z() <= 0.1) return std::nullopt;
@@ -258,10 +253,8 @@ std::optional<cv::Point2f> RuneModel::reprojected_center() const
 
 bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
 {
-  const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() *
-                                          R_gimbal2imubody_ * R_camera2gimbal_;
-  const Eigen::Vector3d t_camera2world = q_gimbal2world_ *
-                                          R_gimbal2imubody_ * t_camera2gimbal_;
+  const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() * R_camera2gimbal_;
+  const Eigen::Vector3d t_camera2world = q_gimbal2world_ * t_camera2gimbal_;
   if (!state_) return initialize(elements, timestamp, R_camera2world, t_camera2world);
 
   auto & state = *state_;

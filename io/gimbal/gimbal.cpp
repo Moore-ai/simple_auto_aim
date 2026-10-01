@@ -96,7 +96,7 @@ GimbalCommandPacket Gimbal::command_with_packet() const
   return {command_, command_packet_};
 }
 
-Eigen::Quaterniond Gimbal::q(std::chrono::steady_clock::time_point t)
+Eigen::Quaterniond Gimbal::q_gimbal2world(std::chrono::steady_clock::time_point t)
 {
   while (true) {
     auto [q_a, t_a] = queue_.pop();
@@ -156,7 +156,7 @@ void Gimbal::read_thread()
       if (parse_infantry_feedback_packet(
           virtual_feedback_packet_.data(), feedback, feedback_angles_in_degrees_)) {
         const auto t = std::chrono::steady_clock::now();
-        queue_.push({infantry_feedback_quaternion(feedback), t});
+        queue_.push({infantry_feedback_q_gimbal2world(feedback), t});
 
         std::lock_guard<std::mutex> lock(mutex_);
         state_.mode = feedback.mode;
@@ -199,7 +199,7 @@ void Gimbal::read_thread()
     std::array<uint8_t, kInfantryFeedbackPacketSize> raw_packet{};
     while (rx_parser_.pop(feedback, &raw_packet)) {
       const auto t = std::chrono::steady_clock::now();
-      const auto q = infantry_feedback_quaternion(feedback);
+      const auto q = infantry_feedback_q_gimbal2world(feedback);
       queue_.push({q, t});
 
       std::lock_guard<std::mutex> lock(mutex_);

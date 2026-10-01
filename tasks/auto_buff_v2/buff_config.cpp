@@ -32,8 +32,6 @@ BuffConfig BuffConfig::load(const std::string & path)
   const auto extrinsic = tools::load_camera2gimbal_extrinsic(yaml);
   result.camera.R_camera2gimbal = extrinsic.rotation;
   result.camera.t_camera2gimbal = extrinsic.translation;
-  const auto body = yaml["R_gimbal2imubody"].as<std::vector<double>>();
-  result.camera.R_gimbal2imubody = Eigen::Matrix<double, 3, 3, Eigen::RowMajor>(body.data());
 
   const auto buff = yaml["buff_v2"];
   if (buff) {

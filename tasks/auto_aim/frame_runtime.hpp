@@ -31,7 +31,7 @@ public:
         *color == io::InfantryEnemyColor::red ? Color::red : Color::blue);
     }
 
-    solver_.set_R_gimbal2world(facts.gimbal_orientation);
+    solver_.set_R_gimbal2world(facts.q_gimbal2world);
     auto detections = detector_.detect(facts.image, -1);
     auto tracking_detections = detections;
     auto targets = tracker_.track(tracking_detections, facts.timestamp);

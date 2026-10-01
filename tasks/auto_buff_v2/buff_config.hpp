@@ -17,7 +17,6 @@ struct BuffConfig
     cv::Mat camera_matrix;
     cv::Mat distort_coeffs;
     Eigen::Matrix3d R_camera2gimbal = Eigen::Matrix3d::Identity();
-    Eigen::Matrix3d R_gimbal2imubody = Eigen::Matrix3d::Identity();
     Eigen::Vector3d t_camera2gimbal = Eigen::Vector3d::Zero();
   } camera;
 

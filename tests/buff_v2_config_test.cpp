@@ -13,7 +13,6 @@ int main()
     "camera2gimbal_mode: xyz_ypr\n"
     "camera2gimbal_xyz: [0.1, 0.2, 0.3]\n"
     "camera2gimbal_ypr: [0, 0, 0]\n"
-    "R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]\n"
     "ballistic_model: vacuum\n"
     "njust_air_resistance: 0.006\n"
     "yaw_offset: 90\n"

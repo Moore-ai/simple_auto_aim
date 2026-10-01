@@ -16,7 +16,7 @@ struct FrameFacts
 {
   FrameSnapshot::Timestamp timestamp;
   cv::Mat image;
-  Eigen::Quaterniond gimbal_orientation;
+  Eigen::Quaterniond q_gimbal2world;
   io::GimbalStatePacket received;
 
   FrameSnapshot snapshot(
@@ -24,7 +24,7 @@ struct FrameFacts
     const auto_aim::TrackerDebugData & tracker, BuffDebugData buff_debug = {}) const
   {
     return FrameSnapshot::capture(
-      timestamp, image, gimbal_orientation, received.state, sent.command, std::move(detections),
+      timestamp, image, q_gimbal2world, received.state, sent.command, std::move(detections),
       tracker, sent.packet, received.packet, std::move(buff_debug));
   }
 };
@@ -39,7 +39,7 @@ public:
   {
     if (!camera_.read(facts.image, facts.timestamp)) return false;
     facts.received = gimbal_.state_with_packet();
-    facts.gimbal_orientation = gimbal_.q(facts.timestamp);
+    facts.q_gimbal2world = gimbal_.q_gimbal2world(facts.timestamp);
     return true;
   }
 

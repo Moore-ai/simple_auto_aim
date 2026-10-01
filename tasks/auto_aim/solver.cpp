@@ -110,8 +110,6 @@ Solver::Solver(const std::string & config_path) : R_gimbal2world_(Eigen::Matrix3
 {
   auto yaml = YAML::LoadFile(config_path);
 
-  auto R_gimbal2imubody_data = yaml["R_gimbal2imubody"].as<std::vector<double>>();
-  R_gimbal2imubody_ = Eigen::Matrix<double, 3, 3, Eigen::RowMajor>(R_gimbal2imubody_data.data());
   const auto extrinsic = tools::load_camera2gimbal_extrinsic(yaml);
   R_camera2gimbal_ = extrinsic.rotation;
   t_camera2gimbal_ = extrinsic.translation;
@@ -132,8 +130,7 @@ Eigen::Matrix3d Solver::R_gimbal2world() const { return R_gimbal2world_; }
 
 void Solver::set_R_gimbal2world(const Eigen::Quaterniond & q)
 {
-  Eigen::Matrix3d R_imubody2imuabs = q.toRotationMatrix();
-  R_gimbal2world_ = R_gimbal2imubody_.transpose() * R_imubody2imuabs * R_gimbal2imubody_;
+  R_gimbal2world_ = q.toRotationMatrix();
 }
 
 //solvePnP（获得姿态）

@@ -48,11 +48,11 @@ void capture_loop(const std::string & config_path, const std::string & output_fo
     &save_requested);
   while (true) {
     camera.read(img, timestamp);
-    Eigen::Quaterniond q = gimbal.q(timestamp);
+    Eigen::Quaterniond q_gimbal2world = gimbal.q_gimbal2world(timestamp);
 
-    // 在图像上显示欧拉角，用来判断imuabs系的xyz正方向，同时判断imu是否存在零漂
+    // 在图像上显示欧拉角，用来判断世界坐标系的 xyz 正方向和姿态反馈是否存在漂移
     auto img_with_ypr = img.clone();
-    Eigen::Vector3d zyx = tools::eulers(q, 2, 1, 0) * 57.3;  // degree
+    Eigen::Vector3d zyx = tools::eulers(q_gimbal2world, 2, 1, 0) * 57.3;  // degree
     tools::draw_text(img_with_ypr, fmt::format("Z {:.2f}", zyx[0]), {40, 40}, {0, 0, 255});
     tools::draw_text(img_with_ypr, fmt::format("Y {:.2f}", zyx[1]), {40, 80}, {0, 0, 255});
     tools::draw_text(img_with_ypr, fmt::format("X {:.2f}", zyx[2]), {40, 120}, {0, 0, 255});
@@ -76,7 +76,7 @@ void capture_loop(const std::string & config_path, const std::string & output_fo
     auto img_path = fmt::format("{}/{}.jpg", output_folder, count);
     auto q_path = fmt::format("{}/{}.txt", output_folder, count);
     cv::imwrite(img_path, img);
-    write_q(q_path, q);
+    write_q(q_path, q_gimbal2world);
     tools::logger()->info("[{}] Saved in {}", count, output_folder);
   }
 

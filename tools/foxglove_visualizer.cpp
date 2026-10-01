@@ -831,7 +831,7 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
     auto buff_debug = frame.buff_debug;
     std::optional<std::vector<cv::Point2f>> hit_armor;
     if (latest_plan) {
-      impl_->solver.set_R_gimbal2world(frame.gimbal_orientation);
+      impl_->solver.set_R_gimbal2world(frame.q_gimbal2world);
       hit_armor = detail::anti_spin_hit_armor(
         latest_plan->second, latest_plan->first, frame.target_generation, target_data.armor_type,
         impl_->solver);

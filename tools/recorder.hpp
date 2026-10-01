@@ -21,7 +21,7 @@ public:
     const std::chrono::steady_clock::time_point & timestamp);
   void record(const FrameSnapshot & frame)
   {
-    record(frame.image, frame.gimbal_orientation, frame.timestamp);
+    record(frame.image, frame.q_gimbal2world, frame.timestamp);
   }
 
 private:

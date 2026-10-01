@@ -17,7 +17,7 @@ tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & fact
 {
   if (const auto color = io::infantry_enemy_color(facts.received.state.mode))
     detector_.config.enemy_red = *color == io::InfantryEnemyColor::red;
-  model_.update_transform(facts.gimbal_orientation);
+  model_.set_q_gimbal2world(facts.q_gimbal2world);
   const auto elements = detector_.detect(facts.image);
   model_.update(elements, facts.timestamp);
   const auto target = model_.state();

@@ -28,7 +28,7 @@ int main()
 
   {
     io::Gimbal gimbal(path.string());
-    const auto initial_q = gimbal.q(std::chrono::steady_clock::now());
+    const auto initial_q = gimbal.q_gimbal2world(std::chrono::steady_clock::now());
     assert(initial_q.coeffs().allFinite());
     const auto configured_state = gimbal.state();
     assert(configured_state.mode == 1);

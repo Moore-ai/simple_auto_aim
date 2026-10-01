@@ -40,7 +40,7 @@ Eigen::Quaterniond read_q(const std::string & q_path)
 
 void load(
   const std::string & input_folder, const std::string & config_path,
-  std::vector<double> & R_gimbal2imubody_data, std::vector<cv::Mat> & R_world2gimbal_list,
+  std::vector<cv::Mat> & R_world2gimbal_list,
   std::vector<cv::Mat> & t_world2gimbal_list, std::vector<cv::Mat> & rvecs,
   std::vector<cv::Mat> & tvecs)
 {
@@ -49,12 +49,10 @@ void load(
   auto pattern_cols = yaml["pattern_cols"].as<int>();
   auto pattern_rows = yaml["pattern_rows"].as<int>();
   auto center_distance_mm = yaml["center_distance_mm"].as<double>();
-  R_gimbal2imubody_data = yaml["R_gimbal2imubody"].as<std::vector<double>>();
   auto camera_matrix_data = yaml["camera_matrix"].as<std::vector<double>>();
   auto distort_coeffs_data = yaml["distort_coeffs"].as<std::vector<double>>();
 
   cv::Size pattern_size(pattern_cols, pattern_rows);
-  Eigen::Matrix<double, 3, 3, Eigen::RowMajor> R_gimbal2imubody(R_gimbal2imubody_data.data());
   cv::Matx33d camera_matrix(camera_matrix_data.data());
   cv::Mat distort_coeffs(distort_coeffs_data);
 
@@ -67,12 +65,10 @@ void load(
     if (img.empty()) break;
 
     // 计算云台的欧拉角
-    Eigen::Matrix3d R_imubody2imuabs = q.toRotationMatrix();
-    Eigen::Matrix3d R_gimbal2world =
-      R_gimbal2imubody.transpose() * R_imubody2imuabs * R_gimbal2imubody;
+    Eigen::Matrix3d R_gimbal2world = q.toRotationMatrix();
     Eigen::Vector3d ypr = tools::eulers(R_gimbal2world, 2, 1, 0) * 57.3;  // degree
 
-    // 在图片上显示云台的欧拉角，用来检验R_gimbal2imubody是否正确
+    // 在图片上显示云台相对世界坐标系的欧拉角
     auto drawing = img.clone();
     tools::draw_text(drawing, fmt::format("yaw   {:.2f}", ypr[0]), {40, 40}, {0, 0, 255});
     tools::draw_text(drawing, fmt::format("pitch {:.2f}", ypr[1]), {40, 80}, {0, 0, 255});
@@ -111,7 +107,7 @@ void load(
 }
 
 void print_yaml(
-  const std::vector<double> & R_gimbal2imubody_data, const cv::Mat & R_camera2gimbal,
+  const cv::Mat & R_camera2gimbal,
   const cv::Mat & t_camera2gimbal, const Eigen::Vector3d & camera_ypr, double distance,
   const Eigen::Vector3d & board_ypr)
 {
@@ -122,10 +118,6 @@ void print_yaml(
     t_camera2gimbal.begin<double>(), t_camera2gimbal.end<double>());
 
   result << YAML::BeginMap;
-  result << YAML::Key << "R_gimbal2imubody";
-  result << YAML::Value << YAML::Flow << R_gimbal2imubody_data;
-  result << YAML::Newline;
-  result << YAML::Newline;
   result << YAML::Comment(fmt::format(
     "相机同理想情况的偏角: yaw{:.2f} pitch{:.2f} roll{:.2f} degree", camera_ypr[0], camera_ypr[1],
     camera_ypr[2]));
@@ -157,11 +149,10 @@ int main(int argc, char * argv[])
   auto config_path = cli.get<std::string>("config-path");
 
   // 从输入文件夹中加载标定所需的数据
-  std::vector<double> R_gimbal2imubody_data;
   std::vector<cv::Mat> R_world2gimbal_list, t_world2gimbal_list;
   std::vector<cv::Mat> rvecs, tvecs;
   load(
-    input_folder, config_path, R_gimbal2imubody_data, R_world2gimbal_list, t_world2gimbal_list,
+    input_folder, config_path, R_world2gimbal_list, t_world2gimbal_list,
     rvecs, tvecs);
 
   // 手眼标定
@@ -200,5 +191,5 @@ int main(int argc, char * argv[])
 
   // 输出yaml
   print_yaml(
-    R_gimbal2imubody_data, R_camera2gimbal, t_camera2gimbal, camera_ypr, distance, board_ypr);
+    R_camera2gimbal, t_camera2gimbal, camera_ypr, distance, board_ypr);
 }

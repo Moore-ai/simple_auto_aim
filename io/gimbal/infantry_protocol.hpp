@@ -76,7 +76,8 @@ inline float infantry_angle_from_wire(float value, bool degrees)
 
 inline float infantry_pitch(float value) { return -value; }
 
-inline Eigen::Quaterniond infantry_feedback_quaternion(const InfantryFeedback & feedback)
+// 反馈 YPR 表示云台坐标系相对固定世界坐标系的姿态。
+inline Eigen::Quaterniond infantry_feedback_q_gimbal2world(const InfantryFeedback & feedback)
 {
   return Eigen::Quaterniond(
            Eigen::AngleAxisd(feedback.yaw, Eigen::Vector3d::UnitZ()) *

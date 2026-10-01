@@ -49,7 +49,7 @@ struct FrameSnapshot
 
   Timestamp timestamp{};
   cv::Mat image;
-  Eigen::Quaterniond gimbal_orientation{Eigen::Quaterniond::Identity()};
+  Eigen::Quaterniond q_gimbal2world{Eigen::Quaterniond::Identity()};
   io::GimbalState gimbal_state{};
   io::GimbalCommand gimbal_command{};
   std::array<uint8_t, io::kInfantryCommandPacketSize> serial_send_packet{};
@@ -60,7 +60,7 @@ struct FrameSnapshot
   std::uint64_t target_generation = 0;
 
   static FrameSnapshot capture(
-    Timestamp timestamp, const cv::Mat & image, const Eigen::Quaterniond & gimbal_orientation,
+    Timestamp timestamp, const cv::Mat & image, const Eigen::Quaterniond & q_gimbal2world,
     const io::GimbalState & gimbal_state, const io::GimbalCommand & gimbal_command,
     auto_aim::DetectionResult detections, const auto_aim::TrackerDebugData & tracker,
     std::array<uint8_t, io::kInfantryCommandPacketSize> serial_send_packet = {},
@@ -70,7 +70,7 @@ struct FrameSnapshot
     return {
       timestamp,
       image.clone(),
-      gimbal_orientation,
+      q_gimbal2world,
       gimbal_state,
       gimbal_command,
       serial_send_packet,

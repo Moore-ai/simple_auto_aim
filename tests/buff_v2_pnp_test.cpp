@@ -13,7 +13,6 @@ int main()
   std::ofstream(path)
     << "camera_matrix: [1000, 0, 320, 0, 1000, 240, 0, 0, 1]\n"
     << "distort_coeffs: [0, 0, 0, 0, 0]\n"
-    << "R_gimbal2imubody: [1, 0, 0, 0, 1, 0, 0, 0, 1]\n"
     << "camera2gimbal_mode: matrix\n"
     << "R_camera2gimbal: [0, 0, 1, -1, 0, 0, 0, -1, 0]\n"
     << "t_camera2gimbal: [0, 0, 0]\n";
@@ -36,13 +35,20 @@ int main()
   elements.bullseyes.push_back(
     {bull_center[0], {pixel[2], pixel[3], pixel[4], pixel[1]}, false, 0.5});
   auto_buff_v2::RuneModel model(config.camera, config.model, false);
-  model.update_transform(Eigen::Quaterniond::Identity());
+  model.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   const auto now = std::chrono::steady_clock::now();
   assert(model.update(elements, now));
   const auto state = model.state();
   assert(state);
   assert((state->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
   assert(std::abs(state->rotation_angle) < 0.03);
+  auto_buff_v2::RuneModel rotated(config.camera, config.model, false);
+  const Eigen::Quaterniond q_gimbal2world(
+    Eigen::AngleAxisd(0.2, Eigen::Vector3d::UnitZ()));
+  rotated.set_q_gimbal2world(q_gimbal2world);
+  assert(rotated.update(elements, now));
+  assert((rotated.state()->center - Eigen::Vector3d(3 * std::cos(0.2),
+                                                   3 * std::sin(0.2), 0)).norm() < 0.03);
   assert(!state->inactive[0]);
   const auto reprojected = model.reprojected_features();
   assert(reprojected.size() == 6);
@@ -52,7 +58,7 @@ int main()
   assert(model.reprojected_center());
 
   auto_buff_v2::RuneModel delayed(config.camera, config.model, false);
-  delayed.update_transform(Eigen::Quaterniond::Identity());
+  delayed.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(delayed.update(elements, now));
   assert(delayed.update(elements, now + std::chrono::milliseconds(600)));
   assert(delayed.state());
@@ -61,7 +67,7 @@ int main()
   candidates.icons.insert(candidates.icons.begin(),
                           {pixel[0] + cv::Point2f(12, 0), 0.5});
   auto_buff_v2::RuneModel selected(config.camera, config.model, false);
-  selected.update_transform(Eigen::Quaterniond::Identity());
+  selected.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(selected.update(candidates, now));
   assert((selected.state()->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
 
@@ -84,7 +90,7 @@ int main()
                           {second_pixel[0], {second_pixel[2], second_pixel[3],
                                              second_pixel[4], second_pixel[1]}, false, 0.5});
   auto_buff_v2::RuneModel layout_model(config.camera, config.model, false);
-  layout_model.update_transform(Eigen::Quaterniond::Identity());
+  layout_model.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(layout_model.update(layout, now));
   assert((layout_model.state()->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
   assert(std::abs(layout_model.state()->rotation_angle) < 0.03);
@@ -92,14 +98,14 @@ int main()
   auto_buff_v2::RuneElements wrong_center = elements;
   wrong_center.bullseyes.front().center += cv::Point2f(35, 0);
   auto_buff_v2::RuneModel gated(config.camera, config.model, false);
-  gated.update_transform(Eigen::Quaterniond::Identity());
+  gated.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(!gated.update(wrong_center, now));
 
   auto_buff_v2::RuneElements degenerate = elements;
   degenerate.bullseyes.front().corners[0] =
     degenerate.bullseyes.front().corners[2];
   auto_buff_v2::RuneModel rejected(config.camera, config.model, false);
-  rejected.update_transform(Eigen::Quaterniond::Identity());
+  rejected.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(!rejected.update(degenerate, now));
 
   auto_buff_v2::RuneElements noisy = elements;
@@ -115,7 +121,7 @@ int main()
                       noisy_rvec, noisy_tvec, true, cv::SOLVEPNP_ITERATIVE));
   const Eigen::Vector3d raw_center(noisy_tvec[2], -noisy_tvec[0], -noisy_tvec[1]);
   auto_buff_v2::RuneModel corrected_seed(config.camera, config.model, false);
-  corrected_seed.update_transform(Eigen::Quaterniond::Identity());
+  corrected_seed.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(corrected_seed.update(noisy, now));
   assert((corrected_seed.state()->center - raw_center).norm() > 0.002);
 
@@ -137,12 +143,12 @@ int main()
     {tilted_center[0], {tilted_pixel[2], tilted_pixel[3], tilted_pixel[4], tilted_pixel[1]},
      false, 0.5});
   auto_buff_v2::RuneModel tilted_model(config.camera, config.model, false);
-  tilted_model.update_transform(Eigen::Quaterniond::Identity());
+  tilted_model.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(tilted_model.update(tilted_elements, now));
   assert(std::abs(tilted_model.state()->rotation_angle - seed_angle) < 0.03);
 
   auto_buff_v2::RuneModel big(config.camera, config.model, true);
-  big.update_transform(Eigen::Quaterniond::Identity());
+  big.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(big.update(elements, now));
   for (int i = 1; i <= 120; ++i) {
     const double t = 0.05 * i;

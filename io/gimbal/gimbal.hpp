@@ -65,7 +65,7 @@ public:
   GimbalState state() const;
   GimbalStatePacket state_with_packet() const;
   GimbalCommandPacket command_with_packet() const;
-  Eigen::Quaterniond q(std::chrono::steady_clock::time_point t);
+  Eigen::Quaterniond q_gimbal2world(std::chrono::steady_clock::time_point t);
 
   void send(
     bool control, InfantryFireCommand fire, float yaw, float yaw_vel, float yaw_acc, float pitch,

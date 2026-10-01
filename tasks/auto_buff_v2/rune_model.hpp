@@ -51,7 +51,7 @@ public:
   using Config = BuffConfig::Model;
 
   RuneModel(BuffConfig::Camera camera, Config config, bool big_rune);
-  void update_transform(const Eigen::Quaterniond & q_gimbal2world);
+  void set_q_gimbal2world(const Eigen::Quaterniond & q_gimbal2world);
   bool update(const RuneElements & elements, Timestamp timestamp);
   void reset();
   std::optional<RuneEstimate> state() const;
@@ -68,7 +68,6 @@ private:
   cv::Mat camera_matrix_;
   cv::Mat distort_coeffs_;
   Eigen::Matrix3d R_camera2gimbal_ = Eigen::Matrix3d::Identity();
-  Eigen::Matrix3d R_gimbal2imubody_ = Eigen::Matrix3d::Identity();
   Eigen::Vector3d t_camera2gimbal_ = Eigen::Vector3d::Zero();
   Eigen::Quaterniond q_gimbal2world_ = Eigen::Quaterniond::Identity();
   bool big_rune_ = false;
