@@ -213,12 +213,19 @@ cmake --build build --target buff_v2_r_detector_debug -j2
 | R 标面积上限 | `/buff_v2/detector.max_icon_area` | 像素² |
 | R 标骨架得分 | `/buff_v2/detector.icon_scores[:].score` | 无量纲 |
 | R 标匹配阈值 | `/buff_v2/detector.match_threshold` | 无量纲 |
+| 骨架端点数量 | `/buff_v2/detector.icon_scores[:].endpoints` | 个 |
+| 骨架下半部分端点数量 | `/buff_v2/detector.icon_scores[:].lower_endpoints` | 个 |
+| 骨架分支像素数量 | `/buff_v2/detector.icon_scores[:].branches` | 个 |
+| 最大外轮廓内部孔洞数量 | `/buff_v2/detector.icon_scores[:].holes` | 个 |
 
 建议分别建立半径图和面积图。用 `candidates[0].radius` 等路径可以只查看某个编号。
 得分图中同时添加 `icon_scores[:].score` 和 `match_threshold`，比较得分与配置阈值。
 `icon_scores` 记录所有进入骨架评分阶段的候选，包括低于阈值、未识别成功的候选；
 未进入评分阶段的轮廓不会产生得分。每项同时包含 `center_x`、`center_y`，
 其数组下标独立于成功识别的 `candidates`，且不代表跨帧跟踪 ID。
+骨架判定要求 `endpoints >= 1`、`lower_endpoints >= 1`、`8 <= branches <= 50`、
+`holes <= 2`。`branches` 统计邻居数量至少为 3 的骨架像素。
+若骨架连通分量检查提前拒绝候选，尚未计算的这四个计数为 0，得分也为 0。
 新增 Image 面板选择 `/image`，黄色圆圈及 `#0`、`#1` 等标注对应当前帧的候选数组下标。
 检测成功的 R 标复用主链路的绿色圆圈和 `R: 得分` 标注；仅检测到 R 标、尚未建立
 完整打符模型时也会显示。此入口只标注 R 标，不发布靶心观测或联合模型重投影标注。

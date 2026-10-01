@@ -72,7 +72,9 @@ nlohmann::json detail::buff_detector_values(const auto_buff_v2::RuneDetectorMeas
   Json icon_scores = Json::array();
   for (const auto & icon : debug.icon_scores)
     icon_scores.push_back(
-      {{"score", icon.score}, {"center_x", icon.center.x}, {"center_y", icon.center.y}});
+      {{"score", icon.score}, {"center_x", icon.center.x}, {"center_y", icon.center.y},
+       {"endpoints", icon.endpoints}, {"lower_endpoints", icon.lower_endpoints},
+       {"branches", icon.branches}, {"holes", icon.holes}});
   return {{"min_radius", debug.min_radius}, {"max_radius", debug.max_radius},
           {"min_icon_area", debug.min_icon_area}, {"max_icon_area", debug.max_icon_area},
           {"match_threshold", debug.match_threshold}, {"icon_scores", std::move(icon_scores)},
@@ -96,6 +98,8 @@ foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_buff_detector_chan
   Json icon_properties;
   for (const auto * name : {"score", "center_x", "center_y"})
     icon_properties[name] = {{"type", "number"}};
+  for (const auto * name : {"endpoints", "lower_endpoints", "branches", "holes"})
+    icon_properties[name] = {{"type", "integer"}};
   properties["icon_scores"] = {
     {"type", "array"},
     {"items", {{"type", "object"}, {"properties", icon_properties}}}};

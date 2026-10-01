@@ -37,7 +37,7 @@ cv::Mat extract_channel(const cv::Mat & image, bool enemy_red)
   return result;
 }
 
-double icon_score(const cv::Mat & image)
+double icon_score(const cv::Mat & image, RuneIconScoreMeasurement * measurement)
 {
   cv::Mat gray, binary, skeleton;
   cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
@@ -77,6 +77,12 @@ double icon_score(const cv::Mat & image)
   int holes = 0;
   for (const auto & h : hierarchy)
     if (h[3] == largest_outer) ++holes;
+  if (measurement) {
+    measurement->endpoints = endpoints;
+    measurement->lower_endpoints = lower_endpoints;
+    measurement->branches = branches;
+    measurement->holes = holes;
+  }
   if (endpoints >= 1 && lower_endpoints >= 1 && branches >= 8 && branches <= 50 && holes <= 2)
     return 0.5 + 0.1 * endpoints;
   return 0;
@@ -310,8 +316,13 @@ RuneElements RuneDetector::detect(
     roi.width += 10;
     roi.height += 10;
     roi &= cv::Rect(0, 0, image.cols, image.rows);
-    const double score = icon_score(image(roi));
-    if (measurements) measurements->icon_scores.push_back({center, score});
+    RuneIconScoreMeasurement icon_measurement;
+    const double score = icon_score(image(roi), measurements ? &icon_measurement : nullptr);
+    if (measurements) {
+      icon_measurement.center = center;
+      icon_measurement.score = score;
+      measurements->icon_scores.push_back(icon_measurement);
+    }
     if (score >= config.match_threshold) {
       result.icons.push_back({center, score});
       if (measurements) measurements->icon_rois.push_back(roi);

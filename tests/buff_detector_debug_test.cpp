@@ -128,11 +128,23 @@ int main()
   const auto & rejected_score = rejected_values.at("icon_scores").at(0);
   assert(rejected_score.at("score").get<double>() >= mixed_detector.match_threshold);
   assert(rejected_score.at("score").get<double>() < 1.1);
+  assert(rejected_score.contains("endpoints"));
+  assert(rejected_score.at("endpoints").get<int>() >= 1);
+  assert(rejected_score.at("lower_endpoints").get<int>() >= 1);
+  assert(rejected_score.at("branches").get<int>() >= 8);
+  assert(rejected_score.at("branches").get<int>() <= 50);
+  assert(rejected_score.at("holes") == 1);
   assert(std::abs(rejected_score.at("center_x").get<double>() -
                   joint.icons.front().center.x) < 2);
   const auto accepted_values = tools::detail::buff_detector_values(icon_frame.measurements);
   assert(accepted_values.at("icon_scores").size() == 1);
   assert(accepted_values.at("icon_scores").at(0).at("score") == rejected_score.at("score"));
+  for (const auto * name : {"endpoints", "lower_endpoints", "branches", "holes"})
+    assert(accepted_values.at("icon_scores").at(0).at(name) == rejected_score.at(name));
+  const auto disk_values = tools::detail::buff_detector_values(not_an_icon.measurements);
+  assert(disk_values.at("icon_scores").size() == 1);
+  for (const auto * name : {"endpoints", "lower_endpoints", "branches", "holes"})
+    assert(disk_values.at("icon_scores").at(0).at(name) == 0);
   const auto empty_scores = tools::detail::buff_detector_values(no_icon.measurements);
   assert(empty_scores.at("icon_scores").empty());
   assert(empty_scores.at("match_threshold") == mixed_detector.match_threshold);
@@ -166,4 +178,7 @@ int main()
   assert(detector_schema_json.at("properties").at("match_threshold").at("type") == "number");
   assert(detector_schema_json.at("properties").at("icon_scores").at("items")
            .at("properties").at("score").at("type") == "number");
+  for (const auto * name : {"endpoints", "lower_endpoints", "branches", "holes"})
+    assert(detector_schema_json.at("properties").at("icon_scores").at("items")
+             .at("properties").at(name).at("type") == "integer");
 }

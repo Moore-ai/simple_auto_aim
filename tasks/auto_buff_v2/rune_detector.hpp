@@ -17,6 +17,16 @@ struct RuneContourMeasurement
   bool icon_area_pass = false;
 };
 
+struct RuneIconScoreMeasurement
+{
+  cv::Point2f center;
+  double score = 0;
+  int endpoints = 0;
+  int lower_endpoints = 0;
+  int branches = 0;
+  int holes = 0;
+};
+
 struct RuneDetectorMeasurements
 {
   double min_radius = 0;
@@ -26,7 +36,7 @@ struct RuneDetectorMeasurements
   double match_threshold = 0;
   std::vector<RuneContourMeasurement> candidates;
   std::vector<cv::Rect> icon_rois;
-  std::vector<RuneIcon> icon_scores;
+  std::vector<RuneIconScoreMeasurement> icon_scores;
 };
 
 class RuneDetector
