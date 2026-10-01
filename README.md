@@ -211,8 +211,14 @@ cmake --build build --target buff_v2_r_detector_debug -j2
 | 当前帧轮廓面积 | `/buff_v2/detector.candidates[:].area` | 像素² |
 | R 标面积下限 | `/buff_v2/detector.min_icon_area` | 像素² |
 | R 标面积上限 | `/buff_v2/detector.max_icon_area` | 像素² |
+| R 标骨架得分 | `/buff_v2/detector.icon_scores[:].score` | 无量纲 |
+| R 标匹配阈值 | `/buff_v2/detector.match_threshold` | 无量纲 |
 
 建议分别建立半径图和面积图。用 `candidates[0].radius` 等路径可以只查看某个编号。
+得分图中同时添加 `icon_scores[:].score` 和 `match_threshold`，比较得分与配置阈值。
+`icon_scores` 记录所有进入骨架评分阶段的候选，包括低于阈值、未识别成功的候选；
+未进入评分阶段的轮廓不会产生得分。每项同时包含 `center_x`、`center_y`，
+其数组下标独立于成功识别的 `candidates`，且不代表跨帧跟踪 ID。
 新增 Image 面板选择 `/image`，黄色圆圈及 `#0`、`#1` 等标注对应当前帧的候选数组下标。
 检测成功的 R 标复用主链路的绿色圆圈和 `R: 得分` 标注；仅检测到 R 标、尚未建立
 完整打符模型时也会显示。此入口只标注 R 标，不发布靶心观测或联合模型重投影标注。
@@ -223,7 +229,7 @@ cmake --build build --target buff_v2_r_detector_debug -j2
 
 记录点位于 `RuneDetector::detect` 中计算 `radius` 和 `area` 后、形状与尺寸筛选之前，
 R 标调试封装随后按主检测器最终识别结果严格过滤，只发布通过面积、椭圆形状、
-靶心内部排除及 R 标骨架评分检查的轮廓。亮点、非 R 形状和识别失败的轮廓不发布；
+靶心内部排除及 R 标骨架评分检查的轮廓。亮点、非 R 形状和识别失败的轮廓不进入 `candidates`；
 识别失败时候选数组为空，但尺寸阈值继续发布。
 `radius_pass` 和 `icon_area_pass` 分别表示尺寸阈值
 是否通过，不代表最终识别成功；实际识别还会检查形状、靶心分支及 R 标骨架得分。

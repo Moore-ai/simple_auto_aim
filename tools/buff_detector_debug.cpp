@@ -69,15 +69,21 @@ nlohmann::json detail::buff_detector_values(const auto_buff_v2::RuneDetectorMeas
       {"center_x", candidate.center.x}, {"center_y", candidate.center.y},
       {"radius_pass", candidate.radius_pass}, {"icon_area_pass", candidate.icon_area_pass}});
   }
+  Json icon_scores = Json::array();
+  for (const auto & icon : debug.icon_scores)
+    icon_scores.push_back(
+      {{"score", icon.score}, {"center_x", icon.center.x}, {"center_y", icon.center.y}});
   return {{"min_radius", debug.min_radius}, {"max_radius", debug.max_radius},
           {"min_icon_area", debug.min_icon_area}, {"max_icon_area", debug.max_icon_area},
+          {"match_threshold", debug.match_threshold}, {"icon_scores", std::move(icon_scores)},
           {"candidates", std::move(candidates)}};
 }
 
 foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_buff_detector_channel()
 {
   Json properties;
-  for (const auto * name : {"min_radius", "max_radius", "min_icon_area", "max_icon_area"})
+  for (const auto * name :
+       {"min_radius", "max_radius", "min_icon_area", "max_icon_area", "match_threshold"})
     properties[name] = {{"type", "number"}};
   Json candidate_properties;
   for (const auto * name : {"radius", "area", "center_x", "center_y"})
@@ -87,6 +93,12 @@ foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_buff_detector_chan
   properties["candidates"] = {
     {"type", "array"},
     {"items", {{"type", "object"}, {"properties", candidate_properties}}}};
+  Json icon_properties;
+  for (const auto * name : {"score", "center_x", "center_y"})
+    icon_properties[name] = {{"type", "number"}};
+  properties["icon_scores"] = {
+    {"type", "array"},
+    {"items", {{"type", "object"}, {"properties", icon_properties}}}};
   const auto schema_data = Json{
     {"$schema", "http://json-schema.org/draft-07/schema#"},
     {"type", "object"}, {"properties", properties}}.dump();

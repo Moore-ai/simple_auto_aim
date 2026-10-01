@@ -1,5 +1,6 @@
 #include <cassert>
 #include <chrono>
+#include <cmath>
 
 #include <opencv2/imgproc.hpp>
 
@@ -112,6 +113,30 @@ int main()
   assert(not_an_icon.measurements.candidates.empty());
   assert(not_an_icon.measurements.min_icon_area > 0);
 
+  // Scores rejected by the threshold must remain available for threshold tuning.
+  auto rejecting_detector = mixed_detector;
+  rejecting_detector.match_threshold = 1.1;
+  tools::BuffDetectorDebug rejecting_processor(
+    rejecting_detector, tools::BuffDetectorDebugTarget::icon);
+  mixed_facts.image = icon_only;
+  const auto rejected = rejecting_processor.process(mixed_facts);
+  assert(rejected.snapshot.buff_debug.detections.empty());
+  const auto rejected_values = tools::detail::buff_detector_values(rejected.measurements);
+  assert(rejected_values.contains("match_threshold"));
+  assert(rejected_values.at("match_threshold") == 1.1);
+  assert(rejected_values.at("icon_scores").size() == 1);
+  const auto & rejected_score = rejected_values.at("icon_scores").at(0);
+  assert(rejected_score.at("score").get<double>() >= mixed_detector.match_threshold);
+  assert(rejected_score.at("score").get<double>() < 1.1);
+  assert(std::abs(rejected_score.at("center_x").get<double>() -
+                  joint.icons.front().center.x) < 2);
+  const auto accepted_values = tools::detail::buff_detector_values(icon_frame.measurements);
+  assert(accepted_values.at("icon_scores").size() == 1);
+  assert(accepted_values.at("icon_scores").at(0).at("score") == rejected_score.at("score"));
+  const auto empty_scores = tools::detail::buff_detector_values(no_icon.measurements);
+  assert(empty_scores.at("icon_scores").empty());
+  assert(empty_scores.at("match_threshold") == mixed_detector.match_threshold);
+
   auto_buff_v2::RuneDetectorMeasurements detector_debug;
   detector_debug.min_radius = 1.35;
   detector_debug.max_radius = 16.5;
@@ -138,4 +163,7 @@ int main()
     reinterpret_cast<const char *>(detector_schema->data) + detector_schema->data_len);
   assert(detector_schema_json.at("properties").at("candidates").at("items")
            .at("properties").at("radius").at("type") == "number");
+  assert(detector_schema_json.at("properties").at("match_threshold").at("type") == "number");
+  assert(detector_schema_json.at("properties").at("icon_scores").at("items")
+           .at("properties").at("score").at("type") == "number");
 }

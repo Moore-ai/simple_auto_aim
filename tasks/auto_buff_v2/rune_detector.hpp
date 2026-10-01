@@ -23,8 +23,10 @@ struct RuneDetectorMeasurements
   double max_radius = 0;
   double min_icon_area = 0;
   double max_icon_area = 0;
+  double match_threshold = 0;
   std::vector<RuneContourMeasurement> candidates;
   std::vector<cv::Rect> icon_rois;
+  std::vector<RuneIcon> icon_scores;
 };
 
 class RuneDetector

@@ -207,7 +207,10 @@ RuneElements RuneDetector::detect(
   const cv::Mat & image, RuneDetectorMeasurements * measurements) const
 {
   RuneElements result;
-  if (measurements) *measurements = {};
+  if (measurements) {
+    *measurements = {};
+    measurements->match_threshold = config.match_threshold;
+  }
   if (image.empty() || image.type() != CV_8UC3 || config.fx <= 0 || config.fy <= 0) return result;
   auto binary = extract_channel(image, config.enemy_red);
   std::vector<std::vector<cv::Point>> contours;
@@ -308,6 +311,7 @@ RuneElements RuneDetector::detect(
     roi.height += 10;
     roi &= cv::Rect(0, 0, image.cols, image.rows);
     const double score = icon_score(image(roi));
+    if (measurements) measurements->icon_scores.push_back({center, score});
     if (score >= config.match_threshold) {
       result.icons.push_back({center, score});
       if (measurements) measurements->icon_rois.push_back(roi);
