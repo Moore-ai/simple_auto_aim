@@ -135,6 +135,11 @@ target_compile_options(buff_v2_detector_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_detector_test PRIVATE auto_buff_v2)
 add_test(NAME buff_v2_detector_test COMMAND buff_v2_detector_test)
 
+add_executable(climber_rune_detector_test tests/climber_rune_detector_test.cpp)
+target_compile_options(climber_rune_detector_test PRIVATE -UNDEBUG)
+target_link_libraries(climber_rune_detector_test PRIVATE auto_buff_v2 openvino::runtime)
+add_test(NAME climber_rune_detector_test COMMAND climber_rune_detector_test)
+
 add_executable(buff_v2_frame_processor_test tests/buff_v2_frame_processor_test.cpp)
 target_compile_options(buff_v2_frame_processor_test PRIVATE -UNDEBUG)
 target_link_libraries(

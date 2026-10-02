@@ -55,10 +55,20 @@ cmake --build build --parallel 1
 运行自瞄或打符：
 
 ```bash
-./build/standard configs/standard.yaml
-./build/buff configs/standard.yaml --mode=0 # 小符
-./build/buff configs/standard.yaml --mode=1 # 大符
+./build/standard configs/standard.yaml --mode=0 # 自瞄
+./build/standard configs/standard.yaml --mode=1 # 小符
+./build/standard configs/standard.yaml --mode=2 # 大符
 ```
+
+打符检测器由 `buff_v2.detector` 选择，默认 `njust`；设置为 `climber` 可使用移植自
+`Climber_Vision_26` 的 `ClimberRuneDetector`，参数位于 `buff_v2.climber`。
+随仓库提供的 `assets/buff_repvgg.xml` / `.bin` 为该源项目模型，默认使用 CPU 推理，
+可通过 `buff_v2.climber.device` 选择设备。预处理尺寸从模型输入 FP32 `[1,3,H,W]`
+读取（附带模型为 640×640），输出为 `[1,33,N]`（红/蓝两类、9 点关键点）。
+`buff_v2.climber.max_bullseyes` 设置未激活靶心输出上限，可选 1 或 2，默认 2；
+同时输出一个细化后的 R 标。五叶关联和丢失处理交给
+`RuneModel`，小符和大符共用多候选检测。颜色直接遵循主入口传入的检测颜色，
+可用 `--target-color=red` 或 `--target-color=blue` 指定。
 
 标定可执行文件：
 

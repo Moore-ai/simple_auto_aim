@@ -276,7 +276,20 @@ predict_time: 0.120     # s
 
 buff_v2: # 新打符入口使用的源项目参数
   planner_mode: njust # 打符规划器：mpc 或 njust
-  detector: njust # 打符检测器：njust
+  detector: njust # 打符检测器：njust 或 climber
+  climber: # ClimberRuneDetector 专属参数，使用红/蓝两类、9 点 YOLO11-pose 模型
+    model: assets/buff_repvgg.xml # 源项目模型，输出形状 [1,33,N]
+    device: CPU # OpenVINO 推理设备，例如 CPU、GPU 或 AUTO
+    max_bullseyes: 2 # 每帧输出靶心上限，可选 1 或 2（RuneModel 初始化约束）
+    ConfidenceThreshold: 0.2 # 模型置信度阈值
+    IouThreshold: 0.2 # NMS 交并比阈值
+    binary_threshold: 100 # 灰度二值化阈值，范围 0–255
+    dilate_kernel_size: 5 # px，R 标细化膨胀核边长
+    dilate_iterations: 1 # R 标细化膨胀次数
+    r_center_mask_ratio: 0.8 # R 标搜索半径与靶心半径之比
+    r_center_contour_div: 3.0 # R 标轮廓距离惩罚除数
+    r_center_refine_max_shift: 5.0 # px，R 标细化最大修正距离
+    dedup_distance: 18.0 # px，候选靶心去重距离
   njust: # NjustRuneDetector 专属参数
     min_distance: 1.7 # m，轮廓几何筛选的最近距离
     max_distance: 5.0 # m，轮廓几何筛选的最远距离
