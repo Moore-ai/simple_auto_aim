@@ -89,14 +89,15 @@ public:
     const double distance = target->center.norm();
     double fly_time = distance / speed;
     AimSolution solution;
-    // Match the pre-MPC aimer's five ballistic flight-time refinements.
+    // RMCS fire control: always refine from the original estimate, at most five solves.
     for (int i = 0; i < 5; ++i) {
       const auto next = aim_solution(*target, offset_time(now, config_.shoot_delay + fly_time),
                                      speed, config_, *ballistic_solver_);
       if (!next) return result;
       solution = *next;
-      if (std::abs(next->fly_time - fly_time) < 0.001) break;
+      const double previous = fly_time;
       fly_time = next->fly_time;
+      if (std::abs(fly_time - previous) < 0.001) break;
     }
     const double future = config_.shoot_delay + fly_time;
     const auto before = aim_solution(*target, offset_time(now, future - 0.01),

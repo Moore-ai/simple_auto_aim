@@ -93,26 +93,18 @@ std::optional<BuffTrackingRequest> BuffPlanner::prepare(
     bullet_speed = config_.bullet_speed_default;
   const double distance = std::hypot(target->center.x(), target->center.y());
   double fly_time = target->center.norm() / bullet_speed;
-  if (config_.fly_time_iteration_enabled) {
-    for (int i = 0; i < config_.fly_time_iteration_max_iteration; ++i) {
-      const double future = config_.shoot_delay + fly_time;
-      const auto prediction_time = offset_time(now, future);
-      const auto solution = aim_solution(*target, prediction_time, bullet_speed,
-                                         config_.yaw_offset, config_.pitch_offset,
-                                         *ballistic_solver_);
-      if (!solution) return std::nullopt;
-      if (std::abs(solution->fly_time - fly_time) <
-          config_.fly_time_iteration_convergence_threshold) {
-        break;
-      }
-      fly_time = solution->fly_time;
-    }
+  Timestamp center_time;
+  std::optional<AimSolution> center;
+  // RMCS fire control: always refine from the original estimate, at most five solves.
+  for (int i = 0; i < 5; ++i) {
+    center_time = offset_time(now, config_.shoot_delay + fly_time);
+    center = aim_solution(*target, center_time, bullet_speed,
+                          config_.yaw_offset, config_.pitch_offset, *ballistic_solver_);
+    if (!center) return std::nullopt;
+    const double previous = fly_time;
+    fly_time = center->fly_time;
+    if (std::abs(fly_time - previous) < 0.001) break;
   }
-  const auto center_time = offset_time(now, config_.shoot_delay + fly_time);
-  const auto center = aim_solution(*target, center_time, bullet_speed,
-                                   config_.yaw_offset, config_.pitch_offset,
-                                   *ballistic_solver_);
-  if (!center) return std::nullopt;
   const auto trajectory = make_reference_trajectory(
     *target, center_time, bullet_speed, center->angles.x(), config_.yaw_offset,
     config_.pitch_offset, *ballistic_solver_);

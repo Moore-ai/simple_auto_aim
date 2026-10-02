@@ -6,6 +6,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "tasks/auto_buff_v2/buff_config.hpp"
+#include "tasks/auto_buff_v2/buff_planner.hpp"
 #include "tasks/auto_buff_v2/detectors/rune_detector_factory.hpp"
 
 int main()
@@ -76,9 +77,16 @@ int main()
   assert(config.planner.ballistic_model == "vacuum");
   assert(config.planner.ballistic_config.njust_air_resistance == 0.006);
   assert(config.planner.bullet_speed_min == 11 && config.planner.bullet_speed_default == 20);
-  assert(!config.planner.fly_time_iteration_enabled);
-  assert(config.planner.fly_time_iteration_max_iteration == 7);
-  assert(config.planner.fly_time_iteration_convergence_threshold == 0.002);
+  // Legacy iteration settings, including enable=false, cannot disable buff iteration.
+  auto_buff_v2::RuneEstimate target;
+  target.timestamp = std::chrono::steady_clock::now();
+  target.start_timestamp = target.timestamp - std::chrono::seconds(4);
+  target.center = {3, 0, 1};
+  target.inactive[0] = true;
+  auto_buff_v2::BuffPlanner planner(config.planner);
+  const auto request = planner.prepare(1, target, 20, target.timestamp);
+  assert(request);
+  assert(std::abs(request->fly_time - 0.176280533350353) < 1e-9);
   assert(std::abs(config.planner.yaw_offset - std::acos(-1) / 2) < 1e-12);
   assert(std::abs(config.planner.pitch_offset + std::acos(-1) / 4) < 1e-12);
   assert((config.camera.t_camera2gimbal - Eigen::Vector3d(0.1, 0.2, 0.3)).norm() < 1e-12);

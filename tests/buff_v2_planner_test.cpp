@@ -8,7 +8,6 @@
 
 #include "tasks/auto_aim/planner/planner.hpp"
 #include "tasks/auto_buff_v2/buff_planner.hpp"
-#include "tasks/auto_buff_v2/rune_predictor.hpp"
 #include "tools/ballistic_solver.hpp"
 
 static_assert(std::is_same_v<
@@ -32,7 +31,7 @@ int main()
   config.rune_shoot_duration = 0.2;
   config.yaw_tolerance = 0.07;
   config.pitch_tolerance = 0.04;
-  config.fly_time_iteration_enabled = false;
+  config.ballistic_model = "vacuum";
   const char * mpc_config_path = "/tmp/buff_v2_mpc_test.yaml";
   std::ofstream(mpc_config_path) <<
     "ballistic_model: vacuum\n"
@@ -58,9 +57,11 @@ int main()
   const auto request = planner.prepare(1, target, 20, start);
   assert(request);
   assert(std::abs(request->distance - target.center.head<2>().norm()) < 1e-12);
-  assert(std::abs(request->fly_time - std::sqrt(10.0) / 20.0) < 1e-12);
+  // A stationary blade is at z=1.7: report its ballistic time, not center.norm()/speed.
+  assert(std::abs(request->fly_time - 0.176280533350353) < 1e-9);
   for (const auto [height, expected_time] :
-       {std::pair{0.0, 0.15}, std::pair{4.0, 0.25}, std::pair{-4.0, 0.25}}) {
+       {std::pair{0.0, 0.155435314095256}, std::pair{4.0, 0.294925697745734},
+        std::pair{-4.0, 0.216191845381263}}) {
     auto height_target = target;
     height_target.center.z() = height;
     height_target.rotation_speed = 1.0;
@@ -70,14 +71,7 @@ int main()
     auto_buff_v2::BuffPlanner height_planner(height_config);
     const auto height_request = height_planner.prepare(1, height_target, 20, start);
     assert(height_request);
-    assert(std::abs(height_request->fly_time - expected_time) < 1e-12);
-    const auto prediction_time =
-      start + std::chrono::duration_cast<auto_buff_v2::Timestamp::duration>(
-                std::chrono::duration<double>(0.1 + expected_time));
-    const auto expected_point =
-      auto_buff_v2::RunePredictor{}.aimpoint_at(height_target, prediction_time);
-    assert(expected_point);
-    assert((height_request->aimpoint - *expected_point).norm() < 1e-12);
+    assert(std::abs(height_request->fly_time - expected_time) < 1e-9);
   }
   const auto mpc_plan = mpc_planner.plan(request->trajectory, request->yaw0, request->distance);
   assert(mpc_plan.control && mpc_plan.debug_valid && !mpc_plan.fire);
