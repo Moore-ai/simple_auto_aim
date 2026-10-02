@@ -1,9 +1,10 @@
-#include "buff_detector_debug.hpp"
+#include "njust_buff_detector_debug.hpp"
 
 #include <algorithm>
 #include <condition_variable>
 #include <iostream>
 #include <mutex>
+#include <stdexcept>
 #include <thread>
 
 #include <fmt/format.h>
@@ -20,23 +21,29 @@ namespace tools
 {
 using Json = nlohmann::json;
 
-BuffDetectorDebug::BuffDetectorDebug(
-  auto_buff_v2::BuffConfig::Detector config, BuffDetectorDebugTarget target)
+NjustBuffDetectorDebug::NjustBuffDetectorDebug(
+  auto_buff_v2::BuffConfig::Detector config, NjustBuffDetectorDebugTarget target)
 : target_(target)
 {
-  static_cast<auto_buff_v2::BuffConfig::Detector &>(detector_.config) = std::move(config);
+  if (config.type != "njust")
+    throw std::invalid_argument("Njust detector debug only supports buff_v2.detector: njust");
+  detector_.config = auto_buff_v2::NjustRuneDetector::Config::load(config.parameters["njust"]);
+  detector_.config.fx = config.fx;
+  detector_.config.fy = config.fy;
+  detector_.measurements.emplace();
 }
 
-BuffDetectorDebugFrame BuffDetectorDebug::process(const FrameFacts & facts)
+NjustBuffDetectorDebugFrame NjustBuffDetectorDebug::process(const FrameFacts & facts)
 {
   if (const auto color = facts.enemy_color())
-    detector_.config.enemy_red = *color == io::InfantryEnemyColor::red;
-  BuffDetectorDebugFrame frame;
+    detector_.set_enemy_red(*color == io::InfantryEnemyColor::red);
+  NjustBuffDetectorDebugFrame frame;
   frame.target = target_;
-  const auto elements = detector_.detect(facts.image, &frame.measurements);
+  const auto elements = detector_.detect(facts.image);
+  frame.measurements = *detector_.measurements;
   auto & candidates = frame.measurements.candidates;
   candidates.erase(std::remove_if(candidates.begin(), candidates.end(), [&](const auto & item) {
-    if (target_ == BuffDetectorDebugTarget::bullseye) return !item.radius_pass;
+    if (target_ == NjustBuffDetectorDebugTarget::bullseye) return !item.radius_pass;
     // An icon and its contour measurement use the same minAreaRect center. Keep only
     // contours that passed the main detector's area, shape and R-skeleton checks.
     return std::none_of(elements.icons.begin(), elements.icons.end(), [&](const auto & icon) {
@@ -45,7 +52,7 @@ BuffDetectorDebugFrame BuffDetectorDebug::process(const FrameFacts & facts)
   }), candidates.end());
 
   BuffDebugData debug;
-  if (target_ == BuffDetectorDebugTarget::icon) {
+  if (target_ == NjustBuffDetectorDebugTarget::icon) {
     debug.icon_count = elements.icons.size();
     for (const auto & icon : elements.icons)
       debug.detections.push_back({icon.center, {}, fmt::format("R: {:.3f}", icon.score)});
@@ -60,7 +67,8 @@ BuffDetectorDebugFrame BuffDetectorDebug::process(const FrameFacts & facts)
   frame.snapshot = facts.snapshot({}, {}, {}, std::move(debug));
   return frame;
 }
-nlohmann::json detail::buff_detector_values(const auto_buff_v2::RuneDetectorMeasurements & debug)
+nlohmann::json detail::njust_buff_detector_values(
+  const auto_buff_v2::NjustDetectorMeasurements & debug)
 {
   Json candidates = Json::array();
   for (const auto & candidate : debug.candidates) {
@@ -81,7 +89,7 @@ nlohmann::json detail::buff_detector_values(const auto_buff_v2::RuneDetectorMeas
           {"candidates", std::move(candidates)}};
 }
 
-foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_buff_detector_channel()
+foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_njust_buff_detector_channel()
 {
   Json properties;
   for (const auto * name :
@@ -107,12 +115,13 @@ foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_buff_detector_chan
     {"$schema", "http://json-schema.org/draft-07/schema#"},
     {"type", "object"}, {"properties", properties}}.dump();
   foxglove::Schema schema{
-    "simple_auto_aim.BuffDetector", "jsonschema",
+    "simple_auto_aim.NjustBuffDetector", "jsonschema",
     reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
   return foxglove::RawChannel::create("/buff_v2/detector", "json", std::move(schema));
 }
 
-cv::Mat detail::buff_detector_debug_image(const BuffDetectorDebugFrame & frame, bool draw_roi)
+cv::Mat detail::njust_buff_detector_debug_image(
+  const NjustBuffDetectorDebugFrame & frame, bool draw_roi)
 {
   auto image = frame.snapshot.image.clone();
   const cv::Scalar yellow{0, 255, 255};
@@ -126,19 +135,19 @@ cv::Mat detail::buff_detector_debug_image(const BuffDetectorDebugFrame & frame, 
                 yellow, 1, cv::LINE_AA);
   }
   const auto & debug = frame.snapshot.buff_debug;
-  const auto status = frame.target == BuffDetectorDebugTarget::icon ?
-    fmt::format("Buff R:{}", debug.icon_count) : fmt::format("Buff B:{}/5", debug.bullseye_count);
+  const auto status = frame.target == NjustBuffDetectorDebugTarget::icon ?
+    fmt::format("Njust R:{}", debug.icon_count) : fmt::format("Njust B:{}/5", debug.bullseye_count);
   cv::putText(image, status, {10, 25}, cv::FONT_HERSHEY_SIMPLEX, 0.6, yellow, 2, cv::LINE_AA);
   // Use the main chain's green observation drawing, without its joint-model status.
   detail::draw_buff_overlay(image, debug);
-  if (draw_roi && frame.target == BuffDetectorDebugTarget::icon) {
+  if (draw_roi && frame.target == NjustBuffDetectorDebugTarget::icon) {
     for (const auto & roi : frame.measurements.icon_rois)
       cv::rectangle(image, roi, {0, 255, 0}, 2, cv::LINE_AA);
   }
   return image;
 }
 
-class BuffDetectorDebugVisualizer::Impl
+class NjustBuffDetectorDebugVisualizer::Impl
 {
 public:
   explicit Impl(detail::FoxgloveConfig config) : limiter(config.image_fps) {}
@@ -151,13 +160,13 @@ public:
   bool draw_roi = true;
   std::mutex mutex;
   std::condition_variable ready;
-  std::optional<BuffDetectorDebugFrame> latest;
+  std::optional<NjustBuffDetectorDebugFrame> latest;
   bool stopped = false;
   std::thread worker;
   const FrameSnapshot::Timestamp steady_origin = std::chrono::steady_clock::now();
   const std::chrono::system_clock::time_point system_origin = std::chrono::system_clock::now();
 
-  void publish_frame(const BuffDetectorDebugFrame & frame)
+  void publish_frame(const NjustBuffDetectorDebugFrame & frame)
   {
     const auto elapsed = frame.snapshot.timestamp - steady_origin;
     const auto wall_time = system_origin +
@@ -165,7 +174,7 @@ public:
     const auto log_time = static_cast<uint64_t>(
       std::chrono::duration_cast<std::chrono::nanoseconds>(wall_time.time_since_epoch()).count());
     if (detector) {
-      const auto payload = detail::buff_detector_values(frame.measurements).dump();
+      const auto payload = detail::njust_buff_detector_values(frame.measurements).dump();
       detector->log(reinterpret_cast<const std::byte *>(payload.data()), payload.size(), log_time);
     }
     if (!limiter.should_publish(frame.snapshot.timestamp)) return;
@@ -181,11 +190,11 @@ public:
       channel->log(message, log_time);
     };
     log_image(image_raw, frame.snapshot.image);
-    log_image(image, detail::buff_detector_debug_image(frame, draw_roi));
+    log_image(image, detail::njust_buff_detector_debug_image(frame, draw_roi));
   }
 };
 
-BuffDetectorDebugVisualizer::BuffDetectorDebugVisualizer(const std::string & config_path)
+NjustBuffDetectorDebugVisualizer::NjustBuffDetectorDebugVisualizer(const std::string & config_path)
 {
   const auto yaml = tools::load(config_path);
   const auto config = detail::load_foxglove_config(yaml);
@@ -196,7 +205,7 @@ BuffDetectorDebugVisualizer::BuffDetectorDebugVisualizer(const std::string & con
   foxglove::WebSocketServerOptions options;
   options.host = "0.0.0.0";
   options.port = 8765;
-  options.name = "simple_auto_aim buff detector debug";
+  options.name = "simple_auto_aim njust detector debug";
   auto server = foxglove::WebSocketServer::create(std::move(options));
   if (!server) {
     std::cerr << "Failed to start Foxglove server: " << foxglove::strerror(server.error()) << '\n';
@@ -208,12 +217,12 @@ BuffDetectorDebugVisualizer::BuffDetectorDebugVisualizer(const std::string & con
     else
       std::cerr << "Failed to create debug channel: " << foxglove::strerror(result.error()) << '\n';
   };
-  create_channel(impl_->detector, detail::create_buff_detector_channel());
+  create_channel(impl_->detector, detail::create_njust_buff_detector_channel());
   create_channel(impl_->image_raw, foxglove::schemas::CompressedImageChannel::create("/image_raw"));
   create_channel(impl_->image, foxglove::schemas::CompressedImageChannel::create("/image"));
   impl_->worker = std::thread([this] {
     while (true) {
-      std::optional<BuffDetectorDebugFrame> frame;
+      std::optional<NjustBuffDetectorDebugFrame> frame;
       {
         std::unique_lock<std::mutex> lock(impl_->mutex);
         impl_->ready.wait(lock, [this] { return impl_->stopped || impl_->latest.has_value(); });
@@ -226,7 +235,7 @@ BuffDetectorDebugVisualizer::BuffDetectorDebugVisualizer(const std::string & con
   });
 }
 
-BuffDetectorDebugVisualizer::~BuffDetectorDebugVisualizer()
+NjustBuffDetectorDebugVisualizer::~NjustBuffDetectorDebugVisualizer()
 {
   {
     std::lock_guard<std::mutex> lock(impl_->mutex);
@@ -236,7 +245,7 @@ BuffDetectorDebugVisualizer::~BuffDetectorDebugVisualizer()
   if (impl_->worker.joinable()) impl_->worker.join();
 }
 
-void BuffDetectorDebugVisualizer::publish(BuffDetectorDebugFrame frame)
+void NjustBuffDetectorDebugVisualizer::publish(NjustBuffDetectorDebugFrame frame)
 {
   if (!impl_->server) return;
   {
@@ -247,7 +256,7 @@ void BuffDetectorDebugVisualizer::publish(BuffDetectorDebugFrame frame)
   impl_->ready.notify_one();
 }
 
-int run_buff_detector_debug(int argc, char * argv[], BuffDetectorDebugTarget target)
+int run_njust_buff_detector_debug(int argc, char * argv[], NjustBuffDetectorDebugTarget target)
 {
   const std::string keys =
     "{help h usage ? | | 输出命令行参数说明}"
@@ -255,6 +264,9 @@ int run_buff_detector_debug(int argc, char * argv[], BuffDetectorDebugTarget tar
     "{mode           |1| 1=小符，2=大符}"
     "{target-color   | | 必填：red、blue 或 none（由下位机决定）}";
   cv::CommandLineParser cli(argc, argv, keys);
+  cli.about(target == NjustBuffDetectorDebugTarget::icon ?
+    "Njust R 标检测调试：仅支持 buff_v2.detector: njust，参数位于 buff_v2.njust" :
+    "Njust 靶心检测调试：仅支持 buff_v2.detector: njust，参数位于 buff_v2.njust");
   if (cli.has("help") || !cli.has("@config-path")) {
     cli.printMessage();
     return 0;
@@ -275,13 +287,18 @@ int run_buff_detector_debug(int argc, char * argv[], BuffDetectorDebugTarget tar
     return 2;
   }
 
+  const auto config = auto_buff_v2::BuffConfig::load(config_path);
+  if (config.detector.type != "njust") {
+    std::cerr << "此调试程序仅支持 buff_v2.detector: njust，当前为 "
+              << config.detector.type << '\n';
+    return 2;
+  }
   Exiter exiter;
   io::Gimbal gimbal(config_path);
   io::Camera camera(config_path);
-  const auto config = auto_buff_v2::BuffConfig::load(config_path);
   FrameCapture frames(camera, gimbal, target_color_override);
-  BuffDetectorDebug detector(config.detector, target);
-  BuffDetectorDebugVisualizer visualizer(config_path);
+  NjustBuffDetectorDebug detector(config.detector, target);
+  NjustBuffDetectorDebugVisualizer visualizer(config_path);
   while (!exiter.exit()) {
     FrameFacts facts;
     if (!frames.next(facts)) break;

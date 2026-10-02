@@ -183,23 +183,26 @@ cd ~/simple_auto_aim
 ./build/capture
 ```
 
-## 9 buff_v2 R 标检测调试
+## 9 buff_v2 Njust R 标检测调试
 
-独立入口为 `src/buff_v2_r_detector_debug.cpp`。它复用 `standard` 的相机、云台反馈、
-`BuffConfig`、颜色选择、`FrameCapture`、`RuneDetector` 和 Foxglove SDK。
-调试处理和发布分别封装在 `tools/buff_detector_debug.*` 的 `BuffDetectorDebug` 和
-`BuffDetectorDebugVisualizer` 中，仅两个调试目标链接此模块。
+此程序仅适用于 Njust 检测器，配置必须设置 `buff_v2.detector: njust`。
+选择其他检测器时会在连接相机和串口前报错退出。
+
+独立入口为 `src/buff_v2_njust_r_detector_debug.cpp`。它复用 `standard` 的相机、云台反馈、
+`BuffConfig`、颜色选择、`FrameCapture`、`NjustRuneDetector` 和 Foxglove SDK。
+调试处理和发布分别封装在 `tools/njust_buff_detector_debug.*` 的 `NjustBuffDetectorDebug` 和
+`NjustBuffDetectorDebugVisualizer` 中，仅两个调试目标链接此模块。
 调试入口仅运行检测，不启动状态估计、云台规划或发射线程。
 
 ```bash
 cmake -S . -B build
-cmake --build build --target buff_v2_r_detector_debug -j2
-./build/buff_v2_r_detector_debug configs/standard.yaml --mode=1 --target-color=blue
+cmake --build build --target buff_v2_njust_r_detector_debug -j2
+./build/buff_v2_njust_r_detector_debug configs/standard.yaml --mode=1 --target-color=blue
 ```
 
 `--mode=2` 对应大符模式；两个模式的检测过程和参数相同。`--target-color=red` 检测红色，`--target-color=none`
 由下位机反馈决定颜色，与主入口相同。检测参数直接读取同一份配置中的相机内参和
-`buff_v2` 下的检测参数，无需维护第二份参数。配置中的 `foxglove.enable` 需要开启。
+`buff_v2.njust` 下的检测参数，无需维护第二份参数。配置中的 `foxglove.enable` 需要开启。
 
 在 Foxglove 中连接 `ws://localhost:8765`，新增 Plot 面板并添加以下路径：
 
@@ -234,7 +237,7 @@ cmake --build build --target buff_v2_r_detector_debug -j2
 用于骨架评分的局部 ROI 框；设为 `false` 可关闭。框包含轮廓外扩的 5 像素，并裁剪到图像边界。
 编号随每帧轮廓顺序变化，不代表跨帧跟踪 ID。
 
-记录点位于 `RuneDetector::detect` 中计算 `radius` 和 `area` 后、形状与尺寸筛选之前，
+记录点位于 `NjustRuneDetector::detect` 中计算 `radius` 和 `area` 后、形状与尺寸筛选之前，
 R 标调试封装随后按主检测器最终识别结果严格过滤，只发布通过面积、椭圆形状、
 靶心内部排除及 R 标骨架评分检查的轮廓。亮点、非 R 形状和识别失败的轮廓不进入 `candidates`；
 识别失败时候选数组为空，但尺寸阈值继续发布。
@@ -246,16 +249,19 @@ R 标调试封装随后按主检测器最终识别结果严格过滤，只发布
 `foxglove.image_fps` 限制；发布队列沿用主链路的最新帧机制，客户端较慢时可能跳帧。
 `standard` 不采集这些候选诊断数据，也不创建 `/buff_v2/detector` 通道。两个入口使用相同端口，应分别运行。
 
-## 10 buff_v2 靶心检测调试
+## 10 buff_v2 Njust 靶心检测调试
 
-独立入口为 `src/buff_v2_bullseye_detector_debug.cpp`，同样复用主链路的相机、云台反馈、
-颜色选择、配置、`RuneDetector` 和 Foxglove SDK，使用同一调试封装，不启动状态估计、
+此程序仅适用于 Njust 检测器，配置必须设置 `buff_v2.detector: njust`。
+选择其他检测器时会在连接相机和串口前报错退出。
+
+独立入口为 `src/buff_v2_njust_bullseye_detector_debug.cpp`，同样复用主链路的相机、云台反馈、
+颜色选择、配置、`NjustRuneDetector` 和 Foxglove SDK，使用同一调试封装，不启动状态估计、
 规划或发射线程。
 
 ```bash
 cmake -S . -B build
-cmake --build build --target buff_v2_bullseye_detector_debug -j2
-./build/buff_v2_bullseye_detector_debug configs/standard.yaml --mode=1 --target-color=blue
+cmake --build build --target buff_v2_njust_bullseye_detector_debug -j2
+./build/buff_v2_njust_bullseye_detector_debug configs/standard.yaml --mode=1 --target-color=blue
 ```
 
 `--mode=2` 对应大符模式（检测参数与小符一致）；`--target-color=red|blue|none` 的含义与 R 标调试入口相同。
@@ -274,5 +280,5 @@ Plot 面板使用 `/buff_v2/detector.candidates[:].radius`、
 靶心入口仅发布靶心候选和成功检测标注，R 标入口仅发布 R 标候选和成功检测标注。
 靶心候选按主检测器的半径分支划分；R 标候选必须通过主检测器最终的 R 标识别，
 仅半径落在靶心范围之外不足以成为 R 标观测。
-阈值属于共用配置参数，不代表另一类对象的观测。两个调试入口均不发布联合模型重投影标注。
+阈值读取自 `buff_v2.njust`，属于 Njust 的共用检测参数，不代表另一类对象的观测。两个调试入口均不发布联合模型重投影标注。
 三个运行入口使用同一相机、串口和 Foxglove 端口，应分别运行。

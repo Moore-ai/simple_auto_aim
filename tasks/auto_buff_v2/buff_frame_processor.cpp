@@ -5,21 +5,22 @@
 #include <fmt/format.h>
 #include <opencv2/imgproc.hpp>
 
+#include "detectors/rune_detector_factory.hpp"
+
 namespace auto_buff_v2
 {
 BuffFrameProcessor::BuffFrameProcessor(RuneModel & model, BuffConfig::Detector detector_config)
-: model_(model)
+: model_(model), detector_(make_rune_detector(detector_config))
 {
-  static_cast<BuffConfig::Detector &>(detector_.config) = std::move(detector_config);
 }
 
 tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & facts)
 {
   if (const auto color = facts.enemy_color())
-    detector_.config.enemy_red = *color == io::InfantryEnemyColor::red;
+    detector_->set_enemy_red(*color == io::InfantryEnemyColor::red);
   model_.set_q_gimbal2world(facts.q_gimbal2world);
   tools::BuffDebugData buff_debug;
-  const auto elements = detector_.detect(facts.image);
+  const auto elements = detector_->detect(facts.image);
   model_.update(elements, facts.timestamp);
   const auto target = model_.state();
 

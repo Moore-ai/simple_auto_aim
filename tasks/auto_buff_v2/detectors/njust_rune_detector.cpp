@@ -1,4 +1,4 @@
-#include "rune_detector.hpp"
+#include "njust_rune_detector.hpp"
 
 #include <algorithm>
 #include <array>
@@ -12,6 +12,18 @@
 
 namespace auto_buff_v2
 {
+NjustRuneDetector::Config NjustRuneDetector::Config::load(const YAML::Node & node)
+{
+  Config result;
+  if (!node) return result;
+  result.min_distance = node["min_distance"].as<double>(result.min_distance);
+  result.max_distance = node["max_distance"].as<double>(result.max_distance);
+  result.active_threshold = node["active_threshold"].as<double>(result.active_threshold);
+  result.match_threshold = node["match_threshold"].as<double>(result.match_threshold);
+  result.max_perspective = node["max_perspective"].as<double>(result.max_perspective);
+  return result;
+}
+
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
@@ -37,7 +49,7 @@ cv::Mat extract_channel(const cv::Mat & image, bool enemy_red)
   return result;
 }
 
-double icon_score(const cv::Mat & image, RuneIconScoreMeasurement * measurement)
+double icon_score(const cv::Mat & image, NjustIconScoreMeasurement * measurement)
 {
   cv::Mat gray, binary, skeleton;
   cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
@@ -209,8 +221,7 @@ std::optional<RuneBullseye> bullseye_feature(
 }
 }  // namespace
 
-RuneElements RuneDetector::detect(
-  const cv::Mat & image, RuneDetectorMeasurements * measurements) const
+RuneElements NjustRuneDetector::detect(const cv::Mat & image)
 {
   RuneElements result;
   if (measurements) {
@@ -316,7 +327,7 @@ RuneElements RuneDetector::detect(
     roi.width += 10;
     roi.height += 10;
     roi &= cv::Rect(0, 0, image.cols, image.rows);
-    RuneIconScoreMeasurement icon_measurement;
+    NjustIconScoreMeasurement icon_measurement;
     const double score = icon_score(image(roi), measurements ? &icon_measurement : nullptr);
     if (measurements) {
       icon_measurement.center = center;

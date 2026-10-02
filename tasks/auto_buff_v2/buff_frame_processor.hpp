@@ -1,8 +1,10 @@
 #ifndef AUTO_BUFF_V2__BUFF_FRAME_PROCESSOR_HPP
 #define AUTO_BUFF_V2__BUFF_FRAME_PROCESSOR_HPP
 
+#include <memory>
+
 #include "buff_config.hpp"
-#include "rune_detector.hpp"
+#include "detectors/rune_detector.hpp"
 #include "rune_model.hpp"
 #include "tools/frame_facts.hpp"
 #include "tools/processed_frame.hpp"
@@ -19,7 +21,7 @@ public:
 
 private:
   RuneModel & model_;
-  RuneDetector detector_;
+  std::unique_ptr<RuneDetector> detector_;
 };
 }  // namespace auto_buff_v2
 

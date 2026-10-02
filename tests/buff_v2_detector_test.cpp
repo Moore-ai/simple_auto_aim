@@ -1,15 +1,19 @@
 #include <cassert>
 #include <cmath>
+#include <stdexcept>
+#include <type_traits>
 
 #include <opencv2/imgproc.hpp>
 
-#include "tasks/auto_buff_v2/rune_detector.hpp"
+#include "tasks/auto_buff_v2/detectors/njust_rune_detector.hpp"
+#include "tasks/auto_buff_v2/detectors/rune_detector_factory.hpp"
 
 int main()
 {
   cv::Mat image = cv::Mat::zeros(400, 400, CV_8UC3);
   cv::circle(image, {200, 200}, 42, {255, 0, 0}, cv::FILLED);
-  auto_buff_v2::RuneDetector detector;
+  static_assert(std::is_abstract_v<auto_buff_v2::RuneDetector>);
+  auto_buff_v2::NjustRuneDetector detector;
   detector.config.fx = 1000;
   detector.config.fy = 1000;
   detector.config.min_distance = 2;
@@ -89,10 +93,11 @@ int main()
   assert(cv::norm(icon_result.icons.front().center - expected_icon_center) < 0.1);
 
   // Diagnostics must retain measurements even when the size gates reject the R.
-  auto_buff_v2::RuneDetectorMeasurements debug;
+  detector.measurements.emplace();
+  const auto & debug = *detector.measurements;
   detector.config.fx = 100;
   detector.config.fy = 100;
-  const auto rejected_icon = detector.detect(icon_image, &debug);
+  const auto rejected_icon = detector.detect(icon_image);
   assert(rejected_icon.icons.empty());
   assert(debug.candidates.size() == 1);
   assert(debug.candidates.front().area > debug.max_icon_area);
@@ -104,13 +109,35 @@ int main()
   assert(std::abs(debug.max_icon_area - 13.75 * 3.14159265358979323846) < 1e-6);
   assert(std::abs(debug.candidates.front().radius -
                   std::sqrt(debug.candidates.front().area / 3.14159265358979323846)) < 1e-6);
-  detector.detect(cv::Mat::zeros(400, 400, CV_8UC3), &debug);
+  detector.detect(cv::Mat::zeros(400, 400, CV_8UC3));
   assert(debug.candidates.empty());
   assert(debug.max_radius > 0);
-  detector.detect(cv::Mat{}, &debug);
+  detector.detect(cv::Mat{});
   assert(debug.candidates.empty());
   assert(debug.max_radius == 0);
 
   detector.config.enemy_red = true;
   assert(detector.detect(image).bullseyes.empty());
+
+  auto_buff_v2::BuffConfig::Detector factory_config;
+  factory_config.fx = factory_config.fy = 1000;
+  factory_config.parameters["njust"]["min_distance"] = 2;
+  auto selected = auto_buff_v2::make_rune_detector(factory_config);
+  selected->set_enemy_red(false);
+  assert(selected->detect(image).bullseyes.size() == 1);
+  selected->set_enemy_red(true);
+  assert(selected->detect(image).bullseyes.empty());
+  factory_config.parameters["njust"]["min_distance"] = 20;
+  factory_config.parameters["njust"]["max_distance"] = 25;
+  auto far_detector = auto_buff_v2::make_rune_detector(factory_config);
+  assert(far_detector->detect(image).bullseyes.empty());
+  factory_config.type = "unknown";
+  bool rejected = false;
+  try {
+    auto_buff_v2::make_rune_detector(factory_config);
+  } catch (const std::invalid_argument &) {
+    rejected = true;
+  }
+  assert(rejected);
+
 }

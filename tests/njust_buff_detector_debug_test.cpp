@@ -1,16 +1,33 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <stdexcept>
+#include <string>
 
 #include <opencv2/imgproc.hpp>
 
-#include "tools/buff_detector_debug.hpp"
+#include "tools/njust_buff_detector_debug.hpp"
+#include "tasks/auto_buff_v2/detectors/rune_detector_factory.hpp"
 
 int main()
 {
   auto_buff_v2::BuffConfig::Detector detector;
-  detector.min_distance = 2;
-  detector.max_distance = 5;
+  detector.parameters["njust"]["min_distance"] = 2;
+  detector.parameters["njust"]["max_distance"] = 5;
+  // Both standalone tools must clearly reject a different detector selection.
+  auto unsupported = detector;
+  unsupported.type = "other";
+  for (const auto target :
+       {tools::NjustBuffDetectorDebugTarget::icon, tools::NjustBuffDetectorDebugTarget::bullseye}) {
+    bool rejected = false;
+    try {
+      tools::NjustBuffDetectorDebug debug(unsupported, target);
+    } catch (const std::invalid_argument & error) {
+      rejected = std::string(error.what()).find("only supports buff_v2.detector: njust") !=
+                 std::string::npos;
+    }
+    assert(rejected);
+  }
   tools::FrameFacts facts{};
   facts.timestamp = std::chrono::steady_clock::now();
   facts.q_gimbal2world = Eigen::Quaterniond::Identity();
@@ -18,16 +35,19 @@ int main()
   // Both objects in one frame must produce disjoint debug observations.
   auto mixed_detector = detector;
   mixed_detector.fx = mixed_detector.fy = 5000;
+  const auto match_threshold = auto_buff_v2::NjustRuneDetector::Config::load(
+    mixed_detector.parameters["njust"]).match_threshold;
   cv::Mat mixed = cv::Mat::zeros(700, 900, CV_8UC3);
   cv::circle(mixed, {600, 350}, 170, {255, 0, 0}, cv::FILLED);
   cv::putText(mixed, "R", {120, 260}, cv::FONT_HERSHEY_SIMPLEX, 3, {255, 0, 0}, 12,
               cv::LINE_8);
-  auto_buff_v2::RuneDetector joint_detector;
-  static_cast<auto_buff_v2::BuffConfig::Detector &>(joint_detector.config) = mixed_detector;
-  const auto joint = joint_detector.detect(mixed);
+  auto joint_detector = auto_buff_v2::make_rune_detector(mixed_detector);
+  const auto joint = joint_detector->detect(mixed);
   assert(joint.icons.size() == 1 && joint.bullseyes.size() == 1);
-  tools::BuffDetectorDebug icon_processor(mixed_detector, tools::BuffDetectorDebugTarget::icon);
-  tools::BuffDetectorDebug bull_processor(mixed_detector, tools::BuffDetectorDebugTarget::bullseye);
+  tools::NjustBuffDetectorDebug icon_processor(
+    mixed_detector, tools::NjustBuffDetectorDebugTarget::icon);
+  tools::NjustBuffDetectorDebug bull_processor(
+    mixed_detector, tools::NjustBuffDetectorDebugTarget::bullseye);
   auto mixed_facts = facts;
   mixed_facts.image = mixed;
   const auto icon_frame = icon_processor.process(mixed_facts);
@@ -51,20 +71,20 @@ int main()
     assert(!debug->blade_polygon && !debug->icon && !debug->info_anchor);
     assert(debug->info.empty());
   }
-  const auto icon_image = tools::detail::buff_detector_debug_image(icon_frame);
+  const auto icon_image = tools::detail::njust_buff_detector_debug_image(icon_frame);
   // The R scoring crop extends five pixels beyond the dilated R contour.
   // Its top edge is y=185 for this fixture; it must be drawn in observation green.
   const auto roi_pixel = icon_image.at<cv::Vec3b>(185, 150);
   assert(roi_pixel == cv::Vec3b(0, 255, 0));
-  const auto no_roi_image = tools::detail::buff_detector_debug_image(icon_frame, false);
+  const auto no_roi_image = tools::detail::njust_buff_detector_debug_image(icon_frame, false);
   assert(no_roi_image.at<cv::Vec3b>(185, 150) == mixed.at<cv::Vec3b>(185, 150));
-  const auto bull_image = tools::detail::buff_detector_debug_image(bull_frame);
+  const auto bull_image = tools::detail::njust_buff_detector_debug_image(bull_frame);
   const cv::Rect bull_roi(420, 170, 360, 360);
   const cv::Rect icon_roi(80, 140, 160, 160);
   assert(cv::norm(icon_image(bull_roi), mixed(bull_roi), cv::NORM_INF) == 0);
   assert(cv::norm(bull_image(icon_roi), mixed(icon_roi), cv::NORM_INF) == 0);
   for (const auto * frame : {&icon_frame, &bull_frame}) {
-    const auto marked = tools::detail::buff_detector_debug_image(*frame);
+    const auto marked = tools::detail::njust_buff_detector_debug_image(*frame);
     const auto point = frame->snapshot.buff_debug.detections.front().point;
     const auto pixel = marked.at<cv::Vec3b>(cvRound(point.y) - 5, cvRound(point.x));
     assert(pixel[0] == 0 && pixel[1] > 0 && pixel[2] == 0);
@@ -98,9 +118,9 @@ int main()
   assert(clean_icon.measurements.candidates.size() == 1);
   assert(cv::norm(clean_icon.measurements.candidates.front().center -
                   joint.icons.front().center) < 2);
-  const auto clean_values = tools::detail::buff_detector_values(clean_icon.measurements);
+  const auto clean_values = tools::detail::njust_buff_detector_values(clean_icon.measurements);
   assert(clean_values.at("candidates").size() == 1);
-  const auto clean_image = tools::detail::buff_detector_debug_image(clean_icon);
+  const auto clean_image = tools::detail::njust_buff_detector_debug_image(clean_icon);
   const cv::Rect clutter_roi(0, 360, 360, 240);
   assert(cv::norm(clean_image(clutter_roi), cluttered(clutter_roi), cv::NORM_INF) == 0);
   assert(cv::norm(clean_image(bull_roi), cluttered(bull_roi), cv::NORM_INF) == 0);
@@ -115,18 +135,19 @@ int main()
 
   // Scores rejected by the threshold must remain available for threshold tuning.
   auto rejecting_detector = mixed_detector;
-  rejecting_detector.match_threshold = 1.1;
-  tools::BuffDetectorDebug rejecting_processor(
-    rejecting_detector, tools::BuffDetectorDebugTarget::icon);
+  rejecting_detector.parameters.reset(YAML::Clone(mixed_detector.parameters));
+  rejecting_detector.parameters["njust"]["match_threshold"] = 1.1;
+  tools::NjustBuffDetectorDebug rejecting_processor(
+    rejecting_detector, tools::NjustBuffDetectorDebugTarget::icon);
   mixed_facts.image = icon_only;
   const auto rejected = rejecting_processor.process(mixed_facts);
   assert(rejected.snapshot.buff_debug.detections.empty());
-  const auto rejected_values = tools::detail::buff_detector_values(rejected.measurements);
+  const auto rejected_values = tools::detail::njust_buff_detector_values(rejected.measurements);
   assert(rejected_values.contains("match_threshold"));
   assert(rejected_values.at("match_threshold") == 1.1);
   assert(rejected_values.at("icon_scores").size() == 1);
   const auto & rejected_score = rejected_values.at("icon_scores").at(0);
-  assert(rejected_score.at("score").get<double>() >= mixed_detector.match_threshold);
+  assert(rejected_score.at("score").get<double>() >= match_threshold);
   assert(rejected_score.at("score").get<double>() < 1.1);
   assert(rejected_score.contains("endpoints"));
   assert(rejected_score.at("endpoints").get<int>() >= 1);
@@ -136,26 +157,26 @@ int main()
   assert(rejected_score.at("holes") == 1);
   assert(std::abs(rejected_score.at("center_x").get<double>() -
                   joint.icons.front().center.x) < 2);
-  const auto accepted_values = tools::detail::buff_detector_values(icon_frame.measurements);
+  const auto accepted_values = tools::detail::njust_buff_detector_values(icon_frame.measurements);
   assert(accepted_values.at("icon_scores").size() == 1);
   assert(accepted_values.at("icon_scores").at(0).at("score") == rejected_score.at("score"));
   for (const auto * name : {"endpoints", "lower_endpoints", "branches", "holes"})
     assert(accepted_values.at("icon_scores").at(0).at(name) == rejected_score.at(name));
-  const auto disk_values = tools::detail::buff_detector_values(not_an_icon.measurements);
+  const auto disk_values = tools::detail::njust_buff_detector_values(not_an_icon.measurements);
   assert(disk_values.at("icon_scores").size() == 1);
   for (const auto * name : {"endpoints", "lower_endpoints", "branches", "holes"})
     assert(disk_values.at("icon_scores").at(0).at(name) == 0);
-  const auto empty_scores = tools::detail::buff_detector_values(no_icon.measurements);
+  const auto empty_scores = tools::detail::njust_buff_detector_values(no_icon.measurements);
   assert(empty_scores.at("icon_scores").empty());
-  assert(empty_scores.at("match_threshold") == mixed_detector.match_threshold);
+  assert(empty_scores.at("match_threshold") == match_threshold);
 
-  auto_buff_v2::RuneDetectorMeasurements detector_debug;
+  auto_buff_v2::NjustDetectorMeasurements detector_debug;
   detector_debug.min_radius = 1.35;
   detector_debug.max_radius = 16.5;
   detector_debug.min_icon_area = 0.28;
   detector_debug.max_icon_area = 43.2;
   detector_debug.candidates.push_back({{20, 30}, 20, 1256, false, false});
-  const auto detector_values = tools::detail::buff_detector_values(detector_debug);
+  const auto detector_values = tools::detail::njust_buff_detector_values(detector_debug);
   assert(detector_values.at("min_radius") == 1.35);
   assert(detector_values.at("max_radius") == 16.5);
   assert(detector_values.at("min_icon_area") == 0.28);
@@ -164,8 +185,8 @@ int main()
   assert(detector_values.at("candidates").at(0).at("area") == 1256);
   assert(detector_values.at("candidates").at(0).at("center_x") == 20);
   detector_debug.candidates.clear();
-  assert(tools::detail::buff_detector_values(detector_debug).at("candidates").empty());
-  auto detector_channel = tools::detail::create_buff_detector_channel();
+  assert(tools::detail::njust_buff_detector_values(detector_debug).at("candidates").empty());
+  auto detector_channel = tools::detail::create_njust_buff_detector_channel();
   assert(detector_channel.has_value());
   assert(detector_channel.value().topic() == "/buff_v2/detector");
   const auto detector_schema = detector_channel.value().schema();

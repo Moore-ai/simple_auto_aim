@@ -1,8 +1,12 @@
 #include <cassert>
 #include <cmath>
 #include <fstream>
+#include <stdexcept>
+
+#include <yaml-cpp/yaml.h>
 
 #include "tasks/auto_buff_v2/buff_config.hpp"
+#include "tasks/auto_buff_v2/detectors/rune_detector_factory.hpp"
 
 int main()
 {
@@ -26,10 +30,13 @@ int main()
     "  convergence_threshold: 0.002\n"
     "buff_v2:\n"
     "  planner_mode: njust\n"
-    "  min_distance: 2.1\n"
-    "  max_distance: 4.8\n"
-    "  active_threshold: 0.3\n"
-    "  match_threshold: 0.6\n"
+    "  detector: njust\n"
+    "  njust:\n"
+    "    min_distance: 2.1\n"
+    "    max_distance: 4.8\n"
+    "    active_threshold: 0.3\n"
+    "    match_threshold: 0.6\n"
+    "    max_perspective: 55\n"
     "  shoot_delay: 0.07\n"
     "  rune_idle_duration: 0.5\n"
     "  rune_shoot_duration: 0.3\n"
@@ -55,7 +62,13 @@ int main()
   assert(config.camera.camera_matrix.at<double>(0, 0) == 1000);
   assert(config.camera.distort_coeffs.at<double>(0, 1) == -0.2);
   assert(config.detector.fx == 1000 && config.detector.fy == 900);
-  assert(config.detector.min_distance == 2.1 && config.detector.match_threshold == 0.6);
+  assert(config.detector.type == "njust");
+  const auto njust = auto_buff_v2::NjustRuneDetector::Config::load(
+    config.detector.parameters["njust"]);
+  assert(njust.max_distance == 4.8);
+  assert(njust.active_threshold == 0.3);
+  assert(njust.max_perspective == 55);
+  assert(njust.min_distance == 2.1 && njust.match_threshold == 0.6);
   assert(config.model.timeout_seconds == 1.2 && config.model.noise_rotation_angle == 0.002);
   assert(config.model.diverge_face_angle == 40);
   assert(config.planner.mode == "njust");
@@ -69,4 +82,16 @@ int main()
   assert(std::abs(config.planner.yaw_offset - std::acos(-1) / 2) < 1e-12);
   assert(std::abs(config.planner.pitch_offset + std::acos(-1) / 4) < 1e-12);
   assert((config.camera.t_camera2gimbal - Eigen::Vector3d(0.1, 0.2, 0.3)).norm() < 1e-12);
+
+  auto yaml = YAML::LoadFile(path);
+  yaml["buff_v2"]["detector"] = "unknown";
+  std::ofstream(path) << yaml;
+  bool rejected = false;
+  try {
+    auto_buff_v2::make_rune_detector(auto_buff_v2::BuffConfig::load(path).detector);
+  } catch (const std::invalid_argument &) {
+    rejected = true;
+  }
+  assert(rejected);
+
 }

@@ -5,6 +5,7 @@
 
 #include <Eigen/Core>
 #include <opencv2/core.hpp>
+#include <yaml-cpp/yaml.h>
 
 #include "tools/ballistic_solver.hpp"
 
@@ -22,12 +23,10 @@ struct BuffConfig
 
   struct Detector
   {
+    std::string type = "njust";
     double fx = 0;
     double fy = 0;
-    double min_distance = 1.7;
-    double max_distance = 5.0;
-    double active_threshold = 0.2;
-    double match_threshold = 0.5;
+    YAML::Node parameters;  // 原始配置，由所选检测器解析其专属参数。
   } detector;
 
   struct Model

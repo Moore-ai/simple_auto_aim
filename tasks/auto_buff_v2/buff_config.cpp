@@ -35,12 +35,8 @@ BuffConfig BuffConfig::load(const std::string & path)
 
   const auto buff = yaml["buff_v2"];
   if (buff) {
-    result.detector.min_distance = buff["min_distance"].as<double>(result.detector.min_distance);
-    result.detector.max_distance = buff["max_distance"].as<double>(result.detector.max_distance);
-    result.detector.active_threshold =
-      buff["active_threshold"].as<double>(result.detector.active_threshold);
-    result.detector.match_threshold =
-      buff["match_threshold"].as<double>(result.detector.match_threshold);
+    result.detector.type = buff["detector"].as<std::string>(result.detector.type);
+    result.detector.parameters = buff;
     result.model.timeout_seconds = buff["timeout_seconds"].as<double>(result.model.timeout_seconds);
     result.model.noise_x = buff["noise_x"].as<double>(result.model.noise_x);
     result.model.noise_y = buff["noise_y"].as<double>(result.model.noise_y);

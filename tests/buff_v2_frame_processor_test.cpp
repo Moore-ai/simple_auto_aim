@@ -13,8 +13,8 @@ int main()
   auto_buff_v2::BuffConfig::Detector detector;
   detector.fx = 1000;
   detector.fy = 1000;
-  detector.min_distance = 2;
-  detector.max_distance = 5;
+  detector.parameters["njust"]["min_distance"] = 2;
+  detector.parameters["njust"]["max_distance"] = 5;
   auto_buff_v2::BuffConfig::Model model;
   auto_buff_v2::RuneModel rune_model(camera, model, false);
   auto_buff_v2::BuffFrameProcessor processor(rune_model, detector);

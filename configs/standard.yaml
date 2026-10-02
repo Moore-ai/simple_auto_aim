@@ -276,10 +276,13 @@ predict_time: 0.120     # s
 
 buff_v2: # 新打符入口使用的源项目参数
   planner_mode: njust # 打符规划器：mpc 或 njust
-  min_distance: 1.7 # m，轮廓几何筛选的最近距离
-  max_distance: 5.0 # m，轮廓几何筛选的最远距离
-  active_threshold: 0.2 # PVD 靶心形状阈值
-  match_threshold: 0.5 # R 标骨架拓扑匹配阈值
+  detector: njust # 打符检测器：njust
+  njust: # NjustRuneDetector 专属参数
+    min_distance: 1.7 # m，轮廓几何筛选的最近距离
+    max_distance: 5.0 # m，轮廓几何筛选的最远距离
+    active_threshold: 0.2 # PVD 靶心形状阈值
+    match_threshold: 0.5 # R 标骨架拓扑匹配阈值
+    max_perspective: 60.0 # deg，轮廓几何筛选允许的最大透视角
   shoot_delay: 0.04 # s，发射至出膛延迟
   rune_idle_duration: 0.4 # s，符叶瞄准但禁止发射的周期
   rune_shoot_duration: 0.2 # s，符叶允许发射的周期
