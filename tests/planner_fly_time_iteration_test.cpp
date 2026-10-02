@@ -16,13 +16,13 @@ tools::BallisticSolution trajectory_at(
   auto min_dist = std::numeric_limits<double>::infinity();
   Eigen::Vector3d xyz;
   for (const auto & xyza : target.armor_xyza_list()) {
-    const auto dist = xyza.head<2>().norm();
+    const auto dist = xyza.head<3>().norm();
     if (dist < min_dist) {
       min_dist = dist;
       xyz = xyza.head<3>();
     }
   }
-  return solver.solve(bullet_speed, min_dist, xyz.z()).value();
+  return solver.solve(bullet_speed, xyz.head<2>().norm(), xyz.z()).value();
 }
 }  // namespace
 
@@ -56,5 +56,22 @@ int main()
   assert(threshold_plan.control);
   assert(std::abs(threshold_plan.fly_time - vacuum_first_iteration.fly_time) < 1e-12);
   assert(threshold_plan.fly_time < plan.fly_time);
+
+  // At this phase the elevated armor is closer in XY (9 m), but the
+  // zero-height armor is closer in 3D (sqrt(101) m versus sqrt(117) m).
+  for (const auto height : {6.0, -6.0}) {
+    auto_aim::Target elevated_target(10.0, 1.0, 1.0, height);
+    elevated_target.predict(M_PI_2);
+    const auto expected = ballistic_solver->solve(bullet_speed, std::sqrt(101.0), 0.0).value();
+    const auto elevated_plan = single_pass_planner.plan(elevated_target, bullet_speed);
+    assert(elevated_plan.control);
+    assert(std::abs(elevated_plan.fly_time - expected.fly_time) < 1e-12);
+
+    const auto expected_iteration =
+      trajectory_at(*ballistic_solver, elevated_target, expected.fly_time, bullet_speed);
+    const auto elevated_iteration_plan = planner.plan(elevated_target, bullet_speed);
+    assert(elevated_iteration_plan.control);
+    assert(std::abs(elevated_iteration_plan.fly_time - expected_iteration.fly_time) < 1e-12);
+  }
   return 0;
 }

@@ -223,17 +223,17 @@ Plan Planner::plan(Target target, double bullet_speed)
   auto min_dist = 1e10;
   if (anti_spin) {
     xyz = anti_spin_aim_point(target);
-    min_dist = xyz.head<2>().norm();
   } else {
     for (auto & xyza : target.armor_xyza_list()) {
-      auto dist = xyza.head<2>().norm();
+      auto dist = xyza.head<3>().norm();
       if (dist < min_dist) {
         min_dist = dist;
         xyz = xyza.head<3>();
       }
     }
   }
-  const auto bullet_traj = ballistic_solver_->solve(bullet_speed, min_dist, xyz.z());
+  // The solver takes horizontal range and height separately.
+  const auto bullet_traj = ballistic_solver_->solve(bullet_speed, xyz.head<2>().norm(), xyz.z());
   if (!bullet_traj || !std::isfinite(bullet_traj->fly_time)) {
     return invalid_plan("invalid bullet trajectory");
   }
@@ -247,10 +247,9 @@ Plan Planner::plan(Target target, double bullet_speed)
       auto future_min_dist = 1e10;
       if (anti_spin) {
         future_xyz = anti_spin_aim_point(future_target);
-        future_min_dist = future_xyz.head<2>().norm();
       } else {
         for (const auto & xyza : future_target.armor_xyza_list()) {
-          const auto dist = xyza.head<2>().norm();
+          const auto dist = xyza.head<3>().norm();
           if (dist < future_min_dist) {
             future_min_dist = dist;
             future_xyz = xyza.head<3>();
@@ -258,7 +257,7 @@ Plan Planner::plan(Target target, double bullet_speed)
         }
       }
       const auto future_bullet_traj =
-        ballistic_solver_->solve(bullet_speed, future_min_dist, future_xyz.z());
+        ballistic_solver_->solve(bullet_speed, future_xyz.head<2>().norm(), future_xyz.z());
       if (!future_bullet_traj || !std::isfinite(future_bullet_traj->fly_time)) {
         return invalid_plan("invalid iterative bullet trajectory");
       }
@@ -499,7 +498,6 @@ Eigen::Matrix<double, 2, 1> Planner::aim(
     const auto state = target.state();
     xyz = anti_spin_aim_point(target);
     yaw = std::atan2(state.center_y(), state.center_x());
-    min_dist = xyz.head<2>().norm();
   }
 
   const auto armors = target.armor_xyza_list();
@@ -507,10 +505,9 @@ Eigen::Matrix<double, 2, 1> Planner::aim(
     const auto & xyza = armors[selected_armor];
     xyz = xyza.head<3>();
     yaw = xyza[3];
-    min_dist = xyza.head<2>().norm();
   } else if (!anti_spin) {
     for (const auto & xyza : armors) {
-      auto dist = xyza.head<2>().norm();
+      auto dist = xyza.head<3>().norm();
       if (dist < min_dist) {
         min_dist = dist;
         xyz = xyza.head<3>();
@@ -521,7 +518,7 @@ Eigen::Matrix<double, 2, 1> Planner::aim(
   debug_xyza = Eigen::Vector4d(xyz.x(), xyz.y(), xyz.z(), yaw);
 
   auto azim = std::atan2(xyz.y(), xyz.x());
-  const auto bullet_traj = ballistic_solver_->solve(bullet_speed, min_dist, xyz.z());
+  const auto bullet_traj = ballistic_solver_->solve(bullet_speed, xyz.head<2>().norm(), xyz.z());
   if (!bullet_traj) throw std::runtime_error("Unsolvable bullet trajectory!");
 
   return {tools::limit_rad(azim + yaw_offset_), -bullet_traj->pitch - pitch_offset_};

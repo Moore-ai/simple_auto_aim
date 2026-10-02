@@ -187,6 +187,9 @@ target_link_libraries(planner_fly_time_iteration_test PRIVATE
   auto_aim
   tools
   io)
+add_test(NAME planner_fly_time_iteration_test COMMAND planner_fly_time_iteration_test)
+set_tests_properties(planner_fly_time_iteration_test PROPERTIES
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_executable(planner_anti_spin_test tests/planner_anti_spin_test.cpp)
 target_compile_options(planner_anti_spin_test PRIVATE -UNDEBUG)
