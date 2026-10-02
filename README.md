@@ -70,6 +70,15 @@ cmake --build build --parallel 1
 `RuneModel`，小符和大符共用多候选检测。颜色直接遵循主入口传入的检测颜色，
 可用 `--target-color=red` 或 `--target-color=blue` 指定。
 
+设置 `buff_v2.detector: szu` 可使用深圳大学 `RP-26Rune` / `RuneDetectionModel`
+移植的 `SzuRuneDetector`，专属参数位于 `buff_v2.szu`。附带模型为
+`assets/szu_rune.onnx`，使用 OpenVINO 推理，支持 `[1,18,N]` / `[1,N,18]`
+三类状态、五点输出。检测过程包含居中 letterbox、关键点置信度筛选、距离 NMS、
+敌方颜色差分和靶心/R 标轮廓精修；颜色同样由 `--target-color` 或云台反馈指定。
+未激活类别输出 `active=false`，小符/大符已激活类别均输出 `active=true`。
+仅发布同时通过靶心和 R 标轮廓验证的候选，缺失或错误颜色的轮廓不会退回网络点。
+三维解算和跟踪继续使用 `RuneModel`；没有引入源项目的 `PowerRunePlane` 优化链路。
+
 标定可执行文件：
 
 ```bash

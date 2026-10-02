@@ -276,7 +276,23 @@ predict_time: 0.120     # s
 
 buff_v2: # 新打符入口使用的源项目参数
   planner_mode: njust # 打符规划器：mpc 或 njust
-  detector: njust # 打符检测器：njust 或 climber
+  detector: njust # 打符检测器：njust、climber 或 szu
+  szu: # SzuRuneDetector 五点网络推理 + 颜色轮廓精修
+    model: assets/szu_rune.onnx # 三类状态 + 五点，输出 [1,18,N] 或 [1,N,18]
+    device: CPU # OpenVINO 推理设备，例如 CPU、GPU 或 AUTO
+    confidence_threshold: 0.65 # 模型类别置信度阈值
+    keypoint_confidence_threshold: 0.5 # 关键点置信度阈值
+    nms_distance_threshold: 30.0 # px，原图上五点有效中心的 NMS 距离阈值
+    min_valid_keypoints: 5 # 至少有效关键点数，范围 1–5，建议全部可靠
+    letterbox_value: 114 # 补边灰度，范围 0–255，应与模型训练预处理一致
+    roi_scale: 1.4 # 五点最小外接矩形的 ROI 扩展倍数
+    gaussian_kernel_size: 5 # 颜色差分高斯核边长，正奇数，1 表示不模糊
+    gaussian_sigma: 0.0 # 高斯标准差，非负，0 表示由核大小自动计算
+    red_minus_blue_threshold: 50 # 红色差分二值化阈值，范围 0–255
+    blue_minus_red_threshold: 62 # 蓝色差分二值化阈值，范围 0–255
+    armor_area_relative_error: 0.35 # 靶心轮廓与网络预测椭圆的面积相对误差上限
+    armor_solidity: 0.8 # 靶心轮廓实心度下限，范围 0–1
+    armor_border_margin: 2 # px，靶心轮廓距图像边缘不超过此值时丢弃，非负整数
   climber: # ClimberRuneDetector 专属参数，使用红/蓝两类、9 点 YOLO11-pose 模型
     model: assets/buff_repvgg.xml # 源项目模型，输出形状 [1,33,N]
     device: CPU # OpenVINO 推理设备，例如 CPU、GPU 或 AUTO
