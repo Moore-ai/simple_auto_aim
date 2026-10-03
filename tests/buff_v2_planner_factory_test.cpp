@@ -4,7 +4,7 @@
 #include <fstream>
 #include <stdexcept>
 
-#include "tasks/auto_buff_v2/buff_planner_factory.hpp"
+#include "tasks/auto_buff_v2/planners/buff_planner_factory.hpp"
 
 int main()
 {

@@ -14,7 +14,7 @@
 #include "tasks/auto_aim/planner/planner.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
-#include "tasks/auto_buff_v2/buff_planner_factory.hpp"
+#include "tasks/auto_buff_v2/planners/buff_planner_factory.hpp"
 #include "tasks/auto_buff_v2/buff_config.hpp"
 #include "tasks/auto_buff_v2/frame_runtime.hpp"
 #include "tools/detect_factory.hpp"

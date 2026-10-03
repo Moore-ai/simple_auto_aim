@@ -1,18 +1,19 @@
-#ifndef AUTO_BUFF_V2__BUFF_PLANNER_HPP
-#define AUTO_BUFF_V2__BUFF_PLANNER_HPP
+#ifndef AUTO_BUFF_V2__MPC_BUFF_TRACKING_HPP
+#define AUTO_BUFF_V2__MPC_BUFF_TRACKING_HPP
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 
+#include "../buff_config.hpp"
+#include "../rune_model.hpp"
 #include "io/gimbal/gimbal.hpp"
-#include "buff_config.hpp"
-#include "rune_model.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
 #include "tools/ballistic_solver.hpp"
 
 namespace auto_buff_v2
 {
-struct BuffTrackingRequest
+struct MpcBuffTrackingRequest
 {
   auto_aim::Trajectory trajectory;
   double yaw0 = 0;
@@ -22,18 +23,18 @@ struct BuffTrackingRequest
   Eigen::Vector3d aimpoint = Eigen::Vector3d::Zero();
 };
 
-class BuffPlanner
+class MpcBuffTracking
 {
 public:
   using Config = BuffConfig::Planner;
 
-  explicit BuffPlanner(Config config);
-  std::optional<BuffTrackingRequest> prepare(
+  explicit MpcBuffTracking(Config config);
+  std::optional<MpcBuffTrackingRequest> prepare(
     std::uint64_t target_generation, const std::optional<RuneEstimate> & target,
-    double bullet_speed,
-    Timestamp now);
-  bool fire_advice(const BuffTrackingRequest & request, const auto_aim::Plan & plan,
-                   const io::GimbalState & gimbal, Timestamp now) const;
+    double bullet_speed, Timestamp now);
+  bool fire_advice(
+    const MpcBuffTrackingRequest & request, const auto_aim::Plan & plan,
+    const io::GimbalState & gimbal, Timestamp now) const;
 
 private:
   Config config_;
@@ -43,4 +44,4 @@ private:
 };
 }  // namespace auto_buff_v2
 
-#endif  // AUTO_BUFF_V2__BUFF_PLANNER_HPP
+#endif  // AUTO_BUFF_V2__MPC_BUFF_TRACKING_HPP

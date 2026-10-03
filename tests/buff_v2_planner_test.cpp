@@ -7,14 +7,14 @@
 #include <utility>
 
 #include "tasks/auto_aim/planner/planner.hpp"
-#include "tasks/auto_buff_v2/buff_planner.hpp"
+#include "tasks/auto_buff_v2/planners/mpc_buff_tracking.hpp"
 #include "tools/ballistic_solver.hpp"
 
 static_assert(std::is_same_v<
-              decltype(std::declval<auto_buff_v2::BuffPlanner>().prepare(
+              decltype(std::declval<auto_buff_v2::MpcBuffTracking>().prepare(
                 std::uint64_t{}, std::optional<auto_buff_v2::RuneEstimate>{}, 0.0,
                 auto_buff_v2::Timestamp{})),
-              std::optional<auto_buff_v2::BuffTrackingRequest>>);
+              std::optional<auto_buff_v2::MpcBuffTrackingRequest>>);
 
 int main()
 {
@@ -25,7 +25,7 @@ int main()
   target.start_timestamp = start - 4s;
   target.timestamp = start;
   target.inactive[0] = true;
-  auto_buff_v2::BuffPlanner::Config config;
+  auto_buff_v2::MpcBuffTracking::Config config;
   config.shoot_delay = 0;
   config.rune_idle_duration = 0.4;
   config.rune_shoot_duration = 0.2;
@@ -53,7 +53,7 @@ int main()
     "Q_pitch: [9e6, 0]\n"
     "R_pitch: [1]\n";
   auto_aim::Planner mpc_planner(mpc_config_path);
-  auto_buff_v2::BuffPlanner planner(config);
+  auto_buff_v2::MpcBuffTracking planner(config);
   const auto request = planner.prepare(1, target, 20, start);
   assert(request);
   assert(std::abs(request->distance - target.center.head<2>().norm()) < 1e-12);
@@ -68,7 +68,7 @@ int main()
     auto height_config = config;
     height_config.shoot_delay = 0.1;
     height_config.ballistic_model = "vacuum";
-    auto_buff_v2::BuffPlanner height_planner(height_config);
+    auto_buff_v2::MpcBuffTracking height_planner(height_config);
     const auto height_request = height_planner.prepare(1, height_target, 20, start);
     assert(height_request);
     assert(std::abs(height_request->fly_time - expected_time) < 1e-9);
@@ -134,16 +134,16 @@ int main()
   assert(high_drag_solution->fly_time > low_drag_solution->fly_time);
   assert(high_drag_solution->pitch > low_drag_solution->pitch);
 
-  auto_buff_v2::BuffPlanner::Config njust_config;
+  auto_buff_v2::MpcBuffTracking::Config njust_config;
   njust_config.ballistic_model = "njust";
   njust_config.ballistic_config.njust_air_resistance = 0.001;
-  auto_buff_v2::BuffPlanner::Config high_drag_planner_config = njust_config;
+  auto_buff_v2::MpcBuffTracking::Config high_drag_planner_config = njust_config;
   high_drag_planner_config.ballistic_config.njust_air_resistance = 0.006;
-  auto_buff_v2::BuffPlanner::Config vacuum_config = njust_config;
+  auto_buff_v2::MpcBuffTracking::Config vacuum_config = njust_config;
   vacuum_config.ballistic_model = "vacuum";
-  auto_buff_v2::BuffPlanner njust_planner(njust_config);
-  auto_buff_v2::BuffPlanner high_drag_planner(high_drag_planner_config);
-  auto_buff_v2::BuffPlanner vacuum_planner(vacuum_config);
+  auto_buff_v2::MpcBuffTracking njust_planner(njust_config);
+  auto_buff_v2::MpcBuffTracking high_drag_planner(high_drag_planner_config);
+  auto_buff_v2::MpcBuffTracking vacuum_planner(vacuum_config);
   const auto njust_request = njust_planner.prepare(1, target, 20, start);
   const auto high_drag_request = high_drag_planner.prepare(1, target, 20, start);
   const auto vacuum_request = vacuum_planner.prepare(1, target, 20, start);

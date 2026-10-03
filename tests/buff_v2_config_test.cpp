@@ -6,7 +6,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "tasks/auto_buff_v2/buff_config.hpp"
-#include "tasks/auto_buff_v2/buff_planner.hpp"
+#include "tasks/auto_buff_v2/planners/mpc_buff_tracking.hpp"
 #include "tasks/auto_buff_v2/detectors/rune_detector_factory.hpp"
 
 int main()
@@ -83,7 +83,7 @@ int main()
   target.start_timestamp = target.timestamp - std::chrono::seconds(4);
   target.center = {3, 0, 1};
   target.inactive[0] = true;
-  auto_buff_v2::BuffPlanner planner(config.planner);
+  auto_buff_v2::MpcBuffTracking planner(config.planner);
   const auto request = planner.prepare(1, target, 20, target.timestamp);
   assert(request);
   assert(std::abs(request->fly_time - 0.176280533350353) < 1e-9);
