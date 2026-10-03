@@ -79,6 +79,14 @@ cmake --build build --parallel 1
 仅发布同时通过靶心和 R 标轮廓验证的候选，缺失或错误颜色的轮廓不会退回网络点。
 三维解算和跟踪继续使用 `RuneModel`；没有引入源项目的 `PowerRunePlane` 优化链路。
 
+使用 `buff_v2.detector: climber` 时，`standard` 的 `/image` 用蓝色绘制网络候选的边框、
+六个关键点（上、左、下、右、靶心、R 标）和 `#编号: 置信度`。候选为置信度筛选及 NMS 后、
+靶心去重和数量限制前的全部结果；绿色仍表示最终检测，黄色表示模型重投影。
+编号仅对应当前帧，不代表跨帧跟踪 ID。
+`/buff_v2/climber/refine_center_contours` 发布与 `/image` 同尺寸的白底图片，用黑色轮廓线
+绘制 `ClimberRuneDetector::refine_center()` 中二值化、膨胀及 R 标圆形掩膜处理后提取的
+全部 contours。无轮廓时发布纯白图；时间戳及发布频率与 `/image` 一致。
+
 标定可执行文件：
 
 ```bash
@@ -227,18 +235,18 @@ cmake --build build --target buff_v2_njust_r_detector_debug -j2
 
 | 数据 | 路径 | 单位 |
 | --- | --- | --- |
-| 当前帧轮廓半径 | `/buff_v2/detector.candidates[:].radius` | 像素 |
-| 靶心半径下限 | `/buff_v2/detector.min_radius` | 像素 |
-| 靶心半径上限 | `/buff_v2/detector.max_radius` | 像素 |
-| 当前帧轮廓面积 | `/buff_v2/detector.candidates[:].area` | 像素² |
-| R 标面积下限 | `/buff_v2/detector.min_icon_area` | 像素² |
-| R 标面积上限 | `/buff_v2/detector.max_icon_area` | 像素² |
-| R 标骨架得分 | `/buff_v2/detector.icon_scores[:].score` | 无量纲 |
-| R 标匹配阈值 | `/buff_v2/detector.match_threshold` | 无量纲 |
-| 骨架端点数量 | `/buff_v2/detector.icon_scores[:].endpoints` | 个 |
-| 骨架下半部分端点数量 | `/buff_v2/detector.icon_scores[:].lower_endpoints` | 个 |
-| 骨架分支像素数量 | `/buff_v2/detector.icon_scores[:].branches` | 个 |
-| 最大外轮廓内部孔洞数量 | `/buff_v2/detector.icon_scores[:].holes` | 个 |
+| 当前帧轮廓半径 | `/buff_v2/njust/detector.candidates[:].radius` | 像素 |
+| 靶心半径下限 | `/buff_v2/njust/detector.min_radius` | 像素 |
+| 靶心半径上限 | `/buff_v2/njust/detector.max_radius` | 像素 |
+| 当前帧轮廓面积 | `/buff_v2/njust/detector.candidates[:].area` | 像素² |
+| R 标面积下限 | `/buff_v2/njust/detector.min_icon_area` | 像素² |
+| R 标面积上限 | `/buff_v2/njust/detector.max_icon_area` | 像素² |
+| R 标骨架得分 | `/buff_v2/njust/detector.icon_scores[:].score` | 无量纲 |
+| R 标匹配阈值 | `/buff_v2/njust/detector.match_threshold` | 无量纲 |
+| 骨架端点数量 | `/buff_v2/njust/detector.icon_scores[:].endpoints` | 个 |
+| 骨架下半部分端点数量 | `/buff_v2/njust/detector.icon_scores[:].lower_endpoints` | 个 |
+| 骨架分支像素数量 | `/buff_v2/njust/detector.icon_scores[:].branches` | 个 |
+| 最大外轮廓内部孔洞数量 | `/buff_v2/njust/detector.icon_scores[:].holes` | 个 |
 
 建议分别建立半径图和面积图。用 `candidates[0].radius` 等路径可以只查看某个编号。
 得分图中同时添加 `icon_scores[:].score` 和 `match_threshold`，比较得分与配置阈值。
@@ -248,11 +256,11 @@ cmake --build build --target buff_v2_njust_r_detector_debug -j2
 骨架判定要求 `endpoints >= 1`、`lower_endpoints >= 1`、`8 <= branches <= 50`、
 `holes <= 2`。`branches` 统计邻居数量至少为 3 的骨架像素。
 若骨架连通分量检查提前拒绝候选，尚未计算的这四个计数为 0，得分也为 0。
-新增 Image 面板选择 `/image`，黄色圆圈及 `#0`、`#1` 等标注对应当前帧的候选数组下标。
+新增 Image 面板选择 `/buff_v2/njust/image`，黄色圆圈及 `#0`、`#1` 等标注对应当前帧的候选数组下标。
 检测成功的 R 标复用主链路的绿色圆圈和 `R: 得分` 标注；仅检测到 R 标、尚未建立
 完整打符模型时也会显示。此入口只标注 R 标，不发布靶心观测或联合模型重投影标注。
-`/image_raw` 发布原始图像，`/image` 发布带标注的图像。
-`foxglove.draw_roi: true`（默认开启）会在 `/image` 上用同样的绿色绘制每个已识别 R 标
+`/buff_v2/njust/image_raw` 发布原始图像，`/buff_v2/njust/image` 发布带标注的图像。
+`foxglove.draw_roi: true`（默认开启）会在 `/buff_v2/njust/image` 上用同样的绿色绘制每个已识别 R 标
 用于骨架评分的局部 ROI 框；设为 `false` 可关闭。框包含轮廓外扩的 5 像素，并裁剪到图像边界。
 编号随每帧轮廓顺序变化，不代表跨帧跟踪 ID。
 
@@ -266,7 +274,7 @@ R 标调试封装随后按主检测器最终识别结果严格过滤，只发布
 
 无候选时数组为空，阈值继续发布。数值数据按处理帧发布，图像受
 `foxglove.image_fps` 限制；发布队列沿用主链路的最新帧机制，客户端较慢时可能跳帧。
-`standard` 不采集这些候选诊断数据，也不创建 `/buff_v2/detector` 通道。两个入口使用相同端口，应分别运行。
+`standard` 不采集这些候选诊断数据，也不创建 `/buff_v2/njust/detector` 通道。两个入口使用相同端口，应分别运行。
 
 ## 10 buff_v2 Njust 靶心检测调试
 
@@ -284,14 +292,14 @@ cmake --build build --target buff_v2_njust_bullseye_detector_debug -j2
 ```
 
 `--mode=2` 对应大符模式（检测参数与小符一致）；`--target-color=red|blue|none` 的含义与 R 标调试入口相同。
-开启配置中的 `foxglove.enable`，连接 `ws://localhost:8765`，Image 面板选择 `/image`。
+开启配置中的 `foxglove.enable`，连接 `ws://localhost:8765`，Image 面板选择 `/buff_v2/njust/image`。
 检测成功的靶心沿用主链路绿色圆圈和 `B: 得分` 标注，未激活靶心还会显示四个绿色角点；
-无需先建立完整打符模型。`/image_raw` 提供原始图像。
+无需先建立完整打符模型。`/buff_v2/njust/image_raw` 提供原始图像。
 
-Plot 面板使用 `/buff_v2/detector.candidates[:].radius`、
-`/buff_v2/detector.min_radius`、`/buff_v2/detector.max_radius` 比较轮廓半径和靶心尺寸范围，
-使用 `/buff_v2/detector.candidates[:].area` 查看面积，
-`/buff_v2/detector.candidates[:].radius_pass` 查看是否通过半径筛选。
+Plot 面板使用 `/buff_v2/njust/detector.candidates[:].radius`、
+`/buff_v2/njust/detector.min_radius`、`/buff_v2/njust/detector.max_radius` 比较轮廓半径和靶心尺寸范围，
+使用 `/buff_v2/njust/detector.candidates[:].area` 查看面积，
+`/buff_v2/njust/detector.candidates[:].radius_pass` 查看是否通过半径筛选。
 黄色候选标注的编号与数组下标一致，仅包含靶心分支的轮廓，包括被后续筛选拒绝的候选。
 尺寸通过后仍需满足主链路的椭圆形状、圆度和靶心特征检查。
 

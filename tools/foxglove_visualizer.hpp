@@ -72,6 +72,8 @@ void draw_aim_overlay(
   auto_aim::Color enemy_color,
   const auto_aim::Armor * locked_armor,
   const std::vector<cv::Point2f> * anti_spin_hit_armor);
+cv::Mat climber_contours_image(
+  cv::Size size, const std::vector<std::vector<cv::Point>> & contours);
 void draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data);
 std::optional<cv::Point2f> buff_aimpoint(
   const auto_aim::Plan & plan, std::uint64_t plan_target_generation,

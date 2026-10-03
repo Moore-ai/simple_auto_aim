@@ -117,7 +117,8 @@ std::vector<ClimberRuneDetector::Candidate> ClimberRuneDetector::infer(const cv:
 }
 
 cv::Point2f ClimberRuneDetector::refine_center(
-  const cv::Mat & image, const std::vector<Candidate> & candidates)
+  const cv::Mat & image, const std::vector<Candidate> & candidates,
+  std::vector<std::vector<cv::Point>> & contours)
 {
   cv::Point2f initial(0, 0);
   for (const auto & candidate : candidates) initial += candidate.points[5];
@@ -135,7 +136,6 @@ cv::Point2f ClimberRuneDetector::refine_center(
   cv::Mat mask = cv::Mat::zeros(image.size(), CV_8U);
   cv::circle(mask, initial, static_cast<int>(radius), cv::Scalar(255), cv::FILLED);
   cv::bitwise_and(binary, mask, binary);
-  std::vector<std::vector<cv::Point>> contours;
   cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
   auto center = initial;
   double best = std::numeric_limits<double>::infinity();
@@ -159,10 +159,12 @@ cv::Point2f ClimberRuneDetector::refine_center(
 RuneElements ClimberRuneDetector::detect(const cv::Mat & image)
 {
   RuneElements elements;
+  elements.climber_contours.emplace();
   if (image.empty()) return elements;
-  const auto candidates = infer(image);
+  elements.candidates = infer(image);
+  const auto & candidates = elements.candidates;
   if (candidates.empty()) return elements;
-  const auto center = refine_center(image, candidates);
+  const auto center = refine_center(image, candidates, *elements.climber_contours);
   for (const auto & candidate : candidates) {
     const auto duplicate = std::any_of(
       elements.bullseyes.begin(), elements.bullseyes.end(), [&](const auto & bull) {

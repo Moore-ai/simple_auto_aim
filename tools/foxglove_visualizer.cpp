@@ -14,6 +14,7 @@
 #include <thread>
 #include <utility>
 
+#include <fmt/format.h>
 #include <foxglove/channel.hpp>
 #include <foxglove/error.hpp>
 #include <foxglove/schemas.hpp>
@@ -580,10 +581,28 @@ void detail::draw_aim_overlay(
   if (locked_armor) draw_polygon(image, locked_armor->points, {0, 255, 255});
 }
 
+cv::Mat detail::climber_contours_image(
+  cv::Size size, const std::vector<std::vector<cv::Point>> & contours)
+{
+  cv::Mat image(size, CV_8UC3, cv::Scalar(255, 255, 255));
+  cv::drawContours(image, contours, -1, cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+  return image;
+}
+
 void detail::draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data)
 {
   const cv::Scalar yellow{0, 255, 255};
   const cv::Scalar green{0, 255, 0};
+  const cv::Scalar blue{255, 0, 0};
+  for (std::size_t i = 0; i < debug_data.candidates.size(); ++i) {
+    const auto & candidate = debug_data.candidates[i];
+    cv::rectangle(image, candidate.box, blue, 2, cv::LINE_AA);
+    for (const auto & point : candidate.points)
+      cv::circle(image, point, 3, blue, 1, cv::LINE_AA);
+    cv::putText(image, fmt::format("#{}: {:.3f}", i, candidate.score),
+                candidate.box.tl() + cv::Point(0, -5), cv::FONT_HERSHEY_SIMPLEX, 0.45, blue,
+                1, cv::LINE_AA);
+  }
   if (debug_data.is_buff_mode) {
     const std::string status = "Buff B:" + std::to_string(debug_data.bullseye_count) +
       "/5 R:" + std::to_string(debug_data.icon_count);
@@ -679,6 +698,7 @@ public:
   std::optional<foxglove::schemas::CompressedImageChannel> image_raw;
   std::optional<foxglove::schemas::CompressedImageChannel> image;
   std::optional<foxglove::schemas::CompressedImageChannel> image_detection;
+  std::optional<foxglove::schemas::CompressedImageChannel> climber_contours;
   std::optional<foxglove::RawChannel> target_values;
   std::optional<foxglove::RawChannel> outpost_current_values;
   std::optional<foxglove::RawChannel> outpost_v2_values;
@@ -734,6 +754,10 @@ FoxgloveVisualizer::FoxgloveVisualizer(
   create(
     impl_->image_detection,
     foxglove::schemas::CompressedImageChannel::create("/image_detection"), "/image_detection");
+  create(
+    impl_->climber_contours,
+    foxglove::schemas::CompressedImageChannel::create("/buff_v2/climber/refine_center_contours"),
+    "/buff_v2/climber/refine_center_contours");
   create(impl_->target_values,
          detail::create_target_values_channel(detail::FoxgloveTargetTopic::normal), "/target");
   create(impl_->outpost_current_values,
@@ -867,6 +891,12 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
     if (impl_->image_detection) {
       impl_->image_detection->log(
         compressed_image(detail::prepare_image_for_publish(detection_image)), log_time);
+    }
+    if (impl_->climber_contours && buff_debug.climber_contours) {
+      const auto contour_image = detail::climber_contours_image(
+        frame.image.size(), *buff_debug.climber_contours);
+      impl_->climber_contours->log(
+        compressed_image(detail::prepare_image_for_publish(contour_image)), log_time);
     }
   }
 

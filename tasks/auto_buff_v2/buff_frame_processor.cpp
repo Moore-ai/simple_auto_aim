@@ -25,6 +25,8 @@ tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & fact
   const auto target = model_.state();
 
   buff_debug.is_buff_mode = true;
+  buff_debug.candidates = elements.candidates;
+  buff_debug.climber_contours = elements.climber_contours;
   buff_debug.bullseye_count = elements.bullseyes.size();
   buff_debug.icon_count = elements.icons.size();
   for (const auto & icon : elements.icons)

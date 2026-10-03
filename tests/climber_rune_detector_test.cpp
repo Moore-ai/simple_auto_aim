@@ -8,6 +8,7 @@
 #include <openvino/pass/serialize.hpp>
 
 #include "tasks/auto_buff_v2/detectors/rune_detector_factory.hpp"
+#include "tasks/auto_buff_v2/buff_frame_processor.hpp"
 
 int main()
 {
@@ -54,6 +55,10 @@ int main()
   auto red = detector->detect(image);
   assert(red.bullseyes.size() == 2);  // Deduplicate even when NMS retains overlapping boxes.
   assert(red.icons.size() == 1);
+  assert(red.candidates.size() == 3);
+  assert(red.candidates[0].box == cv::Rect(90, 90, 20, 20));
+  assert(cv::norm(red.candidates[2].points[4] - cv::Point2f(150, 100)) < 0.01);
+  assert(cv::norm(red.candidates[0].points[5] - cv::Point2f(50, 50)) < 0.01);
   assert(cv::norm(red.icons[0].center - cv::Point2f(50, 50)) < 0.01);
   assert(cv::norm(red.bullseyes[0].center - cv::Point2f(100, 100)) < 0.01);
   assert(cv::norm(red.bullseyes[1].center - cv::Point2f(150, 100)) < 0.01);
@@ -73,6 +78,22 @@ int main()
   single->set_enemy_red(true);
   const auto single_result = single->detect(image);
   assert(single_result.bullseyes.size() == 1);
+  assert(single_result.candidates.size() == 3);
+  auto_buff_v2::BuffConfig::Camera camera;
+  camera.camera_matrix = (cv::Mat_<double>(3, 3) << 1000, 0, 160, 0, 1000, 160, 0, 0, 1);
+  camera.distort_coeffs = cv::Mat::zeros(1, 5, CV_64F);
+  auto_buff_v2::RuneModel rune_model(camera, {}, false);
+  auto_buff_v2::BuffFrameProcessor processor(rune_model, config);
+  tools::FrameFacts facts{std::chrono::steady_clock::now(), image,
+                          Eigen::Quaterniond::Identity(), {}};
+  facts.target_color_override = io::InfantryEnemyColor::red;
+  const auto processed = processor.process(facts);
+  assert(processed.snapshot.buff_debug.candidates.size() == 3);
+  assert(processed.snapshot.buff_debug.candidates[0].box == cv::Rect(90, 90, 20, 20));
+  facts.target_color_override = io::InfantryEnemyColor::blue;
+  assert(processor.process(facts).snapshot.buff_debug.candidates.size() == 1);
+  facts.image = cv::Mat{};
+  assert(processor.process(facts).snapshot.buff_debug.candidates.empty());
   assert(cv::norm(single_result.bullseyes[0].center - cv::Point2f(100, 100)) < 0.01);
   config.parameters["climber"]["max_bullseyes"] = 2;
 
@@ -113,12 +134,25 @@ int main()
   refined->set_enemy_red(true);
   const auto corrected = refined->detect(image);
   assert(cv::norm(corrected.icons[0].center - cv::Point2f(51, 50)) < 0.01);
+  assert(corrected.climber_contours && corrected.climber_contours->size() == 1);
+  assert(cv::boundingRect(corrected.climber_contours->front()) == cv::Rect(50, 46, 7, 9));
+  facts.image = image;
+  facts.target_color_override = io::InfantryEnemyColor::red;
+  const auto contour_frame = processor.process(facts);
+  assert(contour_frame.snapshot.buff_debug.climber_contours == corrected.climber_contours);
+  facts.image = original;
+  const auto blank_frame = processor.process(facts);
+  assert(blank_frame.snapshot.buff_debug.climber_contours);
+  assert(blank_frame.snapshot.buff_debug.climber_contours->empty());
+  assert(cv::norm(image, contour_frame.snapshot.image, cv::NORM_INF) == 0);
 
   config.parameters["climber"]["ConfidenceThreshold"] = 0.95;
   auto strict = auto_buff_v2::make_rune_detector(config);
   strict->set_enemy_red(true);
   const auto below_threshold = strict->detect(image);
   assert(below_threshold.bullseyes.empty() && below_threshold.icons.empty());
+  assert(below_threshold.candidates.empty());
+  assert(below_threshold.climber_contours && below_threshold.climber_contours->empty());
 
   const auto root = std::filesystem::path(__FILE__).parent_path().parent_path();
   const auto real_config =

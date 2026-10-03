@@ -117,7 +117,7 @@ foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_njust_buff_detecto
   foxglove::Schema schema{
     "simple_auto_aim.NjustBuffDetector", "jsonschema",
     reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
-  return foxglove::RawChannel::create("/buff_v2/detector", "json", std::move(schema));
+  return foxglove::RawChannel::create("/buff_v2/njust/detector", "json", std::move(schema));
 }
 
 cv::Mat detail::njust_buff_detector_debug_image(
@@ -218,8 +218,10 @@ NjustBuffDetectorDebugVisualizer::NjustBuffDetectorDebugVisualizer(const std::st
       std::cerr << "Failed to create debug channel: " << foxglove::strerror(result.error()) << '\n';
   };
   create_channel(impl_->detector, detail::create_njust_buff_detector_channel());
-  create_channel(impl_->image_raw, foxglove::schemas::CompressedImageChannel::create("/image_raw"));
-  create_channel(impl_->image, foxglove::schemas::CompressedImageChannel::create("/image"));
+  create_channel(
+    impl_->image_raw, foxglove::schemas::CompressedImageChannel::create("/buff_v2/njust/image_raw"));
+  create_channel(
+    impl_->image, foxglove::schemas::CompressedImageChannel::create("/buff_v2/njust/image"));
   impl_->worker = std::thread([this] {
     while (true) {
       std::optional<NjustBuffDetectorDebugFrame> frame;

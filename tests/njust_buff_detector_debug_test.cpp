@@ -188,7 +188,7 @@ int main()
   assert(tools::detail::njust_buff_detector_values(detector_debug).at("candidates").empty());
   auto detector_channel = tools::detail::create_njust_buff_detector_channel();
   assert(detector_channel.has_value());
-  assert(detector_channel.value().topic() == "/buff_v2/detector");
+  assert(detector_channel.value().topic() == "/buff_v2/njust/detector");
   const auto detector_schema = detector_channel.value().schema();
   assert(detector_schema);
   const auto detector_schema_json = nlohmann::json::parse(

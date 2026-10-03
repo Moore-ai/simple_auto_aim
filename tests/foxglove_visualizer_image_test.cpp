@@ -112,6 +112,42 @@ int main()
   assert(predicted_hit_edge[2] > 0 && predicted_hit_edge[1] == 0);
   assert(predicted_hit_center == cv::Vec3b(0, 0, 0));
 
+  // Every network candidate is drawn, including candidates absent from final detections.
+  cv::Mat candidate_image = cv::Mat::zeros(240, 320, CV_8UC3);
+  tools::BuffDebugData candidate_debug;
+  candidate_debug.candidates = {
+    {{20, 40, 80, 100}, 0.9f, {{{60, 60}, {40, 90}, {60, 120}, {80, 90},
+                              {60, 90}, {60, 160}}}},
+    {{180, 40, 80, 100}, 0.7f, {{{220, 60}, {200, 90}, {220, 120}, {240, 90},
+                               {220, 90}, {220, 160}}}}};
+  tools::detail::draw_buff_overlay(candidate_image, candidate_debug);
+  for (int x : {20, 180}) {
+    const auto pixel = candidate_image.at<cv::Vec3b>(100, x);
+    assert(pixel[0] > 200 && pixel[1] == 0 && pixel[2] == 0);
+  }
+  for (int x : {60, 220}) {
+    for (int y : {60, 90, 160}) {
+      cv::Mat channels[3];
+      cv::split(candidate_image(cv::Rect(x - 5, y - 5, 11, 11)), channels);
+      assert(cv::countNonZero(channels[0]) > 0);
+      assert(cv::countNonZero(channels[1]) == 0);
+      assert(cv::countNonZero(channels[2]) == 0);
+    }
+  }
+
+  const std::vector<std::vector<cv::Point>> contours = {
+    {{10, 10}, {30, 10}, {30, 30}, {10, 30}},
+    {{70, 50}, {90, 50}, {90, 70}, {70, 70}}};
+  const auto contour_image = tools::detail::climber_contours_image({120, 100}, contours);
+  assert(contour_image.size() == cv::Size(120, 100));
+  assert(contour_image.type() == CV_8UC3);
+  assert(contour_image.at<cv::Vec3b>(10, 20) == cv::Vec3b(0, 0, 0));
+  assert(contour_image.at<cv::Vec3b>(50, 80) == cv::Vec3b(0, 0, 0));
+  assert(contour_image.at<cv::Vec3b>(20, 20) == cv::Vec3b(255, 255, 255));
+  assert(contour_image.at<cv::Vec3b>(0, 0) == cv::Vec3b(255, 255, 255));
+  const auto no_contours = tools::detail::climber_contours_image({120, 100}, {});
+  assert(cv::countNonZero(no_contours.reshape(1) != 255) == 0);
+
   cv::Mat buff_image = cv::Mat::zeros(100, 120, CV_8UC3);
   const std::vector<cv::Point2f> rune_features = {
     {60, 20}, {90, 35}, {82, 75}, {40, 85}, {15, 55}, {30, 20}};

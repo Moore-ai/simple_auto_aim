@@ -2,6 +2,7 @@
 #define AUTO_BUFF_V2__RUNE_HPP
 
 #include <array>
+#include <optional>
 #include <vector>
 
 #include <Eigen/Core>
@@ -27,10 +28,21 @@ struct RuneIcon
   double score = 0;
 };
 
+// Network candidates retained for visualization before bullseye selection.
+struct RuneCandidate
+{
+  cv::Rect box;
+  float score;
+  std::array<cv::Point2f, 6> points;  // 上、左、下、右、靶心、R 标。
+};
+
 struct RuneElements
 {
   std::vector<RuneBullseye> bullseyes;
   std::vector<RuneIcon> icons;
+  // 以下服务于 foxglove 可视化
+  std::vector<RuneCandidate> candidates;
+  std::optional<std::vector<std::vector<cv::Point>>> climber_contours;
 };
 }  // namespace auto_buff_v2
 

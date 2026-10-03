@@ -17,15 +17,12 @@ public:
   RuneElements detect(const cv::Mat & image) override;
 
 private:
-  struct Candidate
-  {
-    cv::Rect box;
-    float score;
-    std::array<cv::Point2f, 6> points;  // 上、左、下、右、靶心、R 标。
-  };
+  using Candidate = RuneCandidate;
 
   std::vector<Candidate> infer(const cv::Mat & image);
-  cv::Point2f refine_center(const cv::Mat & image, const std::vector<Candidate> & candidates);
+  cv::Point2f refine_center(
+    const cv::Mat & image, const std::vector<Candidate> & candidates,
+    std::vector<std::vector<cv::Point>> & contours);
 
   ov::Core core_;
   ov::CompiledModel model_;

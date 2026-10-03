@@ -15,6 +15,7 @@
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/armor.hpp"
 #include "tasks/auto_aim/tracker.hpp"
+#include "tasks/auto_buff_v2/rune.hpp"
 
 namespace tools
 {
@@ -32,6 +33,8 @@ struct BuffDebugData
   std::size_t bullseye_count = 0;
   std::size_t icon_count = 0;
   std::vector<BuffDetectionDebug> detections;
+  std::vector<auto_buff_v2::RuneCandidate> candidates;
+  std::optional<std::vector<std::vector<cv::Point>>> climber_contours;
   std::vector<cv::Point2f> reprojected_features;
   std::optional<std::array<cv::Point2f, 5>> blade_polygon;
   std::optional<cv::Point2f> icon;
