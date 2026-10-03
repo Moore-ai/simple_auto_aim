@@ -6,6 +6,7 @@
 #include <tuple>
 #include <vector>
 
+#include <fmt/format.h>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/eigen.hpp>
 #include "hungarian.hpp"
@@ -30,6 +31,7 @@ void RuneModel::set_q_gimbal2world(const Eigen::Quaterniond & q_gimbal2world)
 
 void RuneModel::reset()
 {
+  diagnostic_.clear();
   state_.reset();
   fitter_.reset();
   inactive_timeout_.fill(Timestamp{});
@@ -122,8 +124,10 @@ Eigen::Matrix<double, 2, 6> observation_jacobian(
 bool solve_seed(const RuneIcon & icon, const RuneBullseye & bull, const cv::Mat & camera_matrix,
                 const cv::Mat & distortion, const Eigen::Matrix3d & R_camera2world,
                 const Eigen::Vector3d & t_camera2world, const RuneModel::Config & config,
-                RuneEstimate & state, double & seed_sse, double & seed_max_error)
+                RuneEstimate & state, double & seed_sse, double & seed_max_error,
+                std::string & rejection)
 {
+  rejection = "degenerate corners";
   std::size_t bottom = 0, top = 0;
   double nearest = std::numeric_limits<double>::max(), farthest = 0;
   for (std::size_t i = 0; i < 4; ++i) {
@@ -154,6 +158,7 @@ bool solve_seed(const RuneIcon & icon, const RuneBullseye & bull, const cv::Mat 
     {0, 0, 0.55f}, {0, -0.15f, 0.7f}};
   const std::vector<cv::Point2f> image = {icon.center, t, l, b, r};
   cv::Vec3d rvec, tvec;
+  rejection = "PnP failed or behind camera";
   try {
     if (!cv::solvePnP(object, image, camera_matrix, distortion, rvec, tvec, false,
                       cv::SOLVEPNP_EPNP) || tvec[2] <= 0) return false;
@@ -166,12 +171,16 @@ bool solve_seed(const RuneIcon & icon, const RuneBullseye & bull, const cv::Mat 
   cv::cv2eigen(rotation, R_page2camera);
   const Eigen::Matrix3d R_page2world = R_camera2world * R_page2camera;
   const Eigen::Vector3d face = R_page2world.col(0);
+  rejection = "degenerate face normal";
   if (face.head<2>().squaredNorm() <= 1e-6) return false;
+  const double face_pitch = std::asin(std::abs(face.z())) * 180 / kPi;
+  rejection = fmt::format("face pitch {:.1f} > {:.1f} deg", face_pitch, config.init_pitch_bound);
   if (std::asin(std::abs(face.z())) > config.init_pitch_bound * kPi / 180) return false;
   state.center = R_camera2world * Eigen::Vector3d(tvec[0], tvec[1], tvec[2]) + t_camera2world;
   state.face_yaw = std::atan2(face.y(), face.x());
   const Eigen::Vector3d horizontal_face(std::cos(state.face_yaw),
                                          std::sin(state.face_yaw), 0);
+  rejection = "face normal reversed";
   if ((R_camera2world.transpose() * horizontal_face).z() <= 0) return false;
   const Eigen::Matrix3d local_rotation =
     Eigen::AngleAxisd(-state.face_yaw, Eigen::Vector3d::UnitZ()) * R_page2world;
@@ -186,6 +195,9 @@ bool solve_seed(const RuneIcon & icon, const RuneBullseye & bull, const cv::Mat 
     seed_sse += error2;
     seed_max_error = std::max(seed_max_error, error);
   }
+  rejection = fmt::format("reprojection rms {:.1f}/{:.1f}, max {:.1f}/{:.1f} px",
+                          std::sqrt(seed_sse / image.size()), config.init_seed_mean_error,
+                          seed_max_error, config.init_seed_max_error);
   return std::sqrt(seed_sse / image.size()) <= config.init_seed_mean_error &&
          seed_max_error <= config.init_seed_max_error &&
          state.center.allFinite();
@@ -261,10 +273,12 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
   if (std::chrono::duration<double>(timestamp - last_inactive_corrected_).count() >
       config_.timeout_seconds) {
     reset();
-    return initialize(elements, timestamp, R_camera2world, t_camera2world);
+    const bool initialized = initialize(elements, timestamp, R_camera2world, t_camera2world);
+    diagnostic_ = "inactive timeout; " + diagnostic_;
+    return initialized;
   }
   const double dt = std::chrono::duration<double>(timestamp - state.timestamp).count();
-  if (dt < 0) { reset(); return false; }
+  if (dt < 0) { reset(); diagnostic_ = "timestamp reversed"; return false; }
   state = RunePredictor{}.predict(state, timestamp);
   RuneEkfState x = ekf_state_;
   x.add_rotation_angle(x.rotation_speed() * dt);
@@ -340,7 +354,7 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
     state.rotation_speed = state.sine_v + state.sine_a * std::sin(state.sine_phase);
   else if (state.has_fitted_motion)
     state.rotation_speed = state.fitted_rotation_speed;
-  if (diverged()) { reset(); return false; }
+  if (diverged()) { reset(); diagnostic_ = "model diverged"; return false; }
   if (corrected_inactive > 0) last_inactive_corrected_ = timestamp;
   if (corrected_inactive > 1) force_sine_until_ = timestamp + std::chrono::seconds(3);
   if (corrected_blades == 0) return false;
@@ -358,7 +372,16 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
   const auto inactive_count = std::count_if(elements.bullseyes.begin(),
                                             elements.bullseyes.end(),
                                             [](const auto & bull) { return !bull.active; });
-  if (elements.icons.empty() || inactive_count == 0 || inactive_count > 2) return false;
+  diagnostic_ = fmt::format("init: R={}, inactive={}; ", elements.icons.size(), inactive_count);
+  if (elements.icons.empty()) {
+    diagnostic_ += "missing R";
+    return false;
+  }
+  if (inactive_count == 0 || inactive_count > 2) {
+    diagnostic_ += "need 1 or 2 inactive bullseyes";
+    return false;
+  }
+  std::string rejection;
   struct Candidate
   {
     RuneEstimate state;
@@ -383,13 +406,16 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
       RuneEstimate seed;
       double seed_sse = 0, seed_max_error = 0;
       if (!solve_seed(icon, bull, camera_matrix_, distort_coeffs_, R_camera2world,
-                      t_camera2world, config_, seed, seed_sse, seed_max_error)) continue;
+                      t_camera2world, config_, seed, seed_sse, seed_max_error, rejection)) continue;
       const RuneEkfState x = ekf_state_from(seed);
       const auto projected_icon = project_feature(x, 0, R_camera2world, t_camera2world,
                                                    camera_matrix_, distort_coeffs_);
       const auto projected_seed = project_feature(x, 1, R_camera2world, t_camera2world,
                                                    camera_matrix_, distort_coeffs_);
-      if (!projected_icon || !projected_seed) continue;
+      if (!projected_icon || !projected_seed) {
+        rejection = "model features behind camera";
+        continue;
+      }
       Candidate candidate;
       candidate.state = seed;
       candidate.icon_pixel = icon.center;
@@ -399,7 +425,11 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
       candidate.seed_sse = seed_sse;
       candidate.seed_max_error = seed_max_error;
       const double center_gate2 = config_.init_center_gate * config_.init_center_gate;
-      if (candidate.seed_center_error > center_gate2) continue;
+      if (candidate.seed_center_error > center_gate2) {
+        rejection = fmt::format("center error {:.1f} > {:.1f} px",
+                                std::sqrt(candidate.seed_center_error), config_.init_center_gate);
+        continue;
+      }
       if (inactive_count > 1)
         candidate.inactive_center_sse = std::numeric_limits<double>::max();
       for (const auto & other : elements.bullseyes) {
@@ -424,7 +454,10 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
       if (better) best = candidate;
     }
   }
-  if (!best) return false;
+  if (!best) {
+    diagnostic_ += "last seed rejected: " + rejection;
+    return false;
+  }
   RuneEstimate seed = best->state;
   seed.start_timestamp = timestamp;
   seed.timestamp = timestamp;
@@ -441,6 +474,7 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
                                distort_coeffs_, config_.noise_observation);
   ekf_state_into(*state_, ekf_state_);
   fitter_.reset();
+  diagnostic_ = "initialized";
   return true;
 }
 

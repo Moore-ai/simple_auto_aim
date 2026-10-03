@@ -57,6 +57,14 @@ int main()
   assert(cv::norm(reprojected.front().point - pixel.front()) < 2.0);
   assert(model.reprojected_center());
 
+  auto_buff_v2::RuneElements active_only = elements;
+  active_only.bullseyes.front().active = true;
+  auto_buff_v2::RuneModel no_inactive(config.camera, config.model, false);
+  assert(!no_inactive.update(active_only, now));
+  assert(!no_inactive.state());
+  assert(no_inactive.diagnostic().find("inactive=0") != std::string::npos);
+  assert(no_inactive.diagnostic().find("need 1 or 2 inactive") != std::string::npos);
+
   auto_buff_v2::RuneModel delayed(config.camera, config.model, false);
   delayed.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(delayed.update(elements, now));
@@ -100,6 +108,7 @@ int main()
   auto_buff_v2::RuneModel gated(config.camera, config.model, false);
   gated.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(!gated.update(wrong_center, now));
+  assert(gated.diagnostic().find("center error") != std::string::npos);
 
   auto_buff_v2::RuneElements degenerate = elements;
   degenerate.bullseyes.front().corners[0] =
@@ -107,6 +116,7 @@ int main()
   auto_buff_v2::RuneModel rejected(config.camera, config.model, false);
   rejected.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(!rejected.update(degenerate, now));
+  assert(rejected.diagnostic().find("last seed rejected") != std::string::npos);
 
   auto_buff_v2::RuneElements noisy = elements;
   noisy.bullseyes.front().corners[3] += cv::Point2f(3, 0);
@@ -169,6 +179,7 @@ int main()
   for (int i = 121; i <= 153; ++i)
     big.update(empty, now + std::chrono::milliseconds(50 * i));
   assert(!big.state());
+  assert(big.diagnostic().find("missing R") != std::string::npos);
   assert(big.update(tilted_elements, now + std::chrono::milliseconds(7700)));
   assert(std::abs(big.state()->rotation_angle - seed_angle) < 0.03);
 }

@@ -36,7 +36,7 @@ tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & fact
       {bull.center, bull.active ? std::vector<cv::Point2f>{} :
                                    std::vector<cv::Point2f>(
                                      bull.corners.begin(), bull.corners.end()),
-       fmt::format("B: {:.3f}", bull.score)});
+       fmt::format("B: {:.3f} {}", bull.score, bull.active ? "active" : "inactive")});
   }
   std::array<cv::Point2f, 5> blades;
   bool complete_polygon = true;
@@ -64,6 +64,9 @@ tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & fact
     } else {
       buff_debug.info = fmt::format("theta_ekf={:+.2f}", target->rotation_angle);
     }
+  } else {
+    buff_debug.info = model_.diagnostic();
+    buff_debug.info_anchor = cv::Point2f(10, 50);
   }
 
   tools::ProcessedFrame result;

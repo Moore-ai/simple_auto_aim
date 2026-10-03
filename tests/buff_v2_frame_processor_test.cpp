@@ -33,6 +33,11 @@ int main()
   assert(processed.snapshot.buff_debug.detections.size() == 1);
   assert(processed.snapshot.buff_debug.detections.front().label.rfind("B: ", 0) == 0);
   assert(processed.targets.empty());
+  // A detected bullseye without an R must explain why no model/polygon exists.
+  assert(processed.snapshot.buff_debug.info.find("missing R") != std::string::npos);
+  assert(processed.snapshot.buff_debug.info_anchor);
+  assert(processed.snapshot.buff_debug.detections.front().label.find("active") !=
+         std::string::npos);
   facts.received.state.mode = static_cast<std::uint8_t>(io::InfantryEnemyColor::red);
   assert(processor.process(facts).snapshot.buff_debug.detections.empty());
   facts.target_color_override = io::InfantryEnemyColor::blue;

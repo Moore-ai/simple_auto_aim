@@ -4,6 +4,7 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <Eigen/Geometry>
@@ -55,6 +56,7 @@ public:
   bool update(const RuneElements & elements, Timestamp timestamp);
   void reset();
   std::optional<RuneEstimate> state() const;
+  const std::string & diagnostic() const { return diagnostic_; }
   std::vector<RuneReprojectedFeature> reprojected_features() const;
   std::optional<cv::Point2f> reprojected_center() const;
 
@@ -72,6 +74,7 @@ private:
   Eigen::Quaterniond q_gimbal2world_ = Eigen::Quaterniond::Identity();
   bool big_rune_ = false;
   Config config_;
+  std::string diagnostic_;
   std::optional<RuneEstimate> state_;
   RuneEnergyFitter fitter_;
   Eigen::Matrix<double, 6, 6> covariance_ = Eigen::Matrix<double, 6, 6>::Identity();
