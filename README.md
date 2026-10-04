@@ -60,18 +60,30 @@ cmake --build build --parallel 1
 ./build/standard configs/standard.yaml --mode=2 # 大符
 ```
 
-打符检测器由 `buff_v2.detector` 选择，默认 `njust`；设置为 `climber` 可使用移植自
-`Climber_Vision_26` 的 `ClimberRuneDetector`，参数位于 `buff_v2.climber`。
+打符瞄准器由 `buff_v2.aimer.type` 选择，独立于检测器和 `buff_v2.planner_mode`，两种 planner
+均支持两种 aimer。实现位于 `tasks/auto_buff_v2/aimers/`，通过 `RuneAimer` 接口和工厂创建。
+默认 `njust` 保留现有迭代弹道解算与开火窗口，专属参数位于 `buff_v2.aimer.njust`：
+`shoot_delay`、`rune_idle_duration`、`rune_shoot_duration`（秒）以及
+`yaw_tolerance`、`pitch_tolerance`（米），由 `NjustRuneAimer::Config` 解析。
+`climber` 适配 `Climber_Vision_26/tasks/auto_buff/buff_aimer.*`，支持线性空气阻力、
+两次飞行时间解算（允许 30 ms 差值）、切叶时持续控制并抑制开火，以及定时开火。
+MPC 差分采样分别从原始状态向前和向后预测，不修改模型状态；预测帧保留控制但禁止开火。
+专属参数位于 `buff_v2.aimer.climber`：`predict_time` 为额外预测时间，`fire_gap_time` 为开火间隔，
+单位均为秒；`air_resistance_k` 为线性阻力系数（s⁻¹），0 使用真空弹道。
+弹速低于 10 或高于 28 m/s 时回退到 24 m/s。
+
+打符检测器由 `buff_v2.detector.type` 选择，默认 `njust`；设置为 `climber` 可使用移植自
+`Climber_Vision_26` 的 `ClimberRuneDetector`，参数位于 `buff_v2.detector.climber`。
 随仓库提供的 `assets/buff_repvgg.xml` / `.bin` 为该源项目模型，默认使用 CPU 推理，
-可通过 `buff_v2.climber.device` 选择设备。预处理尺寸从模型输入 FP32 `[1,3,H,W]`
+可通过 `buff_v2.detector.climber.device` 选择设备。预处理尺寸从模型输入 FP32 `[1,3,H,W]`
 读取（附带模型为 640×640），输出为 `[1,33,N]`（红/蓝两类、9 点关键点）。
-`buff_v2.climber.max_bullseyes` 设置未激活靶心输出上限，可选 1 或 2，默认 2；
+`buff_v2.detector.climber.max_bullseyes` 设置未激活靶心输出上限，可选 1 或 2，默认 2；
 同时输出一个细化后的 R 标。五叶关联和丢失处理交给
 `RuneModel`，小符和大符共用多候选检测。颜色直接遵循主入口传入的检测颜色，
 可用 `--target-color=red` 或 `--target-color=blue` 指定。
 
-设置 `buff_v2.detector: szu` 可使用深圳大学 `RP-26Rune` / `RuneDetectionModel`
-移植的 `SzuRuneDetector`，专属参数位于 `buff_v2.szu`。附带模型为
+设置 `buff_v2.detector.type: szu` 可使用深圳大学 `RP-26Rune` / `RuneDetectionModel`
+移植的 `SzuRuneDetector`，专属参数位于 `buff_v2.detector.szu`。附带模型为
 `assets/szu_rune.onnx`，使用 OpenVINO 推理，支持 `[1,18,N]` / `[1,N,18]`
 三类状态、五点输出。检测过程包含居中 letterbox、关键点置信度筛选、距离 NMS、
 敌方颜色差分和靶心/R 标轮廓精修；颜色同样由 `--target-color` 或云台反馈指定。
@@ -79,7 +91,7 @@ cmake --build build --parallel 1
 仅发布同时通过靶心和 R 标轮廓验证的候选，缺失或错误颜色的轮廓不会退回网络点。
 三维解算和跟踪继续使用 `RuneModel`；没有引入源项目的 `PowerRunePlane` 优化链路。
 
-使用 `buff_v2.detector: climber` 时，`standard` 的 `/image` 用蓝色绘制网络候选的边框、
+使用 `buff_v2.detector.type: climber` 时，`standard` 的 `/image` 用蓝色绘制网络候选的边框、
 六个关键点（上、左、下、右、靶心、R 标）和 `#编号: 置信度`。候选为置信度筛选及 NMS 后、
 靶心去重和数量限制前的全部结果；绿色仍表示最终检测，黄色表示模型重投影。
 编号仅对应当前帧，不代表跨帧跟踪 ID。
@@ -212,7 +224,7 @@ cd ~/simple_auto_aim
 
 ## 9 buff_v2 Njust R 标检测调试
 
-此程序仅适用于 Njust 检测器，配置必须设置 `buff_v2.detector: njust`。
+此程序仅适用于 Njust 检测器，配置必须设置 `buff_v2.detector.type: njust`。
 选择其他检测器时会在连接相机和串口前报错退出。
 
 独立入口为 `src/buff_v2_njust_r_detector_debug.cpp`。它复用 `standard` 的相机、云台反馈、
@@ -229,7 +241,7 @@ cmake --build build --target buff_v2_njust_r_detector_debug -j2
 
 `--mode=2` 对应大符模式；两个模式的检测过程和参数相同。`--target-color=red` 检测红色，`--target-color=none`
 由下位机反馈决定颜色，与主入口相同。检测参数直接读取同一份配置中的相机内参和
-`buff_v2.njust` 下的检测参数，无需维护第二份参数。配置中的 `foxglove.enable` 需要开启。
+`buff_v2.detector.njust` 下的检测参数，无需维护第二份参数。配置中的 `foxglove.enable` 需要开启。
 
 在 Foxglove 中连接 `ws://localhost:8765`，新增 Plot 面板并添加以下路径：
 
@@ -278,7 +290,7 @@ R 标调试封装随后按主检测器最终识别结果严格过滤，只发布
 
 ## 10 buff_v2 Njust 靶心检测调试
 
-此程序仅适用于 Njust 检测器，配置必须设置 `buff_v2.detector: njust`。
+此程序仅适用于 Njust 检测器，配置必须设置 `buff_v2.detector.type: njust`。
 选择其他检测器时会在连接相机和串口前报错退出。
 
 独立入口为 `src/buff_v2_njust_bullseye_detector_debug.cpp`，同样复用主链路的相机、云台反馈、
@@ -307,5 +319,5 @@ Plot 面板使用 `/buff_v2/njust/detector.candidates[:].radius`、
 靶心入口仅发布靶心候选和成功检测标注，R 标入口仅发布 R 标候选和成功检测标注。
 靶心候选按主检测器的半径分支划分；R 标候选必须通过主检测器最终的 R 标识别，
 仅半径落在靶心范围之外不足以成为 R 标观测。
-阈值读取自 `buff_v2.njust`，属于 Njust 的共用检测参数，不代表另一类对象的观测。两个调试入口均不发布联合模型重投影标注。
+阈值读取自 `buff_v2.detector.njust`，属于 Njust 的共用检测参数，不代表另一类对象的观测。两个调试入口均不发布联合模型重投影标注。
 三个运行入口使用同一相机、串口和 Foxglove 端口，应分别运行。

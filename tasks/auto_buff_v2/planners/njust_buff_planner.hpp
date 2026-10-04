@@ -3,9 +3,9 @@
 
 #include <memory>
 
+#include "../aimers/rune_aimer.hpp"
 #include "../buff_config.hpp"
 #include "buff_plan_strategy.hpp"
-#include "tools/ballistic_solver.hpp"
 
 namespace auto_buff_v2
 {
@@ -18,10 +18,7 @@ public:
     double bullet_speed, const io::GimbalState & gimbal, Timestamp now) override;
 
 private:
-  BuffConfig::Planner config_;
-  std::unique_ptr<tools::BallisticSolver> ballistic_solver_;
-  std::optional<Timestamp> attack_start_;
-  std::optional<std::uint64_t> attack_generation_;
+  std::unique_ptr<RuneAimer> aimer_;
 };
 }  // namespace auto_buff_v2
 

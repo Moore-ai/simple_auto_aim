@@ -26,11 +26,7 @@ int main()
   target.timestamp = start;
   target.inactive[0] = true;
   auto_buff_v2::MpcBuffTracking::Config config;
-  config.shoot_delay = 0;
-  config.rune_idle_duration = 0.4;
-  config.rune_shoot_duration = 0.2;
-  config.yaw_tolerance = 0.07;
-  config.pitch_tolerance = 0.04;
+  config.aimer_parameters = YAML::Load("{njust: {shoot_delay: 0}}");
   config.ballistic_model = "vacuum";
   const char * mpc_config_path = "/tmp/buff_v2_mpc_test.yaml";
   std::ofstream(mpc_config_path) <<
@@ -66,7 +62,7 @@ int main()
     height_target.center.z() = height;
     height_target.rotation_speed = 1.0;
     auto height_config = config;
-    height_config.shoot_delay = 0.1;
+    height_config.aimer_parameters = YAML::Load("{njust: {shoot_delay: 0.1}}");
     height_config.ballistic_model = "vacuum";
     auto_buff_v2::MpcBuffTracking height_planner(height_config);
     const auto height_request = height_planner.prepare(1, height_target, 20, start);

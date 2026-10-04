@@ -26,7 +26,7 @@ NjustBuffDetectorDebug::NjustBuffDetectorDebug(
 : target_(target)
 {
   if (config.type != "njust")
-    throw std::invalid_argument("Njust detector debug only supports buff_v2.detector: njust");
+    throw std::invalid_argument("Njust detector debug only supports buff_v2.detector.type: njust");
   detector_.config = auto_buff_v2::NjustRuneDetector::Config::load(config.parameters["njust"]);
   detector_.config.fx = config.fx;
   detector_.config.fy = config.fy;
@@ -267,8 +267,8 @@ int run_njust_buff_detector_debug(int argc, char * argv[], NjustBuffDetectorDebu
     "{target-color   | | 必填：red、blue 或 none（由下位机决定）}";
   cv::CommandLineParser cli(argc, argv, keys);
   cli.about(target == NjustBuffDetectorDebugTarget::icon ?
-    "Njust R 标检测调试：仅支持 buff_v2.detector: njust，参数位于 buff_v2.njust" :
-    "Njust 靶心检测调试：仅支持 buff_v2.detector: njust，参数位于 buff_v2.njust");
+    "Njust R 标检测调试：仅支持 buff_v2.detector.type: njust，参数位于 buff_v2.detector.njust" :
+    "Njust 靶心检测调试：仅支持 buff_v2.detector.type: njust，参数位于 buff_v2.detector.njust");
   if (cli.has("help") || !cli.has("@config-path")) {
     cli.printMessage();
     return 0;
@@ -291,7 +291,7 @@ int run_njust_buff_detector_debug(int argc, char * argv[], NjustBuffDetectorDebu
 
   const auto config = auto_buff_v2::BuffConfig::load(config_path);
   if (config.detector.type != "njust") {
-    std::cerr << "此调试程序仅支持 buff_v2.detector: njust，当前为 "
+    std::cerr << "此调试程序仅支持 buff_v2.detector.type: njust，当前为 "
               << config.detector.type << '\n';
     return 2;
   }

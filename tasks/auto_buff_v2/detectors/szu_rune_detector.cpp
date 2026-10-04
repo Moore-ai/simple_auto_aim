@@ -67,7 +67,7 @@ SzuRuneDetector::SzuRuneDetector(const YAML::Node & config)
       !std::isfinite(blue_threshold_) || blue_threshold_ < 0 || blue_threshold_ > 255 ||
       !std::isfinite(armor_area_error_) || armor_area_error_ < 0 ||
       !probability(armor_solidity_) || armor_border_margin_ < 0)
-    throw std::invalid_argument("invalid buff_v2.szu detector parameters");
+    throw std::invalid_argument("invalid buff_v2.detector.szu detector parameters");
 
   auto network = core_.read_model(config["model"].as<std::string>());
   if (network->inputs().size() != 1 || network->outputs().size() != 1)

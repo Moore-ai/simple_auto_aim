@@ -23,7 +23,7 @@ int main()
     try {
       tools::NjustBuffDetectorDebug debug(unsupported, target);
     } catch (const std::invalid_argument & error) {
-      rejected = std::string(error.what()).find("only supports buff_v2.detector: njust") !=
+      rejected = std::string(error.what()).find("only supports buff_v2.detector.type: njust") !=
                  std::string::npos;
     }
     assert(rejected);

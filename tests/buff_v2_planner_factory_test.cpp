@@ -86,6 +86,22 @@ int main()
     assert(std::abs(sine.debug_xyza.z() - 1.643051028439865) < 1e-8);
   }
 
+  // Either planner consumes the selected Climber aimer, including its fallback speed.
+  config.aimer = "climber";
+  target.center.z() = 0;
+  for (const auto & mode : {"mpc", "njust"}) {
+    config.mode = mode;
+    auto climber_planner = auto_buff_v2::make_buff_planner(config, path);
+    assert(climber_planner->plan(1, target, 0, gimbal, start).control);
+    const auto climber_plan = climber_planner->plan(1, target, 0, gimbal, start + 10ms);
+    assert(climber_plan.control);
+    assert(std::abs(climber_plan.fly_time - 0.129172918752555) < 1e-9);
+    assert(!climber_plan.fire);
+    assert(climber_planner->plan(1, target, 0, gimbal, start + 800ms).fire);
+    assert(!climber_planner->plan(1, std::nullopt, 0, gimbal, start + 810ms).control);
+    assert(!climber_planner->plan(2, target, 0, gimbal, start + 820ms).fire);
+  }
+
   config.mode = "unknown";
   bool rejected = false;
   try {

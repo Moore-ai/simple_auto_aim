@@ -34,8 +34,11 @@ BuffConfig BuffConfig::load(const std::string & path)
 
   const auto buff = yaml["buff_v2"];
   if (buff) {
-    result.detector.type = buff["detector"].as<std::string>(result.detector.type);
-    result.detector.parameters = buff;
+    const auto detector = buff["detector"];
+    if (detector) {
+      result.detector.type = detector["type"].as<std::string>(result.detector.type);
+      result.detector.parameters = detector;
+    }
     result.model.timeout_seconds = buff["timeout_seconds"].as<double>(result.model.timeout_seconds);
     result.model.noise_x = buff["noise_x"].as<double>(result.model.noise_x);
     result.model.noise_y = buff["noise_y"].as<double>(result.model.noise_y);
@@ -60,15 +63,11 @@ BuffConfig BuffConfig::load(const std::string & path)
     result.model.diverge_face_angle =
       buff["diverge_face_angle"].as<double>(result.model.diverge_face_angle);
     result.planner.mode = buff["planner_mode"].as<std::string>(result.planner.mode);
-    result.planner.shoot_delay = buff["shoot_delay"].as<double>(result.planner.shoot_delay);
-    result.planner.rune_idle_duration =
-      buff["rune_idle_duration"].as<double>(result.planner.rune_idle_duration);
-    result.planner.rune_shoot_duration =
-      buff["rune_shoot_duration"].as<double>(result.planner.rune_shoot_duration);
-    result.planner.yaw_tolerance =
-      buff["yaw_tolerance"].as<double>(result.planner.yaw_tolerance);
-    result.planner.pitch_tolerance =
-      buff["pitch_tolerance"].as<double>(result.planner.pitch_tolerance);
+    const auto aimer = buff["aimer"];
+    if (aimer) {
+      result.planner.aimer = aimer["type"].as<std::string>(result.planner.aimer);
+      result.planner.aimer_parameters = aimer;
+    }
   }
   result.planner.ballistic_model =
     yaml["ballistic_model"].as<std::string>(result.planner.ballistic_model);

@@ -7,7 +7,8 @@ add_library(auto_buff_v2 STATIC
   rune_energy_fitter.cpp
   rune_model.cpp
   rune_predictor.cpp
-  planners/buff_aiming.cpp
+  aimers/njust_rune_aimer.cpp
+  aimers/climber_rune_aimer.cpp
   planners/mpc_buff_tracking.cpp
   planners/mpc_buff_planner.cpp
   planners/njust_buff_planner.cpp)

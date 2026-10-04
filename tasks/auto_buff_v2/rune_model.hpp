@@ -38,6 +38,7 @@ struct RuneEstimate
   double sine_t = 0;
   bool sine_valid = false;
   std::size_t update_count = 0;
+  bool predicted = false;  // No inactive blade corrected in the current frame.
 };
 
 struct RuneReprojectedFeature

@@ -29,7 +29,7 @@ ClimberRuneDetector::ClimberRuneDetector(const YAML::Node & config)
       dilate_kernel_size_ <= 0 || dilate_iterations_ < 0 || r_center_mask_ratio_ <= 0 ||
       r_center_contour_div_ <= 0 || r_center_refine_max_shift_ < 0 || dedup_distance_ < 0 ||
       max_bullseyes_ < 1 || max_bullseyes_ > 2)
-    throw std::invalid_argument("invalid buff_v2.climber detector parameters");
+    throw std::invalid_argument("invalid buff_v2.detector.climber detector parameters");
 
   const auto device = config["device"].as<std::string>("CPU");
   model_ = core_.compile_model(core_.read_model(path), device);

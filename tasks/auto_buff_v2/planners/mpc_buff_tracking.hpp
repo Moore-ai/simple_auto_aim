@@ -5,11 +5,11 @@
 #include <memory>
 #include <optional>
 
+#include "../aimers/rune_aimer.hpp"
 #include "../buff_config.hpp"
 #include "../rune_model.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
-#include "tools/ballistic_solver.hpp"
 
 namespace auto_buff_v2
 {
@@ -31,16 +31,13 @@ public:
   explicit MpcBuffTracking(Config config);
   std::optional<MpcBuffTrackingRequest> prepare(
     std::uint64_t target_generation, const std::optional<RuneEstimate> & target,
-    double bullet_speed, Timestamp now);
+    double bullet_speed, Timestamp now, const io::GimbalState & gimbal = {});
   bool fire_advice(
     const MpcBuffTrackingRequest & request, const auto_aim::Plan & plan,
-    const io::GimbalState & gimbal, Timestamp now) const;
+    const io::GimbalState & gimbal, Timestamp now);
 
 private:
-  Config config_;
-  std::unique_ptr<tools::BallisticSolver> ballistic_solver_;
-  std::optional<Timestamp> attack_start_;
-  std::optional<std::uint64_t> attack_generation_;
+  std::unique_ptr<RuneAimer> aimer_;
 };
 }  // namespace auto_buff_v2
 

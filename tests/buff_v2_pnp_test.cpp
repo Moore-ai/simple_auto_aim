@@ -39,6 +39,11 @@ int main()
   const auto now = std::chrono::steady_clock::now();
   assert(model.update(elements, now));
   const auto state = model.state();
+  assert(state && !state->predicted);
+  assert(!model.update({}, now + std::chrono::milliseconds(10)));
+  assert(model.state() && model.state()->predicted);
+  assert(model.update(elements, now + std::chrono::milliseconds(20)));
+  assert(!model.state()->predicted);
   assert(state);
   assert((state->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
   assert(std::abs(state->rotation_angle) < 0.03);

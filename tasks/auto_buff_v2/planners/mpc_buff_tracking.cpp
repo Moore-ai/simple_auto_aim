@@ -2,9 +2,8 @@
 
 #include <array>
 #include <cmath>
-#include <utility>
 
-#include "buff_aiming.hpp"
+#include "../aimers/rune_aimer_factory.hpp"
 
 namespace auto_buff_v2
 {
@@ -14,14 +13,13 @@ constexpr double kPi = 3.14159265358979323846;
 
 std::optional<auto_aim::Trajectory> make_reference_trajectory(
   const RuneEstimate & state, Timestamp center_time, double speed, double yaw0,
-  double yaw_offset, double pitch_offset, const tools::BallisticSolver & ballistic_solver)
+  const RuneAimer & aimer)
 {
-  std::array<detail::AimSolution, auto_aim::HORIZON + 2> samples;
+  std::array<AimSolution, auto_aim::HORIZON + 2> samples;
   for (int i = 0; i <= auto_aim::HORIZON + 1; ++i) {
-    const auto time = detail::offset_time(
+    const auto time = offset_time(
       center_time, (static_cast<double>(i - 1 - auto_aim::HALF_HORIZON)) * auto_aim::DT);
-    const auto solution = detail::aim_solution(
-      state, time, speed, yaw_offset, pitch_offset, ballistic_solver);
+    const auto solution = aimer.aim_at(state, time, speed);
     if (!solution) return std::nullopt;
     samples[i] = *solution;
   }
@@ -40,62 +38,34 @@ std::optional<auto_aim::Trajectory> make_reference_trajectory(
 }  // namespace
 
 MpcBuffTracking::MpcBuffTracking(Config config)
-: config_(std::move(config)),
-  ballistic_solver_(tools::make_ballistic_solver(config_.ballistic_model, config_.ballistic_config))
+: aimer_(make_rune_aimer(config))
 {
 }
 
 std::optional<MpcBuffTrackingRequest> MpcBuffTracking::prepare(
   std::uint64_t target_generation, const std::optional<RuneEstimate> & target,
-  double bullet_speed, Timestamp now)
+  double bullet_speed, Timestamp now, const io::GimbalState & gimbal)
 {
-  if (!target) {
-    attack_start_.reset();
-    attack_generation_.reset();
-    return std::nullopt;
-  }
-  if (attack_generation_ != target_generation) {
-    attack_start_ = now;
-    attack_generation_ = target_generation;
-  }
-  if (bullet_speed < config_.bullet_speed_min || bullet_speed > config_.bullet_speed_max)
-    bullet_speed = config_.bullet_speed_default;
-  const double distance = std::hypot(target->center.x(), target->center.y());
-  double fly_time = target->center.norm() / bullet_speed;
-  Timestamp center_time;
-  std::optional<detail::AimSolution> center;
-  // RMCS fire control: always refine from the original estimate, at most five solves.
-  for (int i = 0; i < 5; ++i) {
-    center_time = detail::offset_time(now, config_.shoot_delay + fly_time);
-    center = detail::aim_solution(
-      *target, center_time, bullet_speed, config_.yaw_offset, config_.pitch_offset,
-      *ballistic_solver_);
-    if (!center) return std::nullopt;
-    const double previous = fly_time;
-    fly_time = center->fly_time;
-    if (std::abs(fly_time - previous) < 0.001) break;
-  }
+  const auto aimed = aimer_->aim(target_generation, target, bullet_speed, gimbal, now);
+  if (!aimed || !aimed->plan.control) return std::nullopt;
   const auto trajectory = make_reference_trajectory(
-    *target, center_time, bullet_speed, center->angles.x(), config_.yaw_offset,
-    config_.pitch_offset, *ballistic_solver_);
+    *target, aimed->prediction_time, aimed->bullet_speed, aimed->solution.angles.x(), *aimer_);
   if (!trajectory) return std::nullopt;
 
   MpcBuffTrackingRequest request;
   request.trajectory = *trajectory;
-  request.yaw0 = center->angles.x();
-  request.distance = distance;
-  request.fly_time = fly_time;
+  request.yaw0 = aimed->solution.angles.x();
+  request.distance = std::hypot(target->center.x(), target->center.y());
+  request.fly_time = aimed->plan.fly_time;
   request.rune_center = target->center;
-  request.aimpoint = center->point;
+  request.aimpoint = aimed->solution.point;
   return request;
 }
 
 bool MpcBuffTracking::fire_advice(
   const MpcBuffTrackingRequest & request, const auto_aim::Plan & plan,
-  const io::GimbalState & gimbal, Timestamp now) const
+  const io::GimbalState & gimbal, Timestamp now)
 {
-  if (!plan.control || !attack_start_) return false;
-  return detail::fire_advice(
-    config_, request.rune_center, request.aimpoint, plan, gimbal, *attack_start_, now);
+  return aimer_->fire_advice(request.rune_center, request.aimpoint, plan, gimbal, now);
 }
 }  // namespace auto_buff_v2

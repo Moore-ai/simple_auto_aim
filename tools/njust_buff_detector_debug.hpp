@@ -21,7 +21,7 @@ struct NjustBuffDetectorDebugFrame
   NjustBuffDetectorDebugTarget target;
 };
 
-// Njust-only R icon and bullseye diagnostics; requires buff_v2.detector: njust.
+// Njust-only R icon and bullseye diagnostics; requires buff_v2.detector.type: njust.
 class NjustBuffDetectorDebug
 {
 public:

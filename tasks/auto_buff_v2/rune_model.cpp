@@ -355,6 +355,7 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
   else if (state.has_fitted_motion)
     state.rotation_speed = state.fitted_rotation_speed;
   if (diverged()) { reset(); diagnostic_ = "model diverged"; return false; }
+  state.predicted = corrected_inactive == 0;
   if (corrected_inactive > 0) last_inactive_corrected_ = timestamp;
   if (corrected_inactive > 1) force_sine_until_ = timestamp + std::chrono::seconds(3);
   if (corrected_blades == 0) return false;

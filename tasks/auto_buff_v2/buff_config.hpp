@@ -26,7 +26,7 @@ struct BuffConfig
     std::string type = "njust";
     double fx = 0;
     double fy = 0;
-    YAML::Node parameters;  // 原始配置，由所选检测器解析其专属参数。
+    YAML::Node parameters;  // buff_v2.detector，由所选检测器解析其专属参数。
   } detector;
 
   struct Model
@@ -50,11 +50,8 @@ struct BuffConfig
   struct Planner
   {
     std::string mode = "mpc";
-    double shoot_delay = 0.04;
-    double rune_idle_duration = 0.4;
-    double rune_shoot_duration = 0.2;
-    double yaw_tolerance = 0.07;
-    double pitch_tolerance = 0.04;
+    std::string aimer = "njust";
+    YAML::Node aimer_parameters;  // buff_v2.aimer，由所选 aimer 解析专属参数。
     double yaw_offset = 0;
     double pitch_offset = 0;
     double bullet_speed_min = 10;
