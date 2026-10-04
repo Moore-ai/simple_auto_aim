@@ -47,6 +47,13 @@ struct BuffConfig
     double diverge_face_angle = 45;
   } model;
 
+  struct Ballistic
+  {
+    std::string type = "njust";
+    double njust_air_resistance = 0.003;
+    double climber_air_resistance_k = 0;
+  };
+
   struct Planner
   {
     std::string mode = "mpc";
@@ -57,8 +64,7 @@ struct BuffConfig
     double bullet_speed_min = 10;
     double bullet_speed_max = 25;
     double bullet_speed_default = 23.4;
-    std::string ballistic_model = "njust";
-    tools::BallisticSolverConfig ballistic_config;
+    Ballistic ballistic;
   } planner;
 
   static BuffConfig load(const std::string & path);

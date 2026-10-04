@@ -1,6 +1,9 @@
 #include <cassert>
 #include <cmath>
+#include <fstream>
 #include <limits>
+
+#include <yaml-cpp/yaml.h>
 
 #include "tasks/auto_aim/planner/planner.hpp"
 #include "tools/ballistic_solver.hpp"
@@ -73,5 +76,18 @@ int main()
     assert(elevated_iteration_plan.control);
     assert(std::abs(elevated_iteration_plan.fly_time - expected_iteration.fly_time) < 1e-12);
   }
+  // Climber drag comes from the auto-aim root configuration, independently of buff_v2.
+  constexpr char climber_path[] = "/tmp/auto_aim_climber_ballistic_test.yaml";
+  auto climber_yaml = YAML::LoadFile("tests/planner_fly_time_single_pass.yaml");
+  climber_yaml["ballistic_model"] = "climber";
+  climber_yaml["climber_air_resistance_k"] = 0.0;
+  climber_yaml["buff_v2"]["aimer"]["ballistic"]["climber"]["air_resistance_k"] = 10;
+  std::ofstream(climber_path) << climber_yaml;
+  const auto vacuum_climber = auto_aim::Planner(climber_path).plan(target, bullet_speed);
+  climber_yaml["climber_air_resistance_k"] = 0.02;
+  std::ofstream(climber_path) << climber_yaml;
+  const auto drag_climber = auto_aim::Planner(climber_path).plan(target, bullet_speed);
+  assert(vacuum_climber.control && drag_climber.control);
+  assert(drag_climber.fly_time > vacuum_climber.fly_time);
   return 0;
 }

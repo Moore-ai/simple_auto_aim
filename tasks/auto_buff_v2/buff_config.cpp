@@ -67,12 +67,21 @@ BuffConfig BuffConfig::load(const std::string & path)
     if (aimer) {
       result.planner.aimer = aimer["type"].as<std::string>(result.planner.aimer);
       result.planner.aimer_parameters = aimer;
+      const auto ballistic = aimer["ballistic"];
+      if (ballistic) {
+        result.planner.ballistic.type =
+          ballistic["type"].as<std::string>(result.planner.ballistic.type);
+        const auto njust = ballistic["njust"];
+        if (njust)
+          result.planner.ballistic.njust_air_resistance =
+            njust["air_resistance"].as<double>(result.planner.ballistic.njust_air_resistance);
+        const auto climber = ballistic["climber"];
+        if (climber)
+          result.planner.ballistic.climber_air_resistance_k = climber["air_resistance_k"].as<double>(
+            result.planner.ballistic.climber_air_resistance_k);
+      }
     }
   }
-  result.planner.ballistic_model =
-    yaml["ballistic_model"].as<std::string>(result.planner.ballistic_model);
-  result.planner.ballistic_config.njust_air_resistance = yaml["njust_air_resistance"].as<double>(
-    result.planner.ballistic_config.njust_air_resistance);
   result.planner.yaw_offset = yaml["yaw_offset"].as<double>(0) * kPi / 180;
   result.planner.pitch_offset = yaml["pitch_offset"].as<double>(0) * kPi / 180;
   result.planner.bullet_speed_min =

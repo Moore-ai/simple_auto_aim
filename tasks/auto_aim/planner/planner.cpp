@@ -46,6 +46,8 @@ Planner::Planner(const std::string & config_path)
   tools::BallisticSolverConfig ballistic_config;
   ballistic_config.njust_air_resistance =
     yaml["njust_air_resistance"].as<double>(ballistic_config.njust_air_resistance);
+  ballistic_config.climber_air_resistance_k =
+    yaml["climber_air_resistance_k"].as<double>(ballistic_config.climber_air_resistance_k);
   ballistic_solver_ = tools::make_ballistic_solver(ballistic_model, ballistic_config);
   yaw_offset_ = tools::read<double>(yaml, "yaw_offset") / 57.3;
   pitch_offset_ = tools::read<double>(yaml, "pitch_offset") / 57.3;

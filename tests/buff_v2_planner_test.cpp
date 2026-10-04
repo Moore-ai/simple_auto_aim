@@ -27,7 +27,7 @@ int main()
   target.inactive[0] = true;
   auto_buff_v2::MpcBuffTracking::Config config;
   config.aimer_parameters = YAML::Load("{njust: {shoot_delay: 0}}");
-  config.ballistic_model = "vacuum";
+  config.ballistic.type = "vacuum";
   const char * mpc_config_path = "/tmp/buff_v2_mpc_test.yaml";
   std::ofstream(mpc_config_path) <<
     "ballistic_model: vacuum\n"
@@ -63,7 +63,7 @@ int main()
     height_target.rotation_speed = 1.0;
     auto height_config = config;
     height_config.aimer_parameters = YAML::Load("{njust: {shoot_delay: 0.1}}");
-    height_config.ballistic_model = "vacuum";
+    height_config.ballistic.type = "vacuum";
     auto_buff_v2::MpcBuffTracking height_planner(height_config);
     const auto height_request = height_planner.prepare(1, height_target, 20, start);
     assert(height_request);
@@ -131,12 +131,12 @@ int main()
   assert(high_drag_solution->pitch > low_drag_solution->pitch);
 
   auto_buff_v2::MpcBuffTracking::Config njust_config;
-  njust_config.ballistic_model = "njust";
-  njust_config.ballistic_config.njust_air_resistance = 0.001;
+  njust_config.ballistic.type = "njust";
+  njust_config.ballistic.njust_air_resistance = 0.001;
   auto_buff_v2::MpcBuffTracking::Config high_drag_planner_config = njust_config;
-  high_drag_planner_config.ballistic_config.njust_air_resistance = 0.006;
+  high_drag_planner_config.ballistic.njust_air_resistance = 0.006;
   auto_buff_v2::MpcBuffTracking::Config vacuum_config = njust_config;
-  vacuum_config.ballistic_model = "vacuum";
+  vacuum_config.ballistic.type = "vacuum";
   auto_buff_v2::MpcBuffTracking njust_planner(njust_config);
   auto_buff_v2::MpcBuffTracking high_drag_planner(high_drag_planner_config);
   auto_buff_v2::MpcBuffTracking vacuum_planner(vacuum_config);

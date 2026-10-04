@@ -12,7 +12,6 @@ public:
   {
     double fire_gap_time = 0.7;
     double predict_time = 0.12;
-    double air_resistance_k = 0;  // Linear drag, s^-1; zero selects vacuum.
     static Config load(const YAML::Node & node);
   };
 
@@ -29,6 +28,7 @@ public:
 private:
   BuffConfig::Planner config_;
   Config climber_config_;
+  std::unique_ptr<tools::BallisticSolver> ballistic_solver_;
   std::optional<std::uint64_t> generation_;
   Timestamp last_fire_{};
   Eigen::Vector2d last_angles_ = Eigen::Vector2d::Zero();

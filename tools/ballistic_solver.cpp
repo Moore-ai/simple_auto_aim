@@ -52,6 +52,54 @@ private:
   double air_resistance_;
 };
 
+class ClimberBallisticSolver final : public BallisticSolver
+{
+public:
+  explicit ClimberBallisticSolver(double air_resistance_k) : air_resistance_k_(air_resistance_k) {}
+
+  // Climber AirResistTrajectory: dv/dt = -k*v - g, low arc within +/-60 degrees.
+  std::optional<BallisticSolution> solve(
+    double speed, double distance, double height) const override
+  {
+    constexpr double kPi = 3.14159265358979323846;
+    const double drag = air_resistance_k_;
+    if (distance < 0.1 || !std::isfinite(speed) || !std::isfinite(distance) ||
+        !std::isfinite(height)) return std::nullopt;
+    const tools::Trajectory vacuum(speed, distance, height);
+    if (vacuum.unsolvable || std::abs(vacuum.pitch) > kPi / 3) return std::nullopt;
+    if (drag < 1e-6) return tools::BallisticSolution{vacuum.pitch, vacuum.fly_time};
+    constexpr double gravity = 9.7833;
+    const auto flight_time = [&](double pitch) {
+      const double ratio = drag * distance / (speed * std::cos(pitch));
+      return ratio < 0.99 ? -std::log1p(-ratio) / drag : NAN;
+    };
+    const auto residual = [&](double pitch) {
+      const double time = flight_time(pitch);
+      return (speed * std::sin(pitch) + gravity / drag) *
+               distance / (speed * std::cos(pitch)) - gravity * time / drag - height;
+    };
+    // Locate the first root to select the low arc, then bisect the height residual.
+    double lower = -kPi / 3;
+    for (int i = 1; i <= 128; ++i) {
+      double upper = -kPi / 3 + i * (2 * kPi / 3) / 128;
+      if (residual(lower) <= 0 && residual(upper) >= 0) {
+        for (int j = 0; j < 60; ++j) {
+          const double middle = (lower + upper) / 2;
+          if (residual(middle) < 0) lower = middle;
+          else upper = middle;
+        }
+        const double pitch = (lower + upper) / 2;
+        return tools::BallisticSolution{pitch, flight_time(pitch)};
+      }
+      lower = upper;
+    }
+    return std::nullopt;
+  }
+
+private:
+  double air_resistance_k_;
+};
+
 class VacuumBallisticSolver final : public BallisticSolver
 {
 public:
@@ -74,6 +122,11 @@ std::unique_ptr<BallisticSolver> make_ballistic_solver(const std::string & model
       throw std::invalid_argument("njust_air_resistance 必须为有限正数");
     }
     return std::make_unique<NjustBallisticSolver>(config.njust_air_resistance);
+  }
+  if (model == "climber") {
+    if (!std::isfinite(config.climber_air_resistance_k) || config.climber_air_resistance_k < 0)
+      throw std::invalid_argument("climber_air_resistance_k must be finite and >= 0");
+    return std::make_unique<ClimberBallisticSolver>(config.climber_air_resistance_k);
   }
   if (model == "vacuum") return std::make_unique<VacuumBallisticSolver>();
   throw std::invalid_argument("未知弹道模型: " + model);

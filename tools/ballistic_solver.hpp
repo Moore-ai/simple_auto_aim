@@ -16,6 +16,7 @@ struct BallisticSolution
 struct BallisticSolverConfig
 {
   double njust_air_resistance = 0.003;
+  double climber_air_resistance_k = 0;
 };
 
 class BallisticSolver

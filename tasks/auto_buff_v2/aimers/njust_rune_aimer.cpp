@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "../rune_predictor.hpp"
+#include "tools/ballistic_solver.hpp"
 
 namespace auto_buff_v2
 {
@@ -29,7 +30,9 @@ NjustRuneAimer::Config NjustRuneAimer::Config::load(const YAML::Node & node)
 NjustRuneAimer::NjustRuneAimer(BuffConfig::Planner config, Config njust_config)
 : config_(std::move(config)),
   njust_config_(njust_config),
-  ballistic_solver_(tools::make_ballistic_solver(config_.ballistic_model, config_.ballistic_config))
+  ballistic_solver_(tools::make_ballistic_solver(
+    config_.ballistic.type,
+    {config_.ballistic.njust_air_resistance, config_.ballistic.climber_air_resistance_k}))
 {
 }
 

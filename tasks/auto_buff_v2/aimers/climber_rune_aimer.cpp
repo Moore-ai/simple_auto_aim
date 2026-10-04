@@ -5,50 +5,13 @@
 #include <utility>
 
 #include "../rune_predictor.hpp"
-#include "tools/trajectory.hpp"
+#include "tools/ballistic_solver.hpp"
 
 namespace auto_buff_v2
 {
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
-
-// Climber AirResistTrajectory model: dv/dt = -k*v - g, low arc within +/-60 degrees.
-std::optional<tools::BallisticSolution> solve_trajectory(
-  double speed, double distance, double height, double drag)
-{
-  if (distance < 0.1 || !std::isfinite(speed) || !std::isfinite(distance) ||
-      !std::isfinite(height)) return std::nullopt;
-  const tools::Trajectory vacuum(speed, distance, height);
-  if (vacuum.unsolvable || std::abs(vacuum.pitch) > kPi / 3) return std::nullopt;
-  if (drag < 1e-6) return tools::BallisticSolution{vacuum.pitch, vacuum.fly_time};
-  constexpr double gravity = 9.7833;
-  const auto flight_time = [&](double pitch) {
-    const double ratio = drag * distance / (speed * std::cos(pitch));
-    return ratio < 0.99 ? -std::log1p(-ratio) / drag : NAN;
-  };
-  const auto residual = [&](double pitch) {
-    const double time = flight_time(pitch);
-    return (speed * std::sin(pitch) + gravity / drag) *
-             distance / (speed * std::cos(pitch)) - gravity * time / drag - height;
-  };
-  // Locate the first root to select the low arc, then bisect the height residual.
-  double lower = -kPi / 3;
-  for (int i = 1; i <= 128; ++i) {
-    double upper = -kPi / 3 + i * (2 * kPi / 3) / 128;
-    if (residual(lower) <= 0 && residual(upper) >= 0) {
-      for (int j = 0; j < 60; ++j) {
-        const double middle = (lower + upper) / 2;
-        if (residual(middle) < 0) lower = middle;
-        else upper = middle;
-      }
-      const double pitch = (lower + upper) / 2;
-      return tools::BallisticSolution{pitch, flight_time(pitch)};
-    }
-    lower = upper;
-  }
-  return std::nullopt;
-}
 
 // RunePredictor handles forward prediction. Climber's MPC also samples before the estimate.
 RuneEstimate rewind_to(const RuneEstimate & target, Timestamp time)
@@ -79,19 +42,20 @@ ClimberRuneAimer::Config ClimberRuneAimer::Config::load(const YAML::Node & node)
   if (node) {
     result.fire_gap_time = node["fire_gap_time"].as<double>(result.fire_gap_time);
     result.predict_time = node["predict_time"].as<double>(result.predict_time);
-    result.air_resistance_k = node["air_resistance_k"].as<double>(result.air_resistance_k);
   }
   if (!std::isfinite(result.fire_gap_time) || result.fire_gap_time < 0 ||
-      !std::isfinite(result.predict_time) || result.predict_time <= 0 ||
-      !std::isfinite(result.air_resistance_k) || result.air_resistance_k < 0) {
+      !std::isfinite(result.predict_time) || result.predict_time <= 0) {
     throw std::invalid_argument(
-      "buff_v2.aimer.climber requires fire_gap_time >= 0, predict_time > 0 and air_resistance_k >= 0");
+      "buff_v2.aimer.climber requires fire_gap_time >= 0 and predict_time > 0");
   }
   return result;
 }
 
 ClimberRuneAimer::ClimberRuneAimer(BuffConfig::Planner config, Config climber_config)
-: config_(std::move(config)), climber_config_(climber_config)
+: config_(std::move(config)), climber_config_(climber_config),
+  ballistic_solver_(tools::make_ballistic_solver(
+    config_.ballistic.type,
+    {config_.ballistic.njust_air_resistance, config_.ballistic.climber_air_resistance_k}))
 {
 }
 
@@ -104,8 +68,7 @@ std::optional<AimSolution> ClimberRuneAimer::aim_at(
   const auto point = RunePredictor{}.aimpoint_at(state, prediction_time);
   if (!point) return std::nullopt;
   const double distance = std::hypot(point->x(), point->y());
-  const auto bullet =
-    solve_trajectory(speed, distance, point->z(), climber_config_.air_resistance_k);
+  const auto bullet = ballistic_solver_->solve(speed, distance, point->z());
   if (!bullet) return std::nullopt;
   return AimSolution{
     {std::atan2(point->y(), point->x()) + config_.yaw_offset,

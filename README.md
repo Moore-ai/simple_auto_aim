@@ -65,12 +65,20 @@ cmake --build build --parallel 1
 默认 `njust` 保留现有迭代弹道解算与开火窗口，专属参数位于 `buff_v2.aimer.njust`：
 `shoot_delay`、`rune_idle_duration`、`rune_shoot_duration`（秒）以及
 `yaw_tolerance`、`pitch_tolerance`（米），由 `NjustRuneAimer::Config` 解析。
-`climber` 适配 `Climber_Vision_26/tasks/auto_buff/buff_aimer.*`，支持线性空气阻力、
+`climber` 适配 `Climber_Vision_26/tasks/auto_buff/buff_aimer.*`，支持
 两次飞行时间解算（允许 30 ms 差值）、切叶时持续控制并抑制开火，以及定时开火。
 MPC 差分采样分别从原始状态向前和向后预测，不修改模型状态；预测帧保留控制但禁止开火。
 专属参数位于 `buff_v2.aimer.climber`：`predict_time` 为额外预测时间，`fire_gap_time` 为开火间隔，
-单位均为秒；`air_resistance_k` 为线性阻力系数（s⁻¹），0 使用真空弹道。
+单位均为秒。
 弹速低于 10 或高于 28 m/s 时回退到 24 m/s。
+
+打符弹道由 `buff_v2.aimer.ballistic.type` 独立选择，支持 `njust`、`vacuum` 和 `climber`，
+两个 aimer 均使用所选弹道解算器。`buff_v2.aimer.ballistic.njust.air_resistance` 为南理工二次阻力系数；
+`buff_v2.aimer.ballistic.climber.air_resistance_k` 为常州大学线性阻力系数（s⁻¹），0 使用真空弹道。
+常州大学实现位于 `tools/ballistic_solver.cpp`，保留原来的
+±60° 低弧限制、128 段寻根、60 次二分求解及重力常数。Climber aimer 搭配 `climber`
+弹道即可保留原来的解算行为。自瞄读取根层的 `ballistic_model`、`njust_air_resistance` 和 `climber_air_resistance_k`，
+修改它们不会影响打符弹道；示例配置选用 `vacuum`，保持当前运行配置的解算结果。
 
 打符检测器由 `buff_v2.detector.type` 选择，默认 `njust`；设置为 `climber` 可使用移植自
 `Climber_Vision_26` 的 `ClimberRuneDetector`，参数位于 `buff_v2.detector.climber`。

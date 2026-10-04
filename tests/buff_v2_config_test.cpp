@@ -19,8 +19,8 @@ int main()
     "camera2gimbal_mode: xyz_ypr\n"
     "camera2gimbal_xyz: [0.1, 0.2, 0.3]\n"
     "camera2gimbal_ypr: [0, 0, 0]\n"
-    "ballistic_model: vacuum\n"
-    "njust_air_resistance: 0.006\n"
+    "ballistic_model: njust\n"
+    "njust_air_resistance: 0.009\n"
     "yaw_offset: 90\n"
     "pitch_offset: -45\n"
     "bullet_speed_min: 11\n"
@@ -32,6 +32,7 @@ int main()
     "  convergence_threshold: 0.002\n"
     "buff_v2:\n"
     "  planner_mode: njust\n"
+
     "  detector:\n"
     "    type: njust\n"
     "    njust:\n"
@@ -42,6 +43,10 @@ int main()
     "      max_perspective: 55\n"
     "      shoot_delay: 0.9\n"
     "  aimer:\n"
+    "    ballistic:\n"
+    "      type: vacuum\n"
+    "      njust:\n"
+    "        air_resistance: 0.006\n"
     "    type: njust\n"
     "    njust:\n"
     "      shoot_delay: 0.07\n"
@@ -87,8 +92,8 @@ int main()
   assert(config.model.diverge_face_angle == 40);
   assert(config.planner.mode == "njust");
   assert(config.planner.aimer == "njust");
-  assert(config.planner.ballistic_model == "vacuum");
-  assert(config.planner.ballistic_config.njust_air_resistance == 0.006);
+  assert(config.planner.ballistic.type == "vacuum");
+  assert(config.planner.ballistic.njust_air_resistance == 0.006);
   assert(config.planner.bullet_speed_min == 11 && config.planner.bullet_speed_default == 20);
   // Legacy iteration settings, including enable=false, cannot disable buff iteration.
   auto_buff_v2::RuneEstimate target;
@@ -147,6 +152,20 @@ int main()
   assert(climber.fire_gap_time == 0.3 && climber.predict_time == 0.08);
   auto climber_aimer = auto_buff_v2::make_rune_aimer(climber_config.planner);
   assert(climber_aimer->aim(1, target, 20, {}, target.timestamp));
+  // Either aimer uses the independently selected Climber ballistic implementation.
+  yaml["buff_v2"]["aimer"]["ballistic"]["type"] = "climber";
+  yaml["buff_v2"]["aimer"]["ballistic"]["climber"]["air_resistance_k"] = 0.02;
+  yaml["buff_v2"]["aimer"]["climber"]["air_resistance_k"] = 99;
+  target.center.z() = 0;
+  for (const auto & type : {"njust", "climber"}) {
+    yaml["buff_v2"]["aimer"]["type"] = type;
+    std::ofstream(path) << yaml;
+    const auto independent = auto_buff_v2::BuffConfig::load(path);
+    auto selected = auto_buff_v2::make_rune_aimer(independent.planner);
+    const auto solution = selected->aim(1, target, 20, {}, target.timestamp);
+    assert(solution);
+    assert(std::abs(solution->solution.fly_time - 0.155724913567701) < 1e-9);
+  }
   yaml["buff_v2"]["detector"]["type"] = "unknown";
   std::ofstream(path) << yaml;
   bool rejected = false;

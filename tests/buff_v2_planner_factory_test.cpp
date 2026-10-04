@@ -38,7 +38,7 @@ int main()
   target.inactive[0] = true;
   io::GimbalState gimbal;
   auto_buff_v2::BuffConfig::Planner config;
-  config.ballistic_model = "vacuum";
+  config.ballistic.type = "vacuum";
 
   config.mode = "mpc";
   auto mpc = auto_buff_v2::make_buff_planner(config, path);
@@ -88,6 +88,7 @@ int main()
 
   // Either planner consumes the selected Climber aimer, including its fallback speed.
   config.aimer = "climber";
+  config.ballistic.type = "climber";
   target.center.z() = 0;
   for (const auto & mode : {"mpc", "njust"}) {
     config.mode = mode;

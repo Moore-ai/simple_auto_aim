@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #include "tasks/auto_buff_v2/aimers/rune_aimer_factory.hpp"
+#include "tools/ballistic_solver.hpp"
 
 int main()
 {
@@ -17,7 +18,7 @@ int main()
   target.start_timestamp = now - 7s;
   target.inactive[0] = true;
   auto_buff_v2::BuffConfig::Planner config;
-  config.ballistic_model = "vacuum";
+  config.ballistic.type = "vacuum";
   io::GimbalState gimbal;
   auto njust = auto_buff_v2::make_rune_aimer(config);
   auto aimed = njust->aim(1, target, 20, gimbal, now);
@@ -31,6 +32,7 @@ int main()
                            aimed->plan, gimbal, now + 450ms));
 
   config.aimer = "climber";
+  config.ballistic.type = "climber";
   auto climber = auto_buff_v2::make_rune_aimer(config);
   aimed = climber->aim(1, target, 0, gimbal, now);
   // Climber uses the 24 m/s fallback and a two-pass vacuum solution.
@@ -55,13 +57,36 @@ int main()
 
   auto_buff_v2::BuffConfig::Planner drag_config;
   drag_config.aimer = "climber";
-  drag_config.aimer_parameters = YAML::Load("{climber: {air_resistance_k: 0.02}}");
+  drag_config.ballistic.type = "climber";
+  drag_config.ballistic.climber_air_resistance_k = 0.02;
   auto drag = auto_buff_v2::make_rune_aimer(drag_config);
   const auto drag_aim = drag->aim(1, target, 20, gimbal, now);
   assert(drag_aim && drag_aim->plan.control);
   // Independent linear-drag solution: v=20, d=3, h=0.7, k=0.02, g=9.7833.
   assert(std::abs(drag_aim->solution.angles.y() + 0.266350973473905) < 1e-9);
   assert(std::abs(drag_aim->solution.fly_time - 0.155724913567701) < 1e-9);
+
+  const auto solver = tools::make_ballistic_solver(
+    drag_config.ballistic.type,
+    {drag_config.ballistic.njust_air_resistance, drag_config.ballistic.climber_air_resistance_k});
+  const auto direct = solver->solve(20, 3, 0.7);
+  assert(direct);
+  assert(std::abs(direct->pitch - 0.266350973473905) < 1e-9);
+  assert(std::abs(direct->fly_time - 0.155724913567701) < 1e-9);
+  assert(!solver->solve(20, 0.09, 0));
+  assert(!solver->solve(20, 3, 10));  // Outside Climber's +/-60 degree bound.
+  assert(!solver->solve(20, 1000, 1000));
+  auto invalid_ballistic = drag_config.ballistic;
+  invalid_ballistic.climber_air_resistance_k = -1;
+  bool invalid_drag_rejected = false;
+  try {
+    tools::make_ballistic_solver(
+      invalid_ballistic.type,
+      {invalid_ballistic.njust_air_resistance, invalid_ballistic.climber_air_resistance_k});
+  } catch (const std::invalid_argument &) {
+    invalid_drag_rejected = true;
+  }
+  assert(invalid_drag_rejected);
 
   auto predicted = target;
   predicted.predicted = true;
@@ -111,7 +136,7 @@ int main()
   }
 
   for (const auto & parameters :
-       {"{predict_time: 0}", "{fire_gap_time: -1}", "{air_resistance_k: -1}"}) {
+       {"{predict_time: 0}", "{fire_gap_time: -1}"}) {
     config.aimer_parameters = YAML::Load(std::string("{climber: ") + parameters + "}");
     bool rejected = false;
     try {

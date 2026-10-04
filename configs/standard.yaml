@@ -239,8 +239,9 @@ armor_selection_hysteresis:
 bullet_speed_min: 10             # 弹速下限 (m/s)，低于此值视为无效
 bullet_speed_max: 25             # 弹速上限 (m/s)，高于此值视为无效
 bullet_speed_default: 23.4       # 弹速默认回退值 (m/s)，弹速无效时使用
-ballistic_model: "vacuum"        # 弹道模型：njust=南理工含空气阻力模型，vacuum=无空气阻力模型
-njust_air_resistance: 0.003      # 南理工二次空气阻力系数；仅 ballistic_model=njust 时生效
+ballistic_model: "vacuum"        # 自瞄弹道模型：njust=南理工二次阻力，vacuum=真空，climber=常州大学线性阻力
+njust_air_resistance: 0.003      # 自瞄南理工二次空气阻力系数，有限正数；仅 ballistic_model=njust 生效
+climber_air_resistance_k: 0.0    # s^-1，自瞄常州大学线性阻力系数，有限非负数；仅 ballistic_model=climber 生效，0 为真空极限
 
 #####-----AIMD自适应延迟(选配)-----#####
 aimd:
@@ -278,6 +279,12 @@ buff_v2: # 新打符入口使用的源项目参数
   planner_mode: njust # 打符规划器：mpc 或 njust
   aimer: # 打符瞄准器配置，独立于 detector 和 planner_mode
     type: njust # njust 或 climber
+    ballistic: # 打符弹道解算器配置，独立于自瞄根层配置
+      type: vacuum # njust、vacuum 或 climber；climber 为常州大学线性阻力实现
+      njust:
+        air_resistance: 0.003 # 南理工二次空气阻力系数，有限正数
+      climber:
+        air_resistance_k: 0.0 # s^-1，线性空气阻力系数，0 使用真空弹道
     njust: # Njust 瞄准器专属参数
       shoot_delay: 0.04 # s，发射至出膛延迟
       rune_idle_duration: 0.4 # s，符叶瞄准但禁止发射的周期
@@ -287,7 +294,6 @@ buff_v2: # 新打符入口使用的源项目参数
     climber: # Climber 瞄准器专属参数
       fire_gap_time: 0.700 # s，开火间隔，切换符叶时重新计时
       predict_time: 0.120 # s，除观测延迟和飞行时间外的额外预测时间
-      air_resistance_k: 0.0 # s^-1，线性空气阻力系数，0 使用真空弹道
   detector: # 打符检测器配置
     type: njust # njust、climber 或 szu
     njust: # Njust 检测器专属参数
