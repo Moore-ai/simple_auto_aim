@@ -669,7 +669,7 @@ std::optional<cv::Point2f> detail::buff_aimpoint(
   const auto_aim::Plan & plan, std::uint64_t plan_target_generation,
   std::uint64_t current_target_generation, auto_aim::Solver & solver)
 {
-  if (plan_target_generation != current_target_generation || !plan.control || !plan.debug_valid ||
+  if (plan_target_generation != current_target_generation || !plan.control ||
       !plan.debug_xyza.allFinite()) {
     return std::nullopt;
   }

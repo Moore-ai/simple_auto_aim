@@ -209,6 +209,12 @@ int main()
   assert(!tools::detail::buff_aimpoint(buff_plan, 2, 3, projection_solver));
   assert(tools::detail::buff_aimpoint(buff_plan, 2, 2, projection_solver));
 
+  // Njust supplies a valid aimpoint without MPC trajectory debug data.
+  buff_plan.debug_valid = false;
+  assert(tools::detail::buff_aimpoint(buff_plan, 2, 2, projection_solver));
+  buff_plan.control = false;
+  assert(!tools::detail::buff_aimpoint(buff_plan, 2, 2, projection_solver));
+
   const double yaw = 0.3;
   const double pitch = CV_PI / 12.0;
   const auto cube = tools::detail::armor_cube({-0.3, 0.0, 0.0}, yaw, pitch, auto_aim::big);
