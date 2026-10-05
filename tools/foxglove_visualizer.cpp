@@ -374,6 +374,31 @@ nlohmann::json detail::speed_mode_values(bool high_speed)
   return Json{{"high_speed", high_speed}, {"value", high_speed ? 1 : 0}};
 }
 
+nlohmann::json detail::njust_aim_values(const auto_aim::NjustAimDebug & debug)
+{
+  return Json{
+    {"yaw_error", debug.yaw_error}, {"pitch_error", debug.pitch_error},
+    {"shoot_phase", debug.shoot_phase ? 1 : 0}};
+}
+
+foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_njust_aim_channel()
+{
+  static const auto schema_data = Json{
+    {"$schema", "http://json-schema.org/draft-07/schema#"},
+    {"type", "object"},
+    {"properties",
+     {{"yaw_error", {{"type", "number"}, {"description", "yaw_gimbal - yaw_plan (rad), wrapped"}}},
+      {"pitch_error", {{"type", "number"}, {"description", "pitch_gimbal - pitch_plan (rad)"}}},
+      {"shoot_phase", {{"type", "integer"}, {"description", "0=idle, 1=shoot"}}}}},
+    {"required", Json::array({"yaw_error", "pitch_error", "shoot_phase"})},
+    {"additionalProperties", false}}
+    .dump();
+  foxglove::Schema schema{
+    "simple_auto_aim.NjustAim", "jsonschema",
+    reinterpret_cast<const std::byte *>(schema_data.data()), schema_data.size()};
+  return foxglove::RawChannel::create("/buff_v2/njust/aim", "json", std::move(schema));
+}
+
 foxglove::FoxgloveResult<foxglove::RawChannel> detail::create_speed_mode_channel()
 {
   const auto & schema_data = speed_mode_schema_data();
@@ -694,6 +719,7 @@ public:
   std::optional<foxglove::RawChannel> serial_send;
   std::optional<foxglove::RawChannel> angular_acceleration;
   std::optional<foxglove::RawChannel> angular_error;
+  std::optional<foxglove::RawChannel> njust_aim;
   std::optional<foxglove::RawChannel> speed_mode;
   std::optional<foxglove::schemas::CompressedImageChannel> image_raw;
   std::optional<foxglove::schemas::CompressedImageChannel> image;
@@ -745,6 +771,7 @@ FoxgloveVisualizer::FoxgloveVisualizer(
     "/planner/angular_acceleration");
   create(
     impl_->angular_error, detail::create_angular_error_channel(), "/planner/angular_error");
+  create(impl_->njust_aim, detail::create_njust_aim_channel(), "/buff_v2/njust/aim");
   if (impl_->decision_speed_enable) {
     create(impl_->speed_mode, detail::create_speed_mode_channel(), "/planner/speed_mode");
   }
@@ -848,6 +875,12 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
   if (latest_plan && latest_plan->second.high_speed_mode) {
     log_json(
       impl_->speed_mode, detail::speed_mode_values(*latest_plan->second.high_speed_mode), log_time);
+  }
+  if (frame.buff_debug.is_buff_mode && latest_plan &&
+      latest_plan->first == frame.target_generation && latest_plan->second.control &&
+      latest_plan->second.njust_aim_debug) {
+    log_json(
+      impl_->njust_aim, detail::njust_aim_values(*latest_plan->second.njust_aim_debug), log_time);
   }
   if (impl_->image_limiter.should_publish(frame.timestamp)) {
     const auto * locked_armor =

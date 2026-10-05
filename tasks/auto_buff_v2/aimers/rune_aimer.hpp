@@ -35,6 +35,7 @@ class RuneAimer
 {
 public:
   virtual ~RuneAimer() = default;
+  virtual std::optional<auto_aim::NjustAimDebug> njust_debug() const { return std::nullopt; }
   // Returns the intercept and direct tracking command; nullopt means no solution.
   virtual std::optional<RuneAim> aim(
     std::uint64_t generation, const std::optional<RuneEstimate> & target,

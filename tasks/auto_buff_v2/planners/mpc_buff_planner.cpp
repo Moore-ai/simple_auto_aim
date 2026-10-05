@@ -18,6 +18,7 @@ auto_aim::Plan MpcBuffPlanner::plan(
     request->aimpoint.x(), request->aimpoint.y(), request->aimpoint.z(), request->yaw0};
   result.fly_time = request->fly_time;
   result.fire = tracking_.fire_advice(*request, result, gimbal, now);
+  result.njust_aim_debug = tracking_.njust_debug();
   return result;
 }
 }  // namespace auto_buff_v2

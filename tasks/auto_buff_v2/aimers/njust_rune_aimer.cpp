@@ -40,6 +40,7 @@ std::optional<RuneAim> NjustRuneAimer::aim(
   std::uint64_t generation, const std::optional<RuneEstimate> & target, double speed,
   const io::GimbalState &, Timestamp now)
 {
+  debug_.reset();
   auto_aim::Plan result;
   if (!target) {
     attack_start_.reset();
@@ -103,11 +104,15 @@ bool NjustRuneAimer::fire_advice(
   const Eigen::Vector3d & rune_center, const Eigen::Vector3d & aimpoint,
   const auto_aim::Plan & plan, const io::GimbalState & gimbal, Timestamp now)
 {
+  debug_.reset();
   if (!plan.control || !attack_start_) return false;
   const double cycle = njust_config_.rune_idle_duration + njust_config_.rune_shoot_duration;
   const double phase =
     std::fmod(std::chrono::duration<double>(now - *attack_start_).count(), cycle);
   const bool shoot_phase = phase >= njust_config_.rune_idle_duration;
+  const double yaw_error = std::remainder(gimbal.yaw - plan.yaw, 2 * kPi);
+  const double pitch_error = gimbal.pitch - plan.pitch;
+  debug_ = auto_aim::NjustAimDebug{yaw_error, pitch_error, shoot_phase};
   const double xy = std::hypot(aimpoint.x(), aimpoint.y());
   if (xy < 0.1) return false;
   const double ratio = std::min(xy, 5.0) / xy;
@@ -124,8 +129,6 @@ bool NjustRuneAimer::fire_advice(
     std::atan2(scaled.z() - njust_config_.pitch_tolerance * blade_scale, scaled_xy) - pitch_center;
   const double pitch_upper =
     std::atan2(scaled.z() + njust_config_.pitch_tolerance * blade_scale, scaled_xy) - pitch_center;
-  const double yaw_error = std::remainder(gimbal.yaw - plan.yaw, 2 * kPi);
-  const double pitch_error = gimbal.pitch - plan.pitch;
   return shoot_phase && yaw_error >= yaw_lower && yaw_error <= yaw_upper &&
          pitch_error >= pitch_lower && pitch_error <= pitch_upper;
 }

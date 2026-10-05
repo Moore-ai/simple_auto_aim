@@ -22,6 +22,7 @@ public:
   };
 
   NjustRuneAimer(BuffConfig::Planner config, Config njust_config);
+  std::optional<auto_aim::NjustAimDebug> njust_debug() const override { return debug_; }
   std::optional<RuneAim> aim(
     std::uint64_t generation, const std::optional<RuneEstimate> & target,
     double bullet_speed, const io::GimbalState & gimbal, Timestamp now) override;
@@ -37,6 +38,7 @@ private:
   std::unique_ptr<tools::BallisticSolver> ballistic_solver_;
   std::optional<Timestamp> attack_start_;
   std::optional<std::uint64_t> attack_generation_;
+  std::optional<auto_aim::NjustAimDebug> debug_;
 };
 }  // namespace auto_buff_v2
 

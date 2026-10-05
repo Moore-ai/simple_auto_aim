@@ -95,6 +95,8 @@ nlohmann::json feedback_packet_values(
 nlohmann::json angular_error_values(
   const auto_aim::Plan & plan, const io::GimbalState & gimbal_state);
 foxglove::FoxgloveResult<foxglove::RawChannel> create_angular_error_channel();
+nlohmann::json njust_aim_values(const auto_aim::NjustAimDebug & debug);
+foxglove::FoxgloveResult<foxglove::RawChannel> create_njust_aim_channel();
 nlohmann::json speed_mode_values(bool high_speed);
 foxglove::FoxgloveResult<foxglove::RawChannel> create_speed_mode_channel();
 foxglove::schemas::SceneUpdate target_scene_update(

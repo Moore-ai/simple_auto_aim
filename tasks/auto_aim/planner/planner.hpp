@@ -18,6 +18,13 @@ constexpr int HORIZON = HALF_HORIZON * 2;
 
 using Trajectory = Eigen::Matrix<double, 4, HORIZON>;  // yaw, yaw_vel, pitch, pitch_vel
 
+struct NjustAimDebug
+{
+  double yaw_error;
+  double pitch_error;
+  bool shoot_phase;
+};
+
 struct Plan
 {
   bool control{false};
@@ -37,6 +44,7 @@ struct Plan
   bool debug_valid{false};
   bool anti_spin_active{false};
   std::optional<bool> high_speed_mode;
+  std::optional<NjustAimDebug> njust_aim_debug;
 };
 
 class Planner

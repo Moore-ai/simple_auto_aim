@@ -35,6 +35,7 @@ public:
   bool fire_advice(
     const MpcBuffTrackingRequest & request, const auto_aim::Plan & plan,
     const io::GimbalState & gimbal, Timestamp now);
+  std::optional<auto_aim::NjustAimDebug> njust_debug() const { return aimer_->njust_debug(); }
 
 private:
   std::unique_ptr<RuneAimer> aimer_;

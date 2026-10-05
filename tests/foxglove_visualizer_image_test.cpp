@@ -364,6 +364,24 @@ int main()
   assert(error_schema_json.at("properties").contains("yaw_planner_error"));
   assert(error_schema_json.at("properties").contains("pitch_tracking_error"));
 
+  const auto njust_values = tools::detail::njust_aim_values({0.1, -0.2, true});
+  assert(njust_values.at("yaw_error") == 0.1);
+  assert(njust_values.at("pitch_error") == -0.2);
+  assert(njust_values.at("shoot_phase") == 1);
+  assert(tools::detail::njust_aim_values({0, 0, false}).at("shoot_phase") == 0);
+  auto njust_channel_result = tools::detail::create_njust_aim_channel();
+  assert(njust_channel_result.has_value());
+  auto njust_channel = std::move(njust_channel_result.value());
+  assert(njust_channel.topic() == "/buff_v2/njust/aim");
+  const auto njust_schema = njust_channel.schema();
+  assert(njust_schema && njust_schema->encoding == "jsonschema");
+  const auto njust_schema_json = nlohmann::json::parse(
+    reinterpret_cast<const char *>(njust_schema->data),
+    reinterpret_cast<const char *>(njust_schema->data) + njust_schema->data_len);
+  assert(njust_schema_json.at("properties").at("yaw_error").at("type") == "number");
+  assert(njust_schema_json.at("properties").at("pitch_error").at("type") == "number");
+  assert(njust_schema_json.at("properties").at("shoot_phase").at("type") == "integer");
+
   assert(tools::detail::load_foxglove_config(
            YAML::Load("decision_speed_enable: true")).decision_speed_enable);
   assert(!tools::detail::load_foxglove_config(

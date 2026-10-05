@@ -18,6 +18,7 @@ auto_aim::Plan NjustBuffPlanner::plan(
   auto result = aimed->plan;
   result.fire = aimer_->fire_advice(
     target->center, result.debug_xyza.head<3>(), result, gimbal, now);
+  result.njust_aim_debug = aimer_->njust_debug();
   return result;
 }
 }  // namespace auto_buff_v2

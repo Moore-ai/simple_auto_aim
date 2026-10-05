@@ -30,6 +30,21 @@ int main()
   gimbal.pitch = aimed->plan.pitch;
   assert(njust->fire_advice(target.center, aimed->plan.debug_xyza.head<3>(),
                            aimed->plan, gimbal, now + 450ms));
+  auto debug = njust->njust_debug();
+  assert(debug && debug->shoot_phase);
+  assert(debug->yaw_error == 0 && debug->pitch_error == 0);
+  gimbal.yaw = aimed->plan.yaw + 0.1;
+  gimbal.pitch = aimed->plan.pitch - 0.2;
+  assert(!njust->fire_advice(target.center, aimed->plan.debug_xyza.head<3>(),
+                            aimed->plan, gimbal, now + 650ms));
+  debug = njust->njust_debug();
+  assert(debug && !debug->shoot_phase);
+  assert(std::abs(debug->yaw_error - 0.1) < 1e-7);
+  assert(std::abs(debug->pitch_error + 0.2) < 1e-7);
+  assert(!njust->aim(1, std::nullopt, 20, gimbal, now + 660ms));
+  assert(!njust->njust_debug());
+  gimbal.yaw = aimed->plan.yaw;
+  gimbal.pitch = aimed->plan.pitch;
 
   config.aimer = "climber";
   config.ballistic.type = "climber";

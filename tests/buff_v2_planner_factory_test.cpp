@@ -45,6 +45,7 @@ int main()
   const auto mpc_plan = mpc->plan(1, target, 20, gimbal, start);
   assert(mpc_plan.control && mpc_plan.debug_valid);
   assert(!mpc_plan.fire);
+  assert(mpc_plan.njust_aim_debug && !mpc_plan.njust_aim_debug->shoot_phase);
   assert(std::abs(mpc_plan.fly_time - 0.176280533350353) < 1e-9);
 
   config.mode = "njust";
@@ -53,10 +54,16 @@ int main()
   assert(njust_plan.control);
   assert(!njust_plan.debug_valid);
   assert(!njust_plan.fire);
+  assert(njust_plan.njust_aim_debug && !njust_plan.njust_aim_debug->shoot_phase);
   assert(std::abs(njust_plan.fly_time - 0.176280533350353) < 1e-9);
   gimbal.yaw = njust_plan.yaw;
   gimbal.pitch = njust_plan.pitch;
-  assert(njust->plan(1, target, 20, gimbal, start + 450ms).fire);
+  const auto shooting_plan = njust->plan(1, target, 20, gimbal, start + 450ms);
+  assert(shooting_plan.fire);
+  assert(shooting_plan.njust_aim_debug && shooting_plan.njust_aim_debug->shoot_phase);
+  assert(shooting_plan.njust_aim_debug->yaw_error == 0);
+  assert(shooting_plan.njust_aim_debug->pitch_error == 0);
+  assert(!njust->plan(1, std::nullopt, 20, gimbal, start + 460ms).njust_aim_debug);
   assert(!njust->plan(1, std::nullopt, 20, gimbal, start + 460ms).control);
   assert(!njust->plan(2, target, 20, gimbal, start + 470ms).fire);
 
@@ -96,6 +103,7 @@ int main()
     assert(climber_planner->plan(1, target, 0, gimbal, start).control);
     const auto climber_plan = climber_planner->plan(1, target, 0, gimbal, start + 10ms);
     assert(climber_plan.control);
+    assert(!climber_plan.njust_aim_debug);
     assert(std::abs(climber_plan.fly_time - 0.129172918752555) < 1e-9);
     assert(!climber_plan.fire);
     assert(climber_planner->plan(1, target, 0, gimbal, start + 800ms).fire);
