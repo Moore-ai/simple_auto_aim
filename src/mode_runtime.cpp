@@ -23,6 +23,7 @@
 #include "tools/processed_frame.hpp"
 #include "tools/recorder.hpp"
 #include "tools/thread_safe_queue.hpp"
+#include "tools/yaml.hpp"
 
 namespace standard
 {
@@ -203,14 +204,16 @@ std::unique_ptr<ModeSession> make_session(Mode mode, const std::string & config_
 ModeRuntime::ModeRuntime(std::string config_path, ModeReader mode_reader,
                          std::optional<io::InfantryEnemyColor> target_color_override)
 : config_path_(std::move(config_path)), mode_reader_(std::move(mode_reader)),
-  target_color_override_(target_color_override)
+  target_color_override_(target_color_override),
+  record_video_(tools::load(config_path_)["record_video"].as<bool>(true))
 {
 }
 
 int ModeRuntime::run()
 {
   tools::Exiter exiter;
-  tools::Recorder recorder;
+  std::optional<tools::Recorder> recorder;
+  if (record_video_) recorder.emplace();
   io::Gimbal gimbal(config_path_);
   io::Camera camera(config_path_);
   auto_aim::Solver solver(config_path_);
@@ -230,7 +233,7 @@ int ModeRuntime::run()
 
     tools::ProcessedFrame processed;
     if (!session->next(processed)) break;
-    recorder.record(processed.snapshot);
+    if (recorder) recorder->record(processed.snapshot);
     foxglove.publish(std::move(processed.snapshot));
   }
 

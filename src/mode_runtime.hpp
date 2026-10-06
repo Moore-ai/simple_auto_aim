@@ -43,6 +43,7 @@ private:
   std::string config_path_;
   ModeReader mode_reader_;
   std::optional<io::InfantryEnemyColor> target_color_override_;
+  bool record_video_;
 };
 
 }  // namespace standard
