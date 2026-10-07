@@ -97,7 +97,7 @@ private:
       const auto plan = planner_.plan(target, gimbal_.state().bullet_speed);
       foxglove_.update_plan(target_generation, plan);
       const auto fire =
-        plan.fire ? io::InfantryFireCommand::continuous : io::InfantryFireCommand::none;
+        plan.fire ? io::InfantryFireCommand::fire : io::InfantryFireCommand::none;
       send_plan(gimbal_, plan, fire);
       std::this_thread::sleep_for(1ms);
     }
@@ -161,7 +161,7 @@ private:
       const auto now = std::chrono::steady_clock::now();
       const auto plan = buff_planner_->plan(target_generation, target, state.bullet_speed, state, now);
       foxglove_.update_plan(target_generation, plan);
-      const auto fire = plan.fire ? io::InfantryFireCommand::single : io::InfantryFireCommand::none;
+      const auto fire = plan.fire ? io::InfantryFireCommand::fire : io::InfantryFireCommand::none;
       send_plan(gimbal_, plan, fire);
       std::this_thread::sleep_for(1ms);
     }

@@ -419,7 +419,7 @@ int main()
          nlohmann::json::array({"high_speed", "value"}));
 
   const auto command_packet = io::make_infantry_command_packet(
-    true, io::InfantryFireCommand::continuous, -0.5F, 0.2F, 3.0F,
+    true, io::InfantryFireCommand::fire, -0.5F, 0.2F, 3.0F,
     -0.1F, 0.4F, -0.2F, 0.8F);
   const auto command_packet_values = tools::detail::command_packet_values(command_packet);
   assert(command_packet_values.at("fire") == 1);

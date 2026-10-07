@@ -31,10 +31,7 @@ enum class InfantryEnemyColor : uint8_t
 enum class InfantryFireCommand : uint8_t
 {
   none = 0,
-  // 下位机沿用自瞄的连续发射处理。
-  continuous = 1,
-  // 下位机应将连续收到的 single 命令锁存为一次单发，收到 none 后重新使能。
-  single = 2,
+  fire = 1,
 };
 
 inline std::optional<InfantryEnemyColor> infantry_enemy_color(uint8_t mode)

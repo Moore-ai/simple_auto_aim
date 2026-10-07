@@ -11,7 +11,7 @@ namespace io
 struct __attribute__((packed)) InfantryCommandPacket
 {
   uint8_t start = 0xFF;
-  // 0=不发射，1=自瞄连续发射建议，2=打符单发建议。
+  // 0=不开火，1=开火建议。
   uint8_t fire = 0;
   float pitch = 0;
   float yaw = 0;
