@@ -197,7 +197,7 @@ distort_coeffs: [-0.038237229814716757, 0.20323363149030885, 0.00076583801074767
 # 手眼标定参数；xyz 是云台系位置（m），ypr 是相对相机光轴的 ZYX 旋转（rad）。
 camera2gimbal_mode: xyz_ypr
 camera2gimbal_xyz: [0.11593, -0.06429, 0.03250]
-camera2gimbal_ypr: [-0.01, 0.02, 0.0]
+camera2gimbal_ypr: [-0.03, 0.01, 0.0]
 
 #####-----gimbal参数-----#####
 com_port: "/dev/ttyACM0"           # 串口路径
@@ -227,9 +227,9 @@ fly_time_iteration:              # 仅自瞄使用
   max_iteration: 3               # 最大固定点迭代次数
   convergence_threshold: 1e-3    # s，相邻两次飞行时间差小于此值时停止迭代
 
-max_yaw_acc: 50                  # yaw 最大角加速度约束 (rad/s²)，越大云台越激进
-Q_yaw: [9e6, 0]                  # yaw MPC 跟踪权重 [角度误差权重, 角速度误差权重]
-R_yaw: [1]                       # yaw MPC 控制量惩罚，越大运动越平滑
+max_yaw_acc: 90                  # yaw 最大角加速度约束 (rad/s²)，越大云台越激进
+Q_yaw: [9e6, 1e3]                  # yaw MPC 跟踪权重 [角度误差权重, 角速度误差权重]
+R_yaw: [1e-2]                       # yaw MPC 控制量惩罚，越大运动越平滑
 
 max_pitch_acc: 100               # pitch 最大角加速度约束 (rad/s²)
 Q_pitch: [9e6, 0]                # pitch MPC 跟踪权重 [角度误差权重, 角速度误差权重]
@@ -292,13 +292,13 @@ buff_v2: # 新打符入口使用的源项目参数
       shoot_delay: 0.04 # s，发射至出膛延迟
       rune_idle_duration: 0.4 # s，符叶瞄准但禁止发射的周期
       rune_shoot_duration: 0.2 # s，符叶允许发射的周期
-      yaw_tolerance: 0.07 # m，靶心附近允许的水平误差，超过 5 m 按 5 m 等效角宽
-      pitch_tolerance: 0.04 # m，靶心附近允许的竖直误差，超过 5 m 按 5 m 等效角宽
+      yaw_tolerance: 0.05 # m，靶心附近允许的水平误差，超过 5 m 按 5 m 等效角宽
+      pitch_tolerance: 0.02 # m，靶心附近允许的竖直误差，超过 5 m 按 5 m 等效角宽
     climber: # Climber 瞄准器专属参数
       fire_gap_time: 0.700 # s，开火间隔，切换符叶时重新计时
       predict_time: 0.120 # s，除观测延迟和飞行时间外的额外预测时间
   detector: # 打符检测器配置
-    type: njust # njust、climber 或 szu
+    type: climber # njust、climber 或 szu
     njust: # Njust 检测器专属参数
       min_distance: 1.7 # m，轮廓几何筛选的最近距离
       max_distance: 5.0 # m，轮廓几何筛选的最远距离
