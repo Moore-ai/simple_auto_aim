@@ -138,6 +138,36 @@ int main()
   assert((config.camera.t_camera2gimbal - Eigen::Vector3d(0.1, 0.2, 0.3)).norm() < 1e-12);
 
   auto yaml = YAML::LoadFile(path);
+  assert(config.model.small_motion_fit.window_seconds == 6.0);
+  assert(config.model.small_motion_fit.min_fit_seconds == 1.5);
+  assert(config.model.small_motion_fit.weight_half_life_seconds == 3.0);
+  assert(config.model.big_motion_fit.window_seconds == 6.0);
+  assert(config.model.big_motion_fit.min_fit_seconds == 1.5);
+  assert(config.model.big_motion_fit.weight_half_life_seconds == 3.0);
+  yaml["buff_v2"]["motion_fit"]["small"]["window_seconds"] = 2.5;
+  yaml["buff_v2"]["motion_fit"]["small"]["min_fit_seconds"] = 0.5;
+  yaml["buff_v2"]["motion_fit"]["small"]["weight_half_life_seconds"] = 1.0;
+  yaml["buff_v2"]["motion_fit"]["big"]["window_seconds"] = 8.0;
+  yaml["buff_v2"]["motion_fit"]["big"]["min_fit_seconds"] = 2.0;
+  yaml["buff_v2"]["motion_fit"]["big"]["weight_half_life_seconds"] = 4.0;
+  std::ofstream(path) << yaml;
+  const auto fit_config = auto_buff_v2::BuffConfig::load(path);
+  assert(fit_config.model.small_motion_fit.window_seconds == 2.5);
+  assert(fit_config.model.small_motion_fit.min_fit_seconds == 0.5);
+  assert(fit_config.model.small_motion_fit.weight_half_life_seconds == 1.0);
+  assert(fit_config.model.big_motion_fit.window_seconds == 8.0);
+  assert(fit_config.model.big_motion_fit.min_fit_seconds == 2.0);
+  assert(fit_config.model.big_motion_fit.weight_half_life_seconds == 4.0);
+  yaml["buff_v2"]["prediction_method"] = "unknown";
+  std::ofstream(path) << yaml;
+  bool invalid_prediction_rejected = false;
+  try {
+    auto_buff_v2::BuffConfig::load(path);
+  } catch (const std::invalid_argument &) {
+    invalid_prediction_rejected = true;
+  }
+  assert(invalid_prediction_rejected);
+  yaml["buff_v2"]["prediction_method"] = "weighted_least_squares";
   yaml["buff_v2"]["aimer"]["type"] = "climber";
   yaml["buff_v2"]["aimer"]["climber"]["fire_gap_time"] = 0.3;
   yaml["buff_v2"]["aimer"]["climber"]["predict_time"] = 0.08;

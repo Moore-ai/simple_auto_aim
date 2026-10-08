@@ -6,6 +6,7 @@
 
 #include "tasks/auto_buff_v2/buff_config.hpp"
 #include "tasks/auto_buff_v2/rune_model.hpp"
+#include "tasks/auto_buff_v2/rune_predictor.hpp"
 
 int main()
 {
@@ -163,6 +164,24 @@ int main()
   assert(std::abs(tilted_model.state()->rotation_angle - seed_angle) < 0.03);
 
   auto_buff_v2::RuneModel big(config.camera, config.model, true);
+  auto yaml = YAML::LoadFile(path);
+  yaml["buff_v2"]["motion_fit"]["small"]["min_fit_seconds"] = 0.5;
+  yaml["buff_v2"]["motion_fit"]["big"]["min_fit_seconds"] = 2.0;
+  std::ofstream(path) << yaml;
+  const auto fit_config = auto_buff_v2::BuffConfig::load(path);
+  yaml["buff_v2"]["prediction_method"] = "ekf";
+  std::ofstream(path) << yaml;
+  const auto ekf_config = auto_buff_v2::BuffConfig::load(path);
+  auto_buff_v2::RuneModel ekf_small(ekf_config.camera, ekf_config.model, false);
+  auto_buff_v2::RuneModel big_with_ekf_config(ekf_config.camera, ekf_config.model, true);
+  assert(ekf_small.update(elements, now));
+  assert(big_with_ekf_config.update(elements, now));
+  assert(big_with_ekf_config.state()->prediction_method ==
+         auto_buff_v2::RunePredictionMethod::weighted_least_squares);
+  auto_buff_v2::RuneModel fast_small(fit_config.camera, fit_config.model, false);
+  auto_buff_v2::RuneModel slow_big(fit_config.camera, fit_config.model, true);
+  assert(fast_small.update(elements, now));
+  assert(slow_big.update(elements, now));
   big.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(big.update(elements, now));
   for (int i = 1; i <= 120; ++i) {
@@ -176,9 +195,50 @@ int main()
     const auto stamp = now + std::chrono::milliseconds(50 * i);
     model.update(elements, stamp);
     big.update(elements, stamp);
+    fast_small.update(elements, stamp);
+    slow_big.update(elements, stamp);
+    assert(ekf_small.update(elements, stamp));
+    assert(big_with_ekf_config.update(elements, stamp));
+    assert(big_with_ekf_config.state()->prediction_method ==
+           auto_buff_v2::RunePredictionMethod::weighted_least_squares);
+    assert(std::abs(big_with_ekf_config.state()->rotation_angle -
+                    slow_big.state()->rotation_angle) < 1e-9);
+    assert(std::abs(big_with_ekf_config.state()->rotation_speed -
+                    slow_big.state()->rotation_speed) < 1e-9);
+    assert(big_with_ekf_config.state()->sine_valid == slow_big.state()->sine_valid);
+    const auto current = *ekf_small.state();
+    assert(current.prediction_method == auto_buff_v2::RunePredictionMethod::ekf);
+    assert(!current.has_fitted_motion && !current.sine_valid);
+    assert(std::isfinite(current.rotation_speed));
+    const auto future = auto_buff_v2::RunePredictor{}.predict(
+      current, stamp + std::chrono::milliseconds(500));
+    assert(std::abs(future.rotation_angle - current.rotation_angle -
+                    0.5 * current.rotation_speed) < 1e-9);
+    assert((future.center - current.center).norm() < 1e-12);
+    assert(future.face_yaw == current.face_yaw);
+    // Motion samples start after the model's existing one-second warmup.
+    if (i == 35) {
+      assert(fast_small.state() && fast_small.state()->has_fitted_motion);
+      assert(slow_big.state() && !slow_big.state()->has_fitted_motion &&
+             !slow_big.state()->sine_valid);
+    }
   }
   assert(model.state() && !model.state()->sine_valid);
   assert(big.state() && big.state()->sine_valid);
+  assert(big_with_ekf_config.state() && big_with_ekf_config.state()->sine_valid);
+  assert(model.state()->prediction_method ==
+         auto_buff_v2::RunePredictionMethod::weighted_least_squares);
+  assert(std::abs(ekf_small.state()->rotation_speed) > 0.1);
+  const auto current = *ekf_small.state();
+  assert(!ekf_small.update({}, now + std::chrono::milliseconds(6050)));
+  assert(ekf_small.state() && ekf_small.state()->predicted);
+  assert(std::abs(ekf_small.state()->rotation_angle - current.rotation_angle -
+                  0.05 * current.rotation_speed) < 1e-9);
+  ekf_small.reset();
+  assert(!ekf_small.state());
+  assert(ekf_small.update(tilted_elements, now + std::chrono::milliseconds(6100)));
+  assert(ekf_small.state()->prediction_method == auto_buff_v2::RunePredictionMethod::ekf);
+  assert(!ekf_small.state()->has_fitted_motion && !ekf_small.state()->sine_valid);
 
   auto_buff_v2::RuneElements empty;
   for (int i = 121; i <= 153; ++i)

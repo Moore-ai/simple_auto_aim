@@ -1,6 +1,7 @@
 #include "buff_config.hpp"
 
 #include <cmath>
+#include <stdexcept>
 #include <vector>
 
 #include <yaml-cpp/yaml.h>
@@ -34,6 +35,26 @@ BuffConfig BuffConfig::load(const std::string & path)
 
   const auto buff = yaml["buff_v2"];
   if (buff) {
+    const auto prediction_method =
+      buff["prediction_method"].as<std::string>("weighted_least_squares");
+    if (prediction_method == "ekf") {
+      result.model.prediction_method = RunePredictionMethod::ekf;
+    } else if (prediction_method != "weighted_least_squares") {
+      throw std::invalid_argument(
+        "buff_v2.prediction_method must be weighted_least_squares or ekf");
+    }
+    const auto motion_fit = buff["motion_fit"];
+    if (motion_fit) {
+      const auto load_fit = [](const YAML::Node & node, MotionFit & fit) {
+        if (!node) return;
+        fit.window_seconds = node["window_seconds"].as<double>(fit.window_seconds);
+        fit.min_fit_seconds = node["min_fit_seconds"].as<double>(fit.min_fit_seconds);
+        fit.weight_half_life_seconds =
+          node["weight_half_life_seconds"].as<double>(fit.weight_half_life_seconds);
+      };
+      load_fit(motion_fit["small"], result.model.small_motion_fit);
+      load_fit(motion_fit["big"], result.model.big_motion_fit);
+    }
     const auto detector = buff["detector"];
     if (detector) {
       result.detector.type = detector["type"].as<std::string>(result.detector.type);

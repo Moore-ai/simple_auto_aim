@@ -5,12 +5,17 @@
 #include <limits>
 #include <optional>
 
+#include "buff_config.hpp"
+
 namespace auto_buff_v2
 {
 
 class RuneEnergyFitter
 {
 public:
+  RuneEnergyFitter() = default;
+  explicit RuneEnergyFitter(BuffConfig::MotionFit config);
+
   struct SineFitResult
   {
     double C = 0;
@@ -34,11 +39,8 @@ public:
   std::optional<LinearFitResult> fit_linear() const;
   std::optional<SineFitResult> fit_sine() const;
 
-  static constexpr double kWindowSeconds = 6.0;
-  static constexpr double kMinFitSeconds = 1.5;
-  static constexpr double kWeightHalfLifeSeconds = 3.0;
-
 private:
+  BuffConfig::MotionFit config_;
   struct Point
   {
     double t;
@@ -47,7 +49,8 @@ private:
   std::deque<Point> buffer_;
 
   template <typename Pred>
-  static double compute_weighted_cost(const std::deque<Point> & buffer, Pred && pred_fn);
+  double compute_weighted_cost(const std::deque<Point> & buffer, Pred && pred_fn) const;
+  double sample_weight(double t, double reference_t) const;
 };
 
 }  // namespace auto_buff_v2

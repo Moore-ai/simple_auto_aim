@@ -3,25 +3,31 @@
 #include <Eigen/Dense>
 
 #include <cmath>
+#include <stdexcept>
 
 namespace auto_buff_v2
 {
 
-namespace
+RuneEnergyFitter::RuneEnergyFitter(BuffConfig::MotionFit config) : config_(config)
 {
-
-double sample_weight(double t, double reference_t)
-{
-    return std::exp2((t - reference_t) / RuneEnergyFitter::kWeightHalfLifeSeconds);
+  if (!std::isfinite(config_.window_seconds) || config_.window_seconds <= 0 ||
+      !std::isfinite(config_.min_fit_seconds) || config_.min_fit_seconds <= 0 ||
+      !std::isfinite(config_.weight_half_life_seconds) || config_.weight_half_life_seconds <= 0 ||
+      config_.min_fit_seconds > config_.window_seconds)
+    throw std::invalid_argument(
+      "buff_v2.motion_fit: durations must be finite and positive, min_fit_seconds <= window_seconds");
 }
 
-}  // namespace
+double RuneEnergyFitter::sample_weight(double t, double reference_t) const
+{
+  return std::exp2((t - reference_t) / config_.weight_half_life_seconds);
+}
 
 void RuneEnergyFitter::push(double t, double theta)
 {
   buffer_.push_back({t, theta});
 
-  while (!buffer_.empty() && buffer_.back().t - buffer_.front().t > kWindowSeconds)
+  while (!buffer_.empty() && buffer_.back().t - buffer_.front().t > config_.window_seconds)
     buffer_.pop_front();
 }
 
@@ -29,7 +35,7 @@ void RuneEnergyFitter::reset() { buffer_.clear(); }
 
 template <typename Pred>
 double RuneEnergyFitter::compute_weighted_cost(
-  const std::deque<Point> & buffer, Pred && pred_fn)
+  const std::deque<Point> & buffer, Pred && pred_fn) const
 {
 
   const auto reference_t = buffer.back().t;
@@ -47,7 +53,7 @@ double RuneEnergyFitter::compute_weighted_cost(
 std::optional<RuneEnergyFitter::LinearFitResult> RuneEnergyFitter::fit_linear() const
 {
   if (buffer_.size() < 2) return std::nullopt;
-  if (buffer_.back().t - buffer_.front().t < kMinFitSeconds) return std::nullopt;
+  if (buffer_.back().t - buffer_.front().t < config_.min_fit_seconds) return std::nullopt;
 
   const auto reference_t = buffer_.back().t;
 
@@ -76,7 +82,7 @@ std::optional<RuneEnergyFitter::LinearFitResult> RuneEnergyFitter::fit_linear() 
 std::optional<RuneEnergyFitter::SineFitResult> RuneEnergyFitter::fit_sine() const
 {
   if (buffer_.size() < 2) return std::nullopt;
-  if (buffer_.back().t - buffer_.front().t < kMinFitSeconds) return std::nullopt;
+  if (buffer_.back().t - buffer_.front().t < config_.min_fit_seconds) return std::nullopt;
 
   const auto N = static_cast<Eigen::Index>(buffer_.size());
   Eigen::MatrixXd X(N, 4);

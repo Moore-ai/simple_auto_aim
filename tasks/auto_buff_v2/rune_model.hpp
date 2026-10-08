@@ -21,6 +21,7 @@ using Timestamp = std::chrono::steady_clock::time_point;
 
 struct RuneEstimate
 {
+  RunePredictionMethod prediction_method = RunePredictionMethod::weighted_least_squares;
   Eigen::Vector3d center = Eigen::Vector3d::Zero();
   Timestamp start_timestamp{};
   Timestamp timestamp{};

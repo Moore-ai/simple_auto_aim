@@ -16,7 +16,13 @@ RuneEstimate RunePredictor::predict(const RuneEstimate & estimate,
   if (prediction_time <= estimate.timestamp) return predicted;
   const double seconds =
     std::chrono::duration<double>(prediction_time - estimate.timestamp).count();
-  if (predicted.sine_valid) {
+  if (predicted.prediction_method == RunePredictionMethod::ekf) {
+    RuneEkfState::Vector values;
+    values << estimate.center.x(), estimate.center.y(), estimate.center.z(),
+      estimate.rotation_speed, estimate.rotation_angle, estimate.face_yaw;
+    const auto future = RuneEkfState(values).predict(seconds);
+    predicted.rotation_angle = future.rotation_angle();
+  } else if (predicted.sine_valid) {
     const auto old_phase = predicted.sine_phase;
     predicted.sine_t += seconds;
     predicted.sine_phase += predicted.sine_omega * seconds;

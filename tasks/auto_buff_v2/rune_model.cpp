@@ -20,7 +20,8 @@ RuneModel::RuneModel(BuffConfig::Camera camera, Config config, bool big_rune)
   R_camera2gimbal_(camera.R_camera2gimbal),
   t_camera2gimbal_(camera.t_camera2gimbal),
   big_rune_(big_rune),
-  config_(std::move(config))
+  config_(std::move(config)),
+  fitter_(big_rune ? config_.big_motion_fit : config_.small_motion_fit)
 {
 }
 
@@ -280,8 +281,7 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
   const double dt = std::chrono::duration<double>(timestamp - state.timestamp).count();
   if (dt < 0) { reset(); diagnostic_ = "timestamp reversed"; return false; }
   state = RunePredictor{}.predict(state, timestamp);
-  RuneEkfState x = ekf_state_;
-  x.add_rotation_angle(x.rotation_speed() * dt);
+  RuneEkfState x = ekf_state_.predict(dt);
   Matrix F = Matrix::Identity();
   F(4, 3) = dt;
   Matrix Q = Matrix::Zero();
@@ -362,7 +362,8 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
   ++state.update_count;
   const double elapsed_seconds =
     std::chrono::duration<double>(timestamp - state.start_timestamp).count();
-  if (elapsed_seconds >= 1) update_motion_fit(state, elapsed_seconds);
+  if (state.prediction_method == RunePredictionMethod::weighted_least_squares &&
+      elapsed_seconds >= 1) update_motion_fit(state, elapsed_seconds);
   return true;
 }
 
@@ -460,6 +461,8 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
     return false;
   }
   RuneEstimate seed = best->state;
+  seed.prediction_method = big_rune_ ? RunePredictionMethod::weighted_least_squares
+                                     : config_.prediction_method;
   seed.start_timestamp = timestamp;
   seed.timestamp = timestamp;
   inactive_timeout_.fill(Timestamp{});

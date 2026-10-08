@@ -11,6 +11,8 @@
 
 namespace auto_buff_v2
 {
+enum class RunePredictionMethod { weighted_least_squares, ekf };
+
 struct BuffConfig
 {
   struct Camera
@@ -29,8 +31,18 @@ struct BuffConfig
     YAML::Node parameters;  // buff_v2.detector，由所选检测器解析其专属参数。
   } detector;
 
+  struct MotionFit
+  {
+    double window_seconds = 6.0;
+    double min_fit_seconds = 1.5;
+    double weight_half_life_seconds = 3.0;
+  };
+
   struct Model
   {
+    RunePredictionMethod prediction_method = RunePredictionMethod::weighted_least_squares;  // 小符
+    MotionFit small_motion_fit;
+    MotionFit big_motion_fit;
     double timeout_seconds = 1.5;
     double noise_x = 1e-5;
     double noise_y = 1e-5;

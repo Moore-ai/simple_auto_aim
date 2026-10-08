@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cmath>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 
@@ -80,4 +81,46 @@ int main()
   assert(std::abs(sine->v - 1.2) < 0.03);
   assert(std::abs(sine->a - 0.35) < 0.03);
   assert(std::abs(sine->omega - 2.0) < 0.03);
+
+  auto_buff_v2::RuneEnergyFitter short_window({2.0, 1.0, 1.0});
+  short_window.push(0, 100);
+  short_window.push(1, 0);
+  short_window.push(2, 1);
+  short_window.push(3, 2);
+  const auto trimmed = short_window.fit_linear();
+  assert(trimmed && std::abs(trimmed->speed - 1.0) < 1e-9);
+  assert(trimmed->cost < 1e-9);
+  short_window.reset();
+  short_window.push(0, 0);
+  short_window.push(0.5, 0.5);
+  assert(!short_window.fit_linear());
+  assert(!short_window.fit_sine());
+  short_window.push(1, 1);
+  assert(short_window.fit_linear());
+  assert(short_window.fit_sine());
+
+  auto_buff_v2::RuneEnergyFitter weighted({6.0, 1.0, 1.0});
+  weighted.push(0, 0);
+  weighted.push(1, 0);
+  weighted.push(2, 3);
+  const auto weighted_linear = weighted.fit_linear();
+  assert(weighted_linear);
+  // Weights 1/4, 1/2, 1 give slope 24/13 and weighted MSE 36/91.
+  assert(std::abs(weighted_linear->speed - 24.0 / 13) < 1e-9);
+  assert(std::abs(weighted_linear->cost - 36.0 / 91) < 1e-9);
+
+  for (const auto & invalid : {
+         auto_buff_v2::BuffConfig::MotionFit{0, 1, 1},
+         auto_buff_v2::BuffConfig::MotionFit{2, -1, 1},
+         auto_buff_v2::BuffConfig::MotionFit{2, 1, 0},
+         auto_buff_v2::BuffConfig::MotionFit{1, 2, 1},
+         auto_buff_v2::BuffConfig::MotionFit{2, 1, std::numeric_limits<double>::infinity()}}) {
+    bool rejected = false;
+    try {
+      auto_buff_v2::RuneEnergyFitter invalid_fitter(invalid);
+    } catch (const std::invalid_argument &) {
+      rejected = true;
+    }
+    assert(rejected);
+  }
 }

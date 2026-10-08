@@ -53,6 +53,13 @@ public:
   }
   void set_face_yaw(double value) { values_[index(RuneEkfStateComponent::face_yaw)] = value; }
 
+  RuneEkfState predict(double seconds) const
+  {
+    auto predicted = *this;
+    predicted.add_rotation_angle(rotation_speed() * seconds);
+    return predicted;
+  }
+
   void add_rotation_angle(double value) { set_rotation_angle(rotation_angle() + value); }
   void add_component(RuneEkfStateComponent component, double value)
   {

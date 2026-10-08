@@ -280,6 +280,16 @@ predict_time: 0.120     # s
 
 buff_v2: # 新打符入口使用的源项目参数
   planner_mode: njust # 打符规划器：mpc 或 njust
+  prediction_method: weighted_least_squares # 仅小符预测：weighted_least_squares（加权拟合外推）或 ekf（EKF 恒角速度预测）；大符固定使用加权拟合外推
+  motion_fit: # 运动拟合参数，独立于检测器、规划器和瞄准器
+    small: # 小符（mode=1），线性拟合
+      window_seconds: 6.0 # s，历史样本窗口，有限正数
+      min_fit_seconds: 1.5 # s，开始拟合的最短样本跨度，正数且不超过窗口
+      weight_half_life_seconds: 3.0 # s，样本权重半衰期，有限正数
+    big: # 大符（mode=2），线性与正弦拟合
+      window_seconds: 6.0 # s，历史样本窗口，有限正数
+      min_fit_seconds: 1.5 # s，开始拟合的最短样本跨度，正数且不超过窗口
+      weight_half_life_seconds: 3.0 # s，样本权重半衰期，有限正数
   aimer: # 打符瞄准器配置，独立于 detector 和 planner_mode
     type: njust # njust 或 climber
     ballistic: # 打符弹道解算器配置，独立于自瞄根层配置
