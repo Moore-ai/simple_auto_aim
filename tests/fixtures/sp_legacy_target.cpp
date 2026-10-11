@@ -2,6 +2,9 @@
 // Only namespace, includes and the observation carrier are adapted.
 #include "sp_legacy_target.hpp"
 
+#include "tools/logger.hpp"
+#include "tools/math_tools.hpp"
+
 namespace sp_legacy_reference
 {
 ///voter

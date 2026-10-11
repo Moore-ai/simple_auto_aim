@@ -11,6 +11,7 @@
 #include "tasks/auto_buff_v2/models/sp_rune_tracker.hpp"
 #include "tasks/auto_buff_v2/models/sp_rune_model.hpp"
 #include "tasks/auto_buff_v2/rune_predictor.hpp"
+#include "tools/math_tools.hpp"
 
 // Same solved observations go to the frozen reference and the port. Compare
 // every state component, including the sine parameters, from the first frame.
