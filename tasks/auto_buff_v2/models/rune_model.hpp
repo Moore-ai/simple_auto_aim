@@ -37,6 +37,7 @@ struct RuneEstimate
   double sine_phase = 0;
   double sine_t = 0;
   bool sine_valid = false;
+  bool requires_warmup = true;  // Njust motion fit needs history; SP can aim immediately.
   std::size_t update_count = 0;
   bool predicted = false;  // No inactive blade corrected in the current frame.
 };

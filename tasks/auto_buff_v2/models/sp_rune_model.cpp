@@ -2,7 +2,6 @@
 
 #include <cmath>
 
-#include "../rune_predictor.hpp"
 #include "tools/math_tools.hpp"
 
 namespace auto_buff_v2
@@ -11,7 +10,9 @@ SPRuneConfig SPRuneConfig::load(const YAML::Node & node)
 {
   SPRuneConfig result;
   if (!node) return result;
-  result.timeout_seconds = node["timeout_seconds"].as<double>(result.timeout_seconds);
+  result.max_lost_frames = node["max_lost_frames"].as<int>(result.max_lost_frames);
+  result.small_speed_tolerance =
+    node["small_speed_tolerance"].as<double>(result.small_speed_tolerance);
   result.small_yaw_acceleration_noise =
     node["small_yaw_acceleration_noise"].as<double>(result.small_yaw_acceleration_noise);
   result.big_yaw_acceleration_noise =
@@ -56,9 +57,12 @@ void SPRuneModel::set_q_gimbal2world(const Eigen::Quaterniond & q)
 
 void SPRuneModel::reset()
 {
-  tracker_ = std::make_unique<SPTracker>(big_rune_, config_);
+  if (tracker_) {
+    tracker_->reset();
+  } else {
+    tracker_ = std::make_unique<SPTracker>(big_rune_, config_);
+  }
   state_.reset();
-  last_observed_ = Timestamp{};
   diagnostic_.clear();
 }
 
@@ -69,30 +73,21 @@ bool SPRuneModel::update(const RuneElements & elements, Timestamp timestamp)
     diagnostic_ = "timestamp reversed";
     return false;
   }
-  if (state_ && std::chrono::duration<double>(timestamp - last_observed_).count() >
-                  config_.timeout_seconds) reset();
   const auto observation = solver_.solve(elements);
-  if (!observation) {
-    if (state_) {
-      state_ = RunePredictor{}.predict(*state_, timestamp);
-      state_->predicted = true;
-      state_->inactive.fill(false);
-    }
-    diagnostic_ = "missing inactive bullseye or valid PnP";
+  if (!tracker_->update(observation, timestamp)) {
+    state_.reset();
+    diagnostic_ = observation ? "SP reinitializing" : "missing inactive bullseye or valid PnP";
     return false;
   }
-  tracker_->update(*observation, timestamp);
   const auto & x = tracker_->state();
-  if (!x.allFinite() ||
-      (big_rune_ &&
-       (x[7] < 0.78 / config_.divergence_factor || x[7] > 1.045 * config_.divergence_factor ||
-        x[8] < 1.884 / config_.divergence_factor || x[8] > 2.0 * config_.divergence_factor))) {
+  if (!x.allFinite()) {
     reset();
     diagnostic_ = "SP model diverged";
     return false;
   }
   RuneEstimate estimate;
-  estimate.start_timestamp = state_ ? state_->start_timestamp : timestamp;
+  estimate.start_timestamp = tracker_->start_timestamp();
+  estimate.requires_warmup = false;
   estimate.update_count = state_ ? state_->update_count + 1 : 1;
   estimate.timestamp = timestamp;
   estimate.center = tools::ypd2xyz(Eigen::Vector3d(x[0], x[2], x[3]));
@@ -105,8 +100,7 @@ bool SPRuneModel::update(const RuneElements & elements, Timestamp timestamp)
   if (big_rune_) {
     // The old BigTarget integrates the EKF sine parameters; export the same law
     // with signed coefficients so the shared predictor works in either direction.
-    const double elapsed =
-      std::chrono::duration<double>(timestamp - estimate.start_timestamp).count();
+    const double elapsed = tracker_->time();
     const int direction = tracker_->direction();
     estimate.prediction_method = RunePredictionMethod::weighted_least_squares;
     estimate.sine_valid = true;
@@ -115,10 +109,9 @@ bool SPRuneModel::update(const RuneElements & elements, Timestamp timestamp)
     estimate.sine_omega = x[8];
     estimate.sine_phase = x[8] * elapsed + x[9];
     estimate.sine_t = elapsed;
-    estimate.rotation_speed = estimate.sine_v + estimate.sine_a * std::sin(estimate.sine_phase);
+    estimate.rotation_speed = direction * x[6];
   }
   state_ = estimate;
-  last_observed_ = timestamp;
   diagnostic_ = "tracking";
   return true;
 }

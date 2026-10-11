@@ -96,11 +96,15 @@ buff_v2:
 两种模型共用 `RuneEstimate`、现有 planner/aimer 和 Foxglove 重投影接口；
 SP 的中心方位角速度随状态快照传递，规划预测继续外推中心位置。
 Njust 的 `prediction_method`、`motion_fit`、像素 EKF 噪声和初始化参数位于
-`buff_v2.model.njust`。SP 的超时、大小符过程噪声、球坐标观测噪声、初始状态及协方差、
+`buff_v2.model.njust`。SP 的累计丢帧阈值、大小符过程噪声、球坐标观测噪声、初始状态及协方差、
 发散阈值位于 `buff_v2.model.sp`，完整默认值见 `configs/standard.yaml`。
 每种模型负责解析自己的配置，未选择的模型参数不影响运行；旧 `buff_v2` 根层模型参数不再读取。
 SP 保留 127 mm 平面靶心半径、700 mm 符臂尺寸。
 SP 每帧选择一个未激活靶心作为第零叶；Njust 继续进行五叶多候选关联。
+SP 默认参数的状态更新以 `bdc4e2023eb588b89644ecd16ab49e1f525d6fe5` 的
+`SmallTarget`/`BigTarget` 为基准：首帧执行完整更新，累计丢帧超过 6 次后重获帧不输出，
+下一帧重新初始化并保留方向投票和时间原点。小符发散帧不输出；大符发散帧仍输出，
+下一帧重新初始化。SP 没有 Njust 的 3 秒/6 秒瞄准预热，且不再读取 `model.sp.timeout_seconds`。
 
 打符检测器由 `buff_v2.detector.type` 选择，默认 `njust`；设置为 `climber` 可使用移植自
 `Climber_Vision_26` 的 `ClimberRuneDetector`，参数位于 `buff_v2.detector.climber`。

@@ -48,7 +48,8 @@ std::optional<Eigen::Vector3d> RunePredictor::aimpoint_at(
   const RuneEstimate & estimate, Timestamp prediction_time) const
 {
   const auto delay = std::chrono::seconds(estimate.sine_valid ? 6 : 3);
-  if (prediction_time < estimate.timestamp || prediction_time - estimate.start_timestamp < delay)
+  if (prediction_time < estimate.timestamp ||
+      (estimate.requires_warmup && prediction_time - estimate.start_timestamp < delay))
     return std::nullopt;
   const RuneEstimate predicted = predict(estimate, prediction_time);
   for (std::size_t i = 0; i < predicted.inactive.size(); ++i) {

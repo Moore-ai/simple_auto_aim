@@ -14,12 +14,17 @@ class SPTracker
 {
 public:
   SPTracker(bool big_rune, SPRuneConfig config) : big_rune_(big_rune), config_(config) {}
-  void update(const SPRuneObservation & observation, Timestamp timestamp);
+  bool update(const SPRuneObservation & observation, Timestamp timestamp);
+  bool update(const std::optional<SPRuneObservation> & observation, Timestamp timestamp);
+  void reset();
   const Eigen::VectorXd & state() const { return ekf_.x; }
   int direction() const { return direction_votes_ > 0 ? 1 : -1; }
+  Timestamp start_timestamp() const { return start_timestamp_.value(); }
+  double time() const { return last_time_; }
 
 private:
-  void initialize(const SPRuneObservation & observation, Timestamp timestamp);
+  void initialize(const SPRuneObservation & observation, double elapsed);
+  void correct(const SPRuneObservation & observation, double elapsed);
   void predict(double dt);
   Eigen::MatrixXd blade_jacobian() const;
 
@@ -27,7 +32,8 @@ private:
   SPRuneConfig config_;
   bool initialized_ = false;
   int direction_votes_ = 0;
-  Timestamp start_timestamp_{};
+  int lost_count_ = 0;
+  std::optional<Timestamp> start_timestamp_;
   double last_time_ = 0;
   tools::ExtendedKalmanFilter ekf_;
 };

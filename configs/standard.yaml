@@ -308,7 +308,8 @@ buff_v2: # 新打符入口使用的源项目参数
       init_pitch_bound: 20.0 # deg，符面倾角上限
       diverge_face_angle: 45.0 # deg，符面朝向与符心方向最大偏差
     sp: # 球坐标 EKF 参数，几何尺寸沿用旧模型
-      timeout_seconds: 1.5 # s，最后一次有效观测后的重置超时
+      max_lost_frames: 6 # 累计丢帧超过此值后，重获帧不输出，下一帧重新初始化
+      small_speed_tolerance: 0.17453292519943295 # rad/s，小符速度偏离初始速度绝对值的发散阈值
       small_yaw_acceleration_noise: 0.001 # 小符符心 yaw 加速度过程噪声方差
       big_yaw_acceleration_noise: 0.9 # 大符符心 yaw 加速度过程噪声方差
       big_rotation_angle_noise: 0.09 # 大符每帧转角过程噪声方差

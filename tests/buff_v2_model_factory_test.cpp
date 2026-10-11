@@ -71,7 +71,7 @@ int main()
       assert(model->reprojected_features().size() == 6);
       assert(model->reprojected_center());
       assert(!model->update({}, state->timestamp + std::chrono::milliseconds(20)));
-      assert(model->state() && model->state()->predicted);
+      assert(!model->state());
       assert(!model->update({}, state->timestamp + std::chrono::seconds(2)));
       assert(!model->state());
       assert(model->update(observation(config.camera, 0.2), start + std::chrono::seconds(10)));
@@ -84,6 +84,16 @@ int main()
   auto model = make_rune_model(config.camera, config.model, false);
   assert(!model->update(active, start) && !model->state());
   assert(model->update(observation(config.camera, 0.2), start));
+  assert(std::abs(model->state()->rotation_speed - M_PI / 3) < 1e-9);
+  assert(RunePredictor{}.aimpoint_at(*model->state(), start));
+  for (int i = 1; i <= 7; ++i)
+    assert(!model->update({}, start + std::chrono::milliseconds(i * 20)));
+  assert(!model->update(observation(config.camera, 0.2),
+    start + std::chrono::milliseconds(160)));
+  assert(!model->state());
+  assert(model->update(observation(config.camera, 0.2),
+    start + std::chrono::milliseconds(180)));
+  assert(RunePredictor{}.aimpoint_at(*model->state(), start + std::chrono::milliseconds(180)));
   assert(!model->update(observation(config.camera, 0.2), start - std::chrono::seconds(1)));
   assert(!model->state());
   // The spherical center yaw rate must survive conversion to the planning snapshot.
@@ -110,7 +120,7 @@ int main()
   // Factory must use SP parameters rather than Njust or former root settings.
   config.model.parameters = YAML::Load(R"(
 sp:
-  timeout_seconds: 0.05
+  max_lost_frames: 2
   initial_small_speed: 0.6
   observation_yaw: 0.02
 njust:
@@ -118,9 +128,14 @@ njust:
 )");
   auto configured = make_rune_model(config.camera, config.model, false);
   assert(configured->update(observation(config.camera, 0.2), start));
-  assert(std::abs(configured->state()->rotation_speed + 0.6) < 1e-12);
-  assert(!configured->update({}, start + std::chrono::milliseconds(100)));
+  assert(std::abs(configured->state()->rotation_speed - 0.6) < 1e-12);
+  for (int i = 1; i <= 3; ++i)
+    assert(!configured->update({}, start + std::chrono::milliseconds(i * 20)));
   assert(!configured->state());
+  assert(!configured->update(observation(config.camera, 0.2),
+    start + std::chrono::milliseconds(80)));
+  assert(configured->update(observation(config.camera, 0.2),
+    start + std::chrono::milliseconds(100)));
 
   config.model.type = "unknown";
   bool rejected = false;

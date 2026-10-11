@@ -67,7 +67,7 @@ int main()
     "  model:\n"
     "    type: njust\n"
     "    sp:\n"
-    "      timeout_seconds: 0.05\n"
+    "      max_lost_frames: 2\n"
     "      observation_yaw: 0.02\n"
     "    njust:\n"
     "      timeout_seconds: 1.2\n"
@@ -225,7 +225,7 @@ int main()
   }
   const auto sp = auto_buff_v2::SPRuneModel::Config::load(
     auto_buff_v2::BuffConfig::load(path).model.parameters["sp"]);
-  assert(sp.timeout_seconds == 0.05 && sp.observation_yaw == 0.02);
+  assert(sp.max_lost_frames == 2 && sp.observation_yaw == 0.02);
   yaml["buff_v2"]["model"]["njust"]["prediction_method"] = "unknown";
   std::ofstream(path) << yaml;
   assert(auto_buff_v2::make_rune_model(

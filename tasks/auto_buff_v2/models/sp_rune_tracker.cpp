@@ -15,10 +15,9 @@ Eigen::Vector3d blade_position(const Eigen::VectorXd & x)
 }
 }  // namespace
 
-void SPTracker::initialize(const SPRuneObservation & observation, Timestamp timestamp)
+void SPTracker::initialize(const SPRuneObservation & observation, double elapsed)
 {
-  start_timestamp_ = timestamp;
-  last_time_ = 0;
+  last_time_ = elapsed;
   const int size = big_rune_ ? 10 : 7;
   Eigen::VectorXd x = Eigen::VectorXd::Zero(size);
   x.head<7>() << observation.ypd_in_world[0], 0, observation.ypd_in_world[1],
@@ -32,9 +31,11 @@ void SPTracker::initialize(const SPRuneObservation & observation, Timestamp time
   } else {
     P(6, 6) = config_.small_speed_covariance;
   }
-  const auto add = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b) -> Eigen::VectorXd {
+  const auto add = [big = big_rune_](const Eigen::VectorXd & a,
+                                   const Eigen::VectorXd & b) -> Eigen::VectorXd {
     Eigen::VectorXd result = a + b;
     for (const int index : {0, 2, 4, 5}) result[index] = tools::limit_rad(result[index]);
+    if (big) result[9] = tools::limit_rad(result[9]);
     return result;
   };
   ekf_ = tools::ExtendedKalmanFilter(x, P, add);
@@ -82,21 +83,61 @@ void SPTracker::predict(double dt)
   ekf_.predict(F, Q, transition);
 }
 
-void SPTracker::update(const SPRuneObservation & observation, Timestamp timestamp)
+void SPTracker::reset()
 {
-  if (!initialized_) {
-    initialize(observation, timestamp);
-    return;
+  // Legacy reinitialization retains the clock and direction votes.
+  initialized_ = false;
+  lost_count_ = 0;
+}
+
+bool SPTracker::update(const SPRuneObservation & observation, Timestamp timestamp)
+{
+  return update(std::optional<SPRuneObservation>(observation), timestamp);
+}
+
+bool SPTracker::update(const std::optional<SPRuneObservation> & observation, Timestamp timestamp)
+{
+  if (!observation) {
+    ++lost_count_;
+    return false;
   }
-  const double elapsed = std::chrono::duration<double>(timestamp - start_timestamp_).count();
-  if (elapsed <= last_time_) return;
-  // Align the selected blade before voting, including angle wrap at +/-pi.
-  const double blade_step = 2 * CV_PI / 5;
-  const double delta = std::remainder(observation.ypr_in_world[2] - ekf_.x[5], 2 * CV_PI);
-  ekf_.x[5] += std::round(delta / blade_step) * blade_step;
-  const double movement = std::remainder(observation.ypr_in_world[2] - ekf_.x[5], 2 * CV_PI);
-  if (std::abs(direction_votes_) <= 50 && std::abs(movement) > 1e-6)
-    direction_votes_ += movement > 0 ? 1 : -1;
+  if (!start_timestamp_) start_timestamp_ = timestamp;
+  const double elapsed = std::chrono::duration<double>(timestamp - *start_timestamp_).count();
+  if (!initialized_) initialize(*observation, elapsed);
+  if (lost_count_ > config_.max_lost_frames) {
+    reset();
+    return false;
+  }
+  correct(*observation, elapsed);
+  if (!big_rune_ &&
+      (std::abs(ekf_.x[6]) > config_.initial_small_speed + config_.small_speed_tolerance ||
+       std::abs(ekf_.x[6]) < config_.initial_small_speed - config_.small_speed_tolerance)) {
+    initialized_ = false;
+    return false;
+  }
+  if (big_rune_ &&
+      (ekf_.x[7] > 1.045 * config_.divergence_factor ||
+       ekf_.x[7] < 0.78 / config_.divergence_factor ||
+       ekf_.x[8] > 2.0 * config_.divergence_factor ||
+       ekf_.x[8] < 1.884 / config_.divergence_factor)) {
+    // BigTarget exposes this frame, then initializes on the next observation.
+    initialized_ = false;
+  }
+  return true;
+}
+
+void SPTracker::correct(const SPRuneObservation & observation, double elapsed)
+{
+  const double roll = observation.ypr_in_world[2];
+  if (std::abs(roll - ekf_.x[5]) > CV_PI / 12) {
+    for (int i = -5; i <= 5; ++i) {
+      if (std::abs(ekf_.x[5] + i * 2 * CV_PI / 5 - roll) < CV_PI / 5) {
+        ekf_.x[5] += i * 2 * CV_PI / 5;
+        break;
+      }
+    }
+  }
+  if (std::abs(direction_votes_) <= 50) direction_votes_ += ekf_.x[5] > roll ? -1 : 1;
   if (!big_rune_ && direction() * ekf_.x[6] < 0) ekf_.x[6] *= -1;
   predict(elapsed - last_time_);
 

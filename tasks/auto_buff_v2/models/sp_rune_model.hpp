@@ -30,7 +30,6 @@ private:
   bool big_rune_;
   std::unique_ptr<SPTracker> tracker_;
   std::optional<RuneEstimate> state_;
-  Timestamp last_observed_{};
   std::string diagnostic_;
 };
 }  // namespace auto_buff_v2

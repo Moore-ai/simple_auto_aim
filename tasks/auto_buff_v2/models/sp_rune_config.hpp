@@ -7,7 +7,8 @@ namespace auto_buff_v2
 {
 struct SPRuneConfig
 {
-  double timeout_seconds = 1.5;
+  int max_lost_frames = 6;
+  double small_speed_tolerance = 0.17453292519943295;
   double small_yaw_acceleration_noise = 0.001;
   double big_yaw_acceleration_noise = 0.9;
   double big_rotation_angle_noise = 0.09;
