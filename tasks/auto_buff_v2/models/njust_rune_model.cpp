@@ -370,6 +370,7 @@ bool NjustRuneModel::update(const RuneElements & elements, Timestamp timestamp)
   const auto assignments = hungarian_assign(cost, kGate);
   int corrected_blades = 0;
   int corrected_inactive = 0;
+  std::array<bool, 5> observed_inactive{};
   for (std::size_t i = 0; i < observations.size(); ++i) {
     if (!assignments[i]) continue;
     const int best = *assignments[i];
@@ -394,11 +395,16 @@ bool NjustRuneModel::update(const RuneElements & elements, Timestamp timestamp)
       const int blade = best - 1;
       if (observation.inactive) {
         ++corrected_inactive;
-        state.inactive[blade] = true;
+        observed_inactive[blade] = true;
         inactive_timeout_[blade] = timestamp + std::chrono::milliseconds(100);
+      } else {
+        state.inactive[blade] = false;
       }
     }
   }
+  // Keep the detection grace period only while no current hittable blade is observed.
+  // Otherwise a lower-index stale blade can override the current observation in aiming.
+  if (corrected_inactive > 0) state.inactive = observed_inactive;
   ekf_state_ = x;
   ekf_state_into(state, x);
   if (state.sine_valid)

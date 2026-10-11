@@ -4,6 +4,7 @@
 
 #include <opencv2/calib3d.hpp>
 
+#include "tasks/auto_buff_v2/aimers/rune_aimer_factory.hpp"
 #include "tasks/auto_buff_v2/buff_config.hpp"
 #include "tasks/auto_buff_v2/models/njust_rune_model.hpp"
 #include "tasks/auto_buff_v2/rune_predictor.hpp"
@@ -164,6 +165,61 @@ int main()
   tilted_model.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(tilted_model.update(tilted_elements, now));
   assert(std::abs(tilted_model.state()->rotation_angle - seed_angle) < 0.03);
+
+  // A stationary rune can change its hittable blade without changing the polygon.
+  // Fresh observations must supersede the old blade's 100 ms detection grace period.
+  for (const bool observe_old_active : {false, true}) {
+    auto_buff_v2::NjustRuneModel switching(config.camera, model_config, false);
+    switching.set_q_gimbal2world(q_gimbal2world);
+    assert(switching.update(elements, now));
+    for (int i = 1; i <= 80; ++i)
+      assert(switching.update(elements, now + std::chrono::milliseconds(50 * i)));
+    const auto before_switch = switching.reprojected_features();
+    auto_buff_v2::RuneElements switched;
+    switched.icons = elements.icons;
+    if (observe_old_active) {
+      switched.bullseyes = elements.bullseyes;
+      switched.bullseyes.front().active = true;
+    }
+    switched.bullseyes.push_back(
+      {second_pixel[0], {second_pixel[2], second_pixel[3], second_pixel[4], second_pixel[1]},
+       false, 0.5});
+    const auto stamp = now + std::chrono::milliseconds(4010);
+    assert(switching.update(switched, stamp));
+    const auto features = switching.reprojected_features();
+    assert(features.size() == 6);
+    for (std::size_t i = 0; i < features.size(); ++i)
+      assert(cv::norm(features[i].point - before_switch[i].point) < 0.1);
+    assert(cv::norm(features[2].point - second_pixel[0]) < 0.1);
+    for (const auto & type : {"njust", "climber"}) {
+      auto planner_config = config.planner;
+      planner_config.aimer = type;
+      planner_config.ballistic.type = "vacuum";
+      const auto aimer = auto_buff_v2::make_rune_aimer(planner_config);
+      const auto aimed = aimer->aim(1, switching.state(), 20, {}, stamp);
+      assert(aimed && aimed->plan.control);
+      const Eigen::Vector3d camera_point = config.camera.R_camera2gimbal.transpose() *
+        (q_gimbal2world.conjugate() * aimed->solution.point - config.camera.t_camera2gimbal);
+      std::vector<cv::Point2f> aimed_pixels;
+      cv::projectPoints(
+        std::vector<cv::Point3f>{{static_cast<float>(camera_point.x()),
+                                 static_cast<float>(camera_point.y()),
+                                 static_cast<float>(camera_point.z())}},
+        cv::Vec3d{}, cv::Vec3d{}, camera, config.camera.distort_coeffs, aimed_pixels);
+      assert(cv::norm(aimed_pixels.front() - second_pixel[0]) < 0.1);
+      // Independent world yaw: gimbal yaw plus the second blade's bearing.
+      const double expected_yaw = 0.2 + std::atan2(-0.7 * std::sin(kBladeAngle), 3.0);
+      assert(std::abs(aimed->plan.yaw - expected_yaw) < 1e-4);
+    }
+    // A missed frame retains the selected blade, but an explicit active observation revokes it.
+    const auto missing_stamp = stamp + std::chrono::milliseconds(10);
+    assert(!switching.update({}, missing_stamp));
+    assert(auto_buff_v2::RunePredictor{}.aimpoint_at(*switching.state(), missing_stamp));
+    for (auto & bull : switched.bullseyes) bull.active = true;
+    const auto active_stamp = stamp + std::chrono::milliseconds(20);
+    assert(switching.update(switched, active_stamp));
+    assert(!auto_buff_v2::RunePredictor{}.aimpoint_at(*switching.state(), active_stamp));
+  }
 
   auto_buff_v2::NjustRuneModel big(config.camera, model_config, true);
   auto yaml = YAML::LoadFile(path);
