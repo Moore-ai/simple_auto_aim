@@ -41,6 +41,9 @@ struct BuffDebugData
   std::optional<cv::Point2f> info_anchor;
   std::optional<cv::Point2f> aimpoint;
   bool aimpoint_fire = false;
+  std::optional<Eigen::Vector3d> rune_center;
+  double rune_face_yaw = 0;
+  std::optional<cv::Point2f> impactpoint;
   std::string info;
 };
 

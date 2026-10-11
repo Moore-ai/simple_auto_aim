@@ -1,4 +1,6 @@
 #include "foxglove_visualizer.hpp"
+
+#include "tasks/auto_buff_v2/buff_config.hpp"
 #include "tools/math_tools.hpp"
 
 #include <Eigen/Geometry>
@@ -663,6 +665,41 @@ void detail::draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data
     const cv::Scalar aimpoint_color = debug_data.aimpoint_fire ? cv::Scalar{0, 0, 255} : green;
     cv::circle(image, *debug_data.aimpoint, 5, aimpoint_color, -1, cv::LINE_AA);
   }
+  if (debug_data.impactpoint) {
+    cv::drawMarker(image, *debug_data.impactpoint, {255, 0, 255}, cv::MARKER_CROSS, 16, 2,
+                   cv::LINE_AA);
+    cv::putText(image, "impact", *debug_data.impactpoint + cv::Point2f(10, -10),
+                cv::FONT_HERSHEY_SIMPLEX, 0.45, {255, 0, 255}, 1, cv::LINE_AA);
+  }
+}
+
+std::optional<cv::Point2f> detail::buff_impactpoint(
+  const FrameSnapshot & frame, double bullet_speed, const BallisticSolver & ballistic,
+  auto_aim::Solver & solver)
+{
+  const auto & debug = frame.buff_debug;
+  if (!debug.is_buff_mode || !debug.rune_center || !debug.rune_center->allFinite() ||
+      !std::isfinite(debug.rune_face_yaw) || !frame.q_gimbal2world.coeffs().allFinite())
+    return std::nullopt;
+  // Use the barrel direction at image exposure, not the desired planner angles.
+  const Eigen::Vector3d direction = frame.q_gimbal2world * Eigen::Vector3d::UnitX();
+  const double horizontal = direction.head<2>().norm();
+  if (horizontal < 1e-6) return std::nullopt;
+  const Eigen::Vector3d heading(direction.x() / horizontal, direction.y() / horizontal, 0);
+  const Eigen::Vector3d normal(std::cos(debug.rune_face_yaw), std::sin(debug.rune_face_yaw), 0);
+  const double denominator = normal.dot(heading);
+  if (std::abs(denominator) < 1e-6) return std::nullopt;
+  const double distance = normal.dot(*debug.rune_center) / denominator;
+  const auto shot = ballistic.impact(bullet_speed, distance, std::atan2(direction.z(), horizontal));
+  if (!shot) return std::nullopt;
+  const Eigen::Vector3d point = heading * distance + Eigen::Vector3d(0, 0, shot->height);
+  if (!point.allFinite()) return std::nullopt;
+  solver.set_R_gimbal2world(frame.q_gimbal2world);
+  const auto pixels = solver.world2pixel(
+    {{static_cast<float>(point.x()), static_cast<float>(point.y()), static_cast<float>(point.z())}});
+  if (pixels.size() != 1 || !std::isfinite(pixels.front().x) || !std::isfinite(pixels.front().y))
+    return std::nullopt;
+  return pixels.front();
 }
 
 std::optional<cv::Point2f> detail::buff_aimpoint(
@@ -700,9 +737,15 @@ std::optional<std::vector<cv::Point2f>> detail::anti_spin_hit_armor(
 class FoxgloveVisualizer::Impl
 {
 public:
-  Impl(auto_aim::Solver & solver, detail::FoxgloveConfig config)
+  Impl(auto_aim::Solver & solver, detail::FoxgloveConfig config,
+       auto_buff_v2::BuffConfig::Planner buff_config)
   : solver{solver}, enabled{config.enable},
-    decision_speed_enable{config.decision_speed_enable}, image_limiter{config.image_fps}
+    decision_speed_enable{config.decision_speed_enable}, image_limiter{config.image_fps},
+    buff_config{std::move(buff_config)},
+    buff_ballistic{make_ballistic_solver(
+      this->buff_config.ballistic.type,
+      {this->buff_config.ballistic.njust_air_resistance,
+       this->buff_config.ballistic.climber_air_resistance_k})}
   {
   }
 
@@ -710,6 +753,8 @@ public:
   bool enabled;
   bool decision_speed_enable;
   detail::ImagePublishLimiter image_limiter;
+  auto_buff_v2::BuffConfig::Planner buff_config;
+  std::unique_ptr<BallisticSolver> buff_ballistic;
   detail::LatestFrameQueue frames;
   std::thread worker;
   std::mutex plan_mutex;
@@ -748,7 +793,8 @@ public:
 FoxgloveVisualizer::FoxgloveVisualizer(
   auto_aim::Solver & solver, const std::string & config_path)
 : impl_(std::make_unique<Impl>(
-    solver, detail::load_foxglove_config(tools::load(config_path))))
+    solver, detail::load_foxglove_config(tools::load(config_path)),
+    auto_buff_v2::BuffConfig::load(config_path).planner))
 {
   if (!impl_->enabled) return;
 
@@ -886,6 +932,18 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
     const auto * locked_armor =
       target_data.locked_armor ? &target_data.locked_armor.value() : nullptr;
     auto buff_debug = frame.buff_debug;
+    if (buff_debug.is_buff_mode) {
+      double speed = frame.gimbal_state.bullet_speed;
+      const auto & config = impl_->buff_config;
+      if (config.aimer == "climber") {
+        if (!std::isfinite(speed) || speed < 10 || speed > 28) speed = 24;
+      } else if (!std::isfinite(speed) || speed < config.bullet_speed_min ||
+                 speed > config.bullet_speed_max) {
+        speed = config.bullet_speed_default;
+      }
+      buff_debug.impactpoint = detail::buff_impactpoint(
+        frame, speed, *impl_->buff_ballistic, impl_->solver);
+    }
     std::optional<std::vector<cv::Point2f>> hit_armor;
     if (latest_plan) {
       impl_->solver.set_R_gimbal2world(frame.q_gimbal2world);

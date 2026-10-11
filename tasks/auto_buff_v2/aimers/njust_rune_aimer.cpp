@@ -67,9 +67,8 @@ std::optional<RuneAim> NjustRuneAimer::aim(
     fly_time = next->fly_time;
     if (std::abs(fly_time - previous) < 0.001) break;
   }
-  const double future = njust_config_.shoot_delay + fly_time;
-  const auto before = aim_at(*target, offset_time(now, future - 0.01), speed);
-  const auto after = aim_at(*target, offset_time(now, future + 0.01), speed);
+  const auto before = aim_at(*target, offset_time(prediction_time, -0.01), speed);
+  const auto after = aim_at(*target, offset_time(prediction_time, 0.01), speed);
   if (!before || !after) return std::nullopt;
   result.control = true;
   result.yaw = solution.angles.x();

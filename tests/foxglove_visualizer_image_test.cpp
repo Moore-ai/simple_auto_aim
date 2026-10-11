@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <fstream>
 #include <list>
 #include <optional>
 #include <string>
@@ -214,6 +215,56 @@ int main()
   assert(tools::detail::buff_aimpoint(buff_plan, 2, 2, projection_solver));
   buff_plan.control = false;
   assert(!tools::detail::buff_aimpoint(buff_plan, 2, 2, projection_solver));
+
+  // A level barrel hits below the target; rendering the target itself hides this error.
+  constexpr char impact_config[] = "/tmp/buff_impact_projection_test.yaml";
+  std::ofstream(impact_config) <<
+    "camera_matrix: [1000, 0, 640, 0, 900, 360, 0, 0, 1]\n"
+    "distort_coeffs: [0, 0, 0, 0, 0]\n"
+    "camera2gimbal_mode: xyz_ypr\n"
+    "camera2gimbal_xyz: [0.1, -0.2, 0.3]\n"
+    "camera2gimbal_ypr: [0, 0, 0]\n";
+  auto_aim::Solver impact_solver(impact_config);
+  const auto vacuum = tools::make_ballistic_solver("vacuum");
+  tools::FrameSnapshot impact_frame;
+  impact_frame.buff_debug.is_buff_mode = true;
+  impact_frame.buff_debug.rune_center = Eigen::Vector3d(0, 5, 0);
+  impact_frame.buff_debug.rune_face_yaw = CV_PI / 2;
+  impact_frame.q_gimbal2world = Eigen::AngleAxisd(CV_PI / 2, Eigen::Vector3d::UnitZ());
+  // The exposure-time quaternion is authoritative, even if latest serial feedback differs.
+  impact_frame.gimbal_state.yaw = 0.7;
+  impact_frame.gimbal_state.pitch = 0.2;
+  const auto impact_pixel = tools::detail::buff_impactpoint(
+    impact_frame, 20, *vacuum, impact_solver);
+  assert(impact_pixel);
+  assert(std::abs(impact_pixel->x - 599.183673469388) < 1e-3);
+  assert(std::abs(impact_pixel->y - 471.256186224490) < 1e-3);
+  // Intersect the actual tilted rune plane, rather than a sphere around its center.
+  impact_frame.q_gimbal2world = Eigen::Quaterniond::Identity();
+  impact_frame.buff_debug.rune_center = Eigen::Vector3d(3, 2, 0);
+  impact_frame.buff_debug.rune_face_yaw = CV_PI / 4;
+  const auto tilted_pixel = tools::detail::buff_impactpoint(
+    impact_frame, 20, *vacuum, impact_solver);
+  assert(tilted_pixel && cv::norm(*tilted_pixel - *impact_pixel) < 1e-3);
+  // Negative Y rotation raises the barrel in the project's gimbal convention.
+  impact_frame.q_gimbal2world =
+    Eigen::AngleAxisd(-std::atan(0.2), Eigen::Vector3d::UnitY());
+  const auto raised_pixel = tools::detail::buff_impactpoint(
+    impact_frame, 20, *vacuum, impact_solver);
+  assert(raised_pixel);
+  assert(std::abs(raised_pixel->x - 599.486802855734) < 1e-3);
+  assert(std::abs(raised_pixel->y - 471.533735494665) < 1e-3);
+  impact_frame.buff_debug.rune_face_yaw = CV_PI / 2;
+  assert(!tools::detail::buff_impactpoint(impact_frame, 20, *vacuum, impact_solver));
+  impact_frame.buff_debug.rune_center.reset();
+  assert(!tools::detail::buff_impactpoint(impact_frame, 20, *vacuum, impact_solver));
+
+  tools::BuffDebugData impact_debug;
+  impact_debug.impactpoint = {60, 50};
+  cv::Mat impact_image = cv::Mat::zeros(100, 120, CV_8UC3);
+  tools::detail::draw_buff_overlay(impact_image, impact_debug);
+  const auto impact_color = impact_image.at<cv::Vec3b>(50, 60);
+  assert(impact_color[0] > 0 && impact_color[1] == 0 && impact_color[2] > 0);
 
   const double yaw = 0.3;
   const double pitch = CV_PI / 12.0;

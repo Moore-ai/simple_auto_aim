@@ -53,6 +53,8 @@ tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & fact
   if (complete_polygon) buff_debug.blade_polygon = blades;
   buff_debug.info_anchor = model_.reprojected_center();
   if (target) {
+    buff_debug.rune_center = target->center;
+    buff_debug.rune_face_yaw = target->face_yaw;
     if (target->sine_valid) {
       buff_debug.info = fmt::format(
         "spd_{}(t)={:+.2f}{:+.2f}*sin({:+.2f}{:+.2f}t), e={:.3f}", target->update_count,

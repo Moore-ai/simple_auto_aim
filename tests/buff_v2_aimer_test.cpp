@@ -12,6 +12,27 @@ int main()
   using namespace std::chrono_literals;
   static_assert(std::is_abstract_v<auto_buff_v2::RuneAimer>);
   const auto now = auto_buff_v2::Timestamp{} + 10s;
+  // Forward ballistics must use the same model as aiming, including gravity and drag.
+  const auto vacuum_solver = tools::make_ballistic_solver("vacuum");
+  const auto level_impact = vacuum_solver->impact(20, 5, 0);
+  assert(level_impact);
+  assert(std::abs(level_impact->height + 0.305728125) < 1e-12);
+  assert(std::abs(level_impact->fly_time - 0.25) < 1e-12);
+  const auto linear_solver = tools::make_ballistic_solver("climber", {0.003, 0.02});
+  const auto linear_impact = linear_solver->impact(20, 3, 0.266350973473905);
+  assert(linear_impact && std::abs(linear_impact->height - 0.7) < 1e-9);
+  assert(std::abs(linear_impact->fly_time - 0.155724913567701) < 1e-9);
+  for (const auto & model : {"vacuum", "climber", "njust"}) {
+    const auto ballistic = tools::make_ballistic_solver(model, {0.003, 0.02});
+    const auto shot = ballistic->solve(20, 5, 0.7);
+    assert(shot);
+    const auto impact = ballistic->impact(20, 5, shot->pitch);
+    assert(impact && std::abs(impact->height - 0.7) < 0.001);
+    assert(std::abs(impact->fly_time - shot->fly_time) < 1e-9);
+    assert(!ballistic->impact(0, 5, 0));
+    assert(!ballistic->impact(20, -5, 0));
+    assert(!ballistic->impact(20, 5, std::acos(-1)));
+  }
   auto_buff_v2::RuneEstimate target;
   target.center = {3, 0, 0};
   target.timestamp = now;

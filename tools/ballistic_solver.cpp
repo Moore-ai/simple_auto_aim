@@ -9,6 +9,12 @@ namespace tools
 {
 namespace
 {
+bool valid_shot(double speed, double distance, double pitch)
+{
+  return std::isfinite(speed) && std::isfinite(distance) && std::isfinite(pitch) &&
+         speed > 0 && distance > 0 && std::abs(pitch) < std::acos(-1) / 2;
+}
+
 class NjustBallisticSolver final : public BallisticSolver
 {
 public:
@@ -18,35 +24,43 @@ public:
                                           double height) const override
   {
     if (speed <= 0 || distance <= 0) return std::nullopt;
-    constexpr double kStep = 0.005;
-    constexpr double kGravity = 9.81;
     double pitch = std::atan2(height, distance);
     for (int iteration = 0; iteration < 10; ++iteration) {
-      double x = 0, y = 0, t = 0;
-      double vx = speed * std::cos(pitch), vy = speed * std::sin(pitch);
-      double previous_x = 0, previous_y = 0, previous_t = 0;
-      while (x < distance) {
-        previous_x = x;
-        previous_y = y;
-        previous_t = t;
-        const double velocity = std::hypot(vx, vy);
-        vx -= air_resistance_ * velocity * vx * kStep;
-        vy -= (kGravity + air_resistance_ * velocity * vy) * kStep;
-        x += vx * kStep;
-        y += vy * kStep;
-        t += kStep;
-        if (t > 4 || vx <= 0.1) break;
-      }
-      if (x < distance || x <= previous_x) return std::nullopt;
-      const double ratio = (distance - previous_x) / (x - previous_x);
-      const double actual_height = previous_y + (y - previous_y) * ratio;
-      const double fly_time = previous_t + (t - previous_t) * ratio;
-      const double error = height - actual_height;
-      if (std::abs(error) < 0.001) return BallisticSolution{pitch, fly_time};
+      const auto shot = impact(speed, distance, pitch);
+      if (!shot) return std::nullopt;
+      const double error = height - shot->height;
+      if (std::abs(error) < 0.001) return BallisticSolution{pitch, shot->fly_time};
       pitch += std::atan2(error, distance);
       if (std::abs(pitch) > 80.0 / 57.3) break;
     }
     return std::nullopt;
+  }
+
+  std::optional<BallisticImpact> impact(
+    double speed, double distance, double pitch) const override
+  {
+    if (!valid_shot(speed, distance, pitch)) return std::nullopt;
+    constexpr double kStep = 0.005;
+    constexpr double kGravity = 9.81;
+    double x = 0, y = 0, t = 0;
+    double vx = speed * std::cos(pitch), vy = speed * std::sin(pitch);
+    double previous_x = 0, previous_y = 0, previous_t = 0;
+    while (x < distance) {
+      previous_x = x;
+      previous_y = y;
+      previous_t = t;
+      const double velocity = std::hypot(vx, vy);
+      vx -= air_resistance_ * velocity * vx * kStep;
+      vy -= (kGravity + air_resistance_ * velocity * vy) * kStep;
+      x += vx * kStep;
+      y += vy * kStep;
+      t += kStep;
+      if (t > 4 || vx <= 0.1) break;
+    }
+    if (x < distance || x <= previous_x) return std::nullopt;
+    const double ratio = (distance - previous_x) / (x - previous_x);
+    return BallisticImpact{
+      previous_y + (y - previous_y) * ratio, previous_t + (t - previous_t) * ratio};
   }
 private:
   double air_resistance_;
@@ -96,6 +110,25 @@ public:
     return std::nullopt;
   }
 
+  std::optional<BallisticImpact> impact(
+    double speed, double distance, double pitch) const override
+  {
+    if (!valid_shot(speed, distance, pitch)) return std::nullopt;
+    constexpr double gravity = 9.7833;
+    const double vx = speed * std::cos(pitch);
+    const double vy = speed * std::sin(pitch);
+    const double drag = air_resistance_k_;
+    if (drag < 1e-6) {
+      const double time = distance / vx;
+      return BallisticImpact{vy * time - gravity * time * time / 2, time};
+    }
+    const double ratio = drag * distance / vx;
+    if (ratio >= 0.99) return std::nullopt;
+    const double time = -std::log1p(-ratio) / drag;
+    return BallisticImpact{
+      (vy + gravity / drag) * distance / vx - gravity * time / drag, time};
+  }
+
 private:
   double air_resistance_k_;
 };
@@ -110,6 +143,14 @@ public:
     const Trajectory trajectory(speed, distance, height);
     if (trajectory.unsolvable) return std::nullopt;
     return BallisticSolution{trajectory.pitch, trajectory.fly_time};
+  }
+
+  std::optional<BallisticImpact> impact(
+    double speed, double distance, double pitch) const override
+  {
+    if (!valid_shot(speed, distance, pitch)) return std::nullopt;
+    const double time = distance / (speed * std::cos(pitch));
+    return BallisticImpact{speed * std::sin(pitch) * time - 9.7833 * time * time / 2, time};
   }
 };
 }  // namespace

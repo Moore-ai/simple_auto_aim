@@ -78,6 +78,9 @@ void draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data);
 std::optional<cv::Point2f> buff_aimpoint(
   const auto_aim::Plan & plan, std::uint64_t plan_target_generation,
   std::uint64_t current_target_generation, auto_aim::Solver & solver);
+std::optional<cv::Point2f> buff_impactpoint(
+  const FrameSnapshot & frame, double bullet_speed, const BallisticSolver & ballistic,
+  auto_aim::Solver & solver);
 std::optional<std::vector<cv::Point2f>> anti_spin_hit_armor(
   const auto_aim::Plan & plan, std::uint64_t plan_target_generation,
   std::uint64_t current_target_generation, auto_aim::ArmorType armor_type,

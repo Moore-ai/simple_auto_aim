@@ -13,6 +13,12 @@ struct BallisticSolution
   double fly_time = 0;
 };
 
+struct BallisticImpact
+{
+  double height = 0;
+  double fly_time = 0;
+};
+
 struct BallisticSolverConfig
 {
   double njust_air_resistance = 0.003;
@@ -25,6 +31,9 @@ public:
   virtual ~BallisticSolver() = default;
   virtual std::optional<BallisticSolution> solve(double speed, double distance,
                                                   double height) const = 0;
+  // Forward trajectory at a horizontal distance. Pitch is positive upwards.
+  virtual std::optional<BallisticImpact> impact(
+    double speed, double distance, double pitch) const = 0;
 };
 
 std::unique_ptr<BallisticSolver> make_ballistic_solver(

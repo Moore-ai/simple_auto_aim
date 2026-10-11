@@ -243,6 +243,10 @@ target_link_libraries(foxglove_visualizer_image_test PRIVATE
   fmt::fmt
   yaml-cpp
   auto_aim
+  auto_buff_v2
   tools
   io
   foxglove_sdk)
+add_test(NAME foxglove_visualizer_image_test COMMAND foxglove_visualizer_image_test)
+set_tests_properties(foxglove_visualizer_image_test PROPERTIES
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
