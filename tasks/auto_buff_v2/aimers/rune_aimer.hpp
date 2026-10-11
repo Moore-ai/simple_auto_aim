@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <optional>
 
-#include "../rune_model.hpp"
+#include "../models/rune_model.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
 

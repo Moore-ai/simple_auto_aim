@@ -3,7 +3,7 @@
 
 #include "io/gimbal/gimbal.hpp"
 #include "buff_frame_processor.hpp"
-#include "rune_model.hpp"
+#include "models/rune_model.hpp"
 #include "tools/frame_facts.hpp"
 #include "tools/processed_frame.hpp"
 

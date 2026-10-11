@@ -5,7 +5,10 @@ add_library(auto_buff_v2 STATIC
   detectors/climber_rune_detector.cpp
   detectors/szu_rune_detector.cpp
   rune_energy_fitter.cpp
-  rune_model.cpp
+  models/njust_rune_model.cpp
+  models/sp_rune_model.cpp
+  models/sp_rune_solver.cpp
+  models/sp_rune_tracker.cpp
   rune_predictor.cpp
   aimers/njust_rune_aimer.cpp
   aimers/climber_rune_aimer.cpp

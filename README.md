@@ -80,6 +80,28 @@ MPC 差分采样分别从原始状态向前和向后预测，不修改模型状�
 弹道即可保留原来的解算行为。自瞄读取根层的 `ballistic_model`、`njust_air_resistance` 和 `climber_air_resistance_k`，
 修改它们不会影响打符弹道；示例配置选用 `vacuum`，保持当前运行配置的解算结果。
 
+打符状态模型由 `buff_v2.model.type` 独立选择，默认 `njust`。接口和工厂位于
+`tasks/auto_buff_v2/models/`：`RuneModel` 为抽象接口，`NjustRuneModel` 保留原 v2
+五叶重投影 EKF 和加权运动拟合；`SPRuneModel` 移植旧 `auto_buff` 的小符 7 维、
+大符 10 维球坐标 EKF，包含方向投票、扇叶切换补偿和大符正弦积分预测。
+SP 的 PnP 解算、EKF 跟踪和 v2 状态适配分别由 solver、tracker、model 负责，
+不链接旧检测器或旧瞄准器。切换方式：
+
+```yaml
+buff_v2:
+  model:
+    type: sp # njust 或 sp；省略时使用 njust
+```
+
+两种模型共用 `RuneEstimate`、现有 planner/aimer 和 Foxglove 重投影接口；
+SP 的中心方位角速度随状态快照传递，规划预测继续外推中心位置。
+Njust 的 `prediction_method`、`motion_fit`、像素 EKF 噪声和初始化参数位于
+`buff_v2.model.njust`。SP 的超时、大小符过程噪声、球坐标观测噪声、初始状态及协方差、
+发散阈值位于 `buff_v2.model.sp`，完整默认值见 `configs/standard.yaml`。
+每种模型负责解析自己的配置，未选择的模型参数不影响运行；旧 `buff_v2` 根层模型参数不再读取。
+SP 保留 127 mm 平面靶心半径、700 mm 符臂尺寸。
+SP 每帧选择一个未激活靶心作为第零叶；Njust 继续进行五叶多候选关联。
+
 打符检测器由 `buff_v2.detector.type` 选择，默认 `njust`；设置为 `climber` 可使用移植自
 `Climber_Vision_26` 的 `ClimberRuneDetector`，参数位于 `buff_v2.detector.climber`。
 随仓库提供的 `assets/buff_repvgg.xml` / `.bin` 为该源项目模型，默认使用 CPU 推理，

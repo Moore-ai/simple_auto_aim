@@ -5,7 +5,7 @@
 #include <utility>
 
 #include "tasks/auto_buff_v2/rune_energy_fitter.hpp"
-#include "tasks/auto_buff_v2/rune_model.hpp"
+#include "tasks/auto_buff_v2/models/rune_model.hpp"
 #include "tasks/auto_buff_v2/rune_predictor.hpp"
 
 static_assert(std::is_same_v<

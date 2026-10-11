@@ -4,6 +4,7 @@
 #include <opencv2/imgproc.hpp>
 
 #include "tasks/auto_buff_v2/buff_frame_processor.hpp"
+#include "tasks/auto_buff_v2/models/njust_rune_model.hpp"
 
 int main()
 {
@@ -15,8 +16,8 @@ int main()
   detector.fy = 1000;
   detector.parameters["njust"]["min_distance"] = 2;
   detector.parameters["njust"]["max_distance"] = 5;
-  auto_buff_v2::BuffConfig::Model model;
-  auto_buff_v2::RuneModel rune_model(camera, model, false);
+  auto_buff_v2::NjustRuneModel::Config model;
+  auto_buff_v2::NjustRuneModel rune_model(camera, model, false);
   auto_buff_v2::BuffFrameProcessor processor(rune_model, detector);
 
   cv::Mat image = cv::Mat::zeros(400, 400, CV_8UC3);

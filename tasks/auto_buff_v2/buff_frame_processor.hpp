@@ -5,7 +5,7 @@
 
 #include "buff_config.hpp"
 #include "detectors/rune_detector.hpp"
-#include "rune_model.hpp"
+#include "models/rune_model.hpp"
 #include "tools/frame_facts.hpp"
 #include "tools/processed_frame.hpp"
 

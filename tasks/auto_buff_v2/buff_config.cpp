@@ -35,54 +35,18 @@ BuffConfig BuffConfig::load(const std::string & path)
 
   const auto buff = yaml["buff_v2"];
   if (buff) {
-    const auto prediction_method =
-      buff["prediction_method"].as<std::string>("weighted_least_squares");
-    if (prediction_method == "ekf") {
-      result.model.prediction_method = RunePredictionMethod::ekf;
-    } else if (prediction_method != "weighted_least_squares") {
-      throw std::invalid_argument(
-        "buff_v2.prediction_method must be weighted_least_squares or ekf");
+    const auto model = buff["model"];
+    if (model) {
+      result.model.type = model["type"].as<std::string>(result.model.type);
+      result.model.parameters = model;
     }
-    const auto motion_fit = buff["motion_fit"];
-    if (motion_fit) {
-      const auto load_fit = [](const YAML::Node & node, MotionFit & fit) {
-        if (!node) return;
-        fit.window_seconds = node["window_seconds"].as<double>(fit.window_seconds);
-        fit.min_fit_seconds = node["min_fit_seconds"].as<double>(fit.min_fit_seconds);
-        fit.weight_half_life_seconds =
-          node["weight_half_life_seconds"].as<double>(fit.weight_half_life_seconds);
-      };
-      load_fit(motion_fit["small"], result.model.small_motion_fit);
-      load_fit(motion_fit["big"], result.model.big_motion_fit);
-    }
+    if (result.model.type != "njust" && result.model.type != "sp")
+      throw std::invalid_argument("buff_v2.model.type must be njust or sp");
     const auto detector = buff["detector"];
     if (detector) {
       result.detector.type = detector["type"].as<std::string>(result.detector.type);
       result.detector.parameters = detector;
     }
-    result.model.timeout_seconds = buff["timeout_seconds"].as<double>(result.model.timeout_seconds);
-    result.model.noise_x = buff["noise_x"].as<double>(result.model.noise_x);
-    result.model.noise_y = buff["noise_y"].as<double>(result.model.noise_y);
-    result.model.noise_z = buff["noise_z"].as<double>(result.model.noise_z);
-    result.model.noise_rotation_speed =
-      buff["noise_rotation_speed"].as<double>(result.model.noise_rotation_speed);
-    result.model.noise_rotation_angle =
-      buff["noise_rotation_angle"].as<double>(result.model.noise_rotation_angle);
-    result.model.noise_face_yaw =
-      buff["noise_face_yaw"].as<double>(result.model.noise_face_yaw);
-    result.model.noise_observation =
-      buff["noise_observation"].as<double>(result.model.noise_observation);
-    result.model.gate_threshold = buff["gate_threshold"].as<double>(result.model.gate_threshold);
-    result.model.init_seed_mean_error =
-      buff["init_seed_mean_error"].as<double>(result.model.init_seed_mean_error);
-    result.model.init_seed_max_error =
-      buff["init_seed_max_error"].as<double>(result.model.init_seed_max_error);
-    result.model.init_center_gate =
-      buff["init_center_gate"].as<double>(result.model.init_center_gate);
-    result.model.init_pitch_bound =
-      buff["init_pitch_bound"].as<double>(result.model.init_pitch_bound);
-    result.model.diverge_face_angle =
-      buff["diverge_face_angle"].as<double>(result.model.diverge_face_angle);
     result.planner.mode = buff["planner_mode"].as<std::string>(result.planner.mode);
     const auto aimer = buff["aimer"];
     if (aimer) {

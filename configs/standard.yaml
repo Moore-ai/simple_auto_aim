@@ -280,16 +280,54 @@ predict_time: 0.120     # s
 
 buff_v2: # 新打符入口使用的源项目参数
   planner_mode: njust # 打符规划器：mpc 或 njust
-  prediction_method: weighted_least_squares # 仅小符预测：weighted_least_squares（加权拟合外推）或 ekf（EKF 恒角速度预测）；大符固定使用加权拟合外推
-  motion_fit: # 运动拟合参数，独立于检测器、规划器和瞄准器
-    small: # 小符（mode=1），线性拟合
-      window_seconds: 6.0 # s，历史样本窗口，有限正数
-      min_fit_seconds: 1.5 # s，开始拟合的最短样本跨度，正数且不超过窗口
-      weight_half_life_seconds: 3.0 # s，样本权重半衰期，有限正数
-    big: # 大符（mode=2），线性与正弦拟合
-      window_seconds: 6.0 # s，历史样本窗口，有限正数
-      min_fit_seconds: 1.5 # s，开始拟合的最短样本跨度，正数且不超过窗口
-      weight_half_life_seconds: 3.0 # s，样本权重半衰期，有限正数
+  model: # 状态估计模型，独立于 detector、planner_mode 和 aimer
+    type: njust # njust=原 v2 模型；sp=旧 auto_buff 球坐标 EKF 模型
+    njust: # 像素重投影 EKF 与运动拟合参数
+      prediction_method: weighted_least_squares # 仅 Njust 小符预测：weighted_least_squares（加权拟合外推）或 ekf（EKF 恒角速度预测）；大符固定使用加权拟合外推
+      motion_fit: # Njust 模型运动拟合参数，独立于检测器、规划器和瞄准器
+        small: # 小符（mode=1），线性拟合
+          window_seconds: 6.0 # s，历史样本窗口，有限正数
+          min_fit_seconds: 1.5 # s，开始拟合的最短样本跨度，正数且不超过窗口
+          weight_half_life_seconds: 3.0 # s，样本权重半衰期，有限正数
+        big: # 大符（mode=2），线性与正弦拟合
+          window_seconds: 6.0 # s，历史样本窗口，有限正数
+          min_fit_seconds: 1.5 # s，开始拟合的最短样本跨度，正数且不超过窗口
+          weight_half_life_seconds: 3.0 # s，样本权重半衰期，有限正数
+      timeout_seconds: 1.5 # s，最后一次未激活符叶校正后的模型超时
+      noise_x: 0.00001 # EKF 每帧 x 过程噪声
+      noise_y: 0.00001 # EKF 每帧 y 过程噪声
+      noise_z: 0.00001 # EKF 每帧 z 过程噪声
+      noise_rotation_speed: 1.0 # EKF 每帧角速度过程噪声
+      noise_rotation_angle: 0.001 # EKF 每帧角度过程噪声
+      noise_face_yaw: 0.00001 # EKF 每帧符面 yaw 过程噪声
+      noise_observation: 20.0 # 像素重投影观测噪声
+      gate_threshold: 13.816 # Mahalanobis 距离平方关联阈值
+      init_seed_mean_error: 10.0 # px，PnP 种子平均重投影误差上限
+      init_seed_max_error: 20.0 # px，PnP 种子最大重投影误差上限
+      init_center_gate: 30.0 # px，初始叶片中心和其他未激活叶片的匹配阈值
+      init_pitch_bound: 20.0 # deg，符面倾角上限
+      diverge_face_angle: 45.0 # deg，符面朝向与符心方向最大偏差
+    sp: # 球坐标 EKF 参数，几何尺寸沿用旧模型
+      timeout_seconds: 1.5 # s，最后一次有效观测后的重置超时
+      small_yaw_acceleration_noise: 0.001 # 小符符心 yaw 加速度过程噪声方差
+      big_yaw_acceleration_noise: 0.9 # 大符符心 yaw 加速度过程噪声方差
+      big_rotation_angle_noise: 0.09 # 大符每帧转角过程噪声方差
+      big_rotation_speed_noise: 0.5 # 大符每帧角速度过程噪声方差
+      big_phase_noise: 1.0 # 大符每帧正弦相位过程噪声方差
+      observation_yaw: 0.01 # rad²，符心及靶心 yaw 观测噪声
+      observation_pitch: 0.01 # rad²，符心及靶心 pitch 观测噪声
+      observation_distance: 0.5 # m²，符心及靶心距离观测噪声
+      observation_rotation_angle: 0.1 # rad²，符叶转角观测噪声
+      initial_small_speed: 1.0471975511965976 # rad/s，小符初始角速度绝对值
+      initial_big_speed: 1.1775 # rad/s，大符初始角速度
+      initial_amplitude: 0.9125 # rad/s，大符初始正弦振幅
+      initial_frequency: 1.942 # rad/s，大符初始正弦频率
+      initial_phase: 0.0 # rad，大符初始正弦相位
+      initial_covariance: 10.0 # 初始状态协方差对角项，速度及相位单独覆盖
+      small_speed_covariance: 0.01 # 小符初始角速度方差
+      big_speed_covariance: 100.0 # 大符初始角速度方差
+      big_phase_covariance: 400.0 # 大符初始正弦相位方差
+      divergence_factor: 1.5 # 大符振幅 [0.78/f,1.045*f]、频率 [1.884/f,2.0*f] 发散边界
   aimer: # 打符瞄准器配置，独立于 detector 和 planner_mode
     type: njust # njust 或 climber
     ballistic: # 打符弹道解算器配置，独立于自瞄根层配置
@@ -344,17 +382,3 @@ buff_v2: # 新打符入口使用的源项目参数
       armor_area_relative_error: 0.35 # 靶心轮廓与网络预测椭圆的面积相对误差上限
       armor_solidity: 0.8 # 靶心轮廓实心度下限，范围 0–1
       armor_border_margin: 2 # px，靶心轮廓距图像边缘不超过此值时丢弃，非负整数
-  timeout_seconds: 1.5 # s，最后一次未激活符叶校正后的模型超时
-  noise_x: 0.00001 # EKF 每帧 x 过程噪声
-  noise_y: 0.00001 # EKF 每帧 y 过程噪声
-  noise_z: 0.00001 # EKF 每帧 z 过程噪声
-  noise_rotation_speed: 1.0 # EKF 每帧角速度过程噪声
-  noise_rotation_angle: 0.001 # EKF 每帧角度过程噪声
-  noise_face_yaw: 0.00001 # EKF 每帧符面 yaw 过程噪声
-  noise_observation: 20.0 # 像素重投影观测噪声
-  gate_threshold: 13.816 # Mahalanobis 距离平方关联阈值
-  init_seed_mean_error: 10.0 # px，PnP 种子平均重投影误差上限
-  init_seed_max_error: 20.0 # px，PnP 种子最大重投影误差上限
-  init_center_gate: 30.0 # px，初始叶片中心和其他未激活叶片的匹配阈值
-  init_pitch_bound: 20.0 # deg，符面倾角上限
-  diverge_face_angle: 45.0 # deg，符面朝向与符心方向最大偏差

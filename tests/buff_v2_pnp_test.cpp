@@ -5,7 +5,7 @@
 #include <opencv2/calib3d.hpp>
 
 #include "tasks/auto_buff_v2/buff_config.hpp"
-#include "tasks/auto_buff_v2/rune_model.hpp"
+#include "tasks/auto_buff_v2/models/njust_rune_model.hpp"
 #include "tasks/auto_buff_v2/rune_predictor.hpp"
 
 int main()
@@ -18,6 +18,8 @@ int main()
     << "R_camera2gimbal: [0, 0, 1, -1, 0, 0, 0, -1, 0]\n"
     << "t_camera2gimbal: [0, 0, 0]\n";
   const auto config = auto_buff_v2::BuffConfig::load(path);
+  const auto model_config = auto_buff_v2::NjustRuneModel::Config::load(
+    config.model.parameters["njust"]);
 
   cv::Mat camera = (cv::Mat_<double>(3, 3) << 1000, 0, 320, 0, 1000, 240, 0, 0, 1);
   cv::Mat rotation = (cv::Mat_<double>(3, 3) << 0, -1, 0, 0, 0, -1, 1, 0, 0);
@@ -35,7 +37,7 @@ int main()
   elements.icons.push_back({pixel[0], 1});
   elements.bullseyes.push_back(
     {bull_center[0], {pixel[2], pixel[3], pixel[4], pixel[1]}, false, 0.5});
-  auto_buff_v2::RuneModel model(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel model(config.camera, model_config, false);
   model.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   const auto now = std::chrono::steady_clock::now();
   assert(model.update(elements, now));
@@ -48,7 +50,7 @@ int main()
   assert(state);
   assert((state->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
   assert(std::abs(state->rotation_angle) < 0.03);
-  auto_buff_v2::RuneModel rotated(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel rotated(config.camera, model_config, false);
   const Eigen::Quaterniond q_gimbal2world(
     Eigen::AngleAxisd(0.2, Eigen::Vector3d::UnitZ()));
   rotated.set_q_gimbal2world(q_gimbal2world);
@@ -65,13 +67,13 @@ int main()
 
   auto_buff_v2::RuneElements active_only = elements;
   active_only.bullseyes.front().active = true;
-  auto_buff_v2::RuneModel no_inactive(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel no_inactive(config.camera, model_config, false);
   assert(!no_inactive.update(active_only, now));
   assert(!no_inactive.state());
   assert(no_inactive.diagnostic().find("inactive=0") != std::string::npos);
   assert(no_inactive.diagnostic().find("need 1 or 2 inactive") != std::string::npos);
 
-  auto_buff_v2::RuneModel delayed(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel delayed(config.camera, model_config, false);
   delayed.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(delayed.update(elements, now));
   assert(delayed.update(elements, now + std::chrono::milliseconds(600)));
@@ -80,7 +82,7 @@ int main()
   auto_buff_v2::RuneElements candidates = elements;
   candidates.icons.insert(candidates.icons.begin(),
                           {pixel[0] + cv::Point2f(12, 0), 0.5});
-  auto_buff_v2::RuneModel selected(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel selected(config.camera, model_config, false);
   selected.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(selected.update(candidates, now));
   assert((selected.state()->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
@@ -103,7 +105,7 @@ int main()
   layout.bullseyes.insert(layout.bullseyes.begin(),
                           {second_pixel[0], {second_pixel[2], second_pixel[3],
                                              second_pixel[4], second_pixel[1]}, false, 0.5});
-  auto_buff_v2::RuneModel layout_model(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel layout_model(config.camera, model_config, false);
   layout_model.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(layout_model.update(layout, now));
   assert((layout_model.state()->center - Eigen::Vector3d(3, 0, 0)).norm() < 0.03);
@@ -111,7 +113,7 @@ int main()
 
   auto_buff_v2::RuneElements wrong_center = elements;
   wrong_center.bullseyes.front().center += cv::Point2f(35, 0);
-  auto_buff_v2::RuneModel gated(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel gated(config.camera, model_config, false);
   gated.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(!gated.update(wrong_center, now));
   assert(gated.diagnostic().find("center error") != std::string::npos);
@@ -119,7 +121,7 @@ int main()
   auto_buff_v2::RuneElements degenerate = elements;
   degenerate.bullseyes.front().corners[0] =
     degenerate.bullseyes.front().corners[2];
-  auto_buff_v2::RuneModel rejected(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel rejected(config.camera, model_config, false);
   rejected.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(!rejected.update(degenerate, now));
   assert(rejected.diagnostic().find("last seed rejected") != std::string::npos);
@@ -136,7 +138,7 @@ int main()
   assert(cv::solvePnP(object, noisy_points, camera, cv::Mat::zeros(1, 5, CV_64F),
                       noisy_rvec, noisy_tvec, true, cv::SOLVEPNP_ITERATIVE));
   const Eigen::Vector3d raw_center(noisy_tvec[2], -noisy_tvec[0], -noisy_tvec[1]);
-  auto_buff_v2::RuneModel corrected_seed(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel corrected_seed(config.camera, model_config, false);
   corrected_seed.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(corrected_seed.update(noisy, now));
   assert((corrected_seed.state()->center - raw_center).norm() > 0.002);
@@ -158,28 +160,32 @@ int main()
   tilted_elements.bullseyes.push_back(
     {tilted_center[0], {tilted_pixel[2], tilted_pixel[3], tilted_pixel[4], tilted_pixel[1]},
      false, 0.5});
-  auto_buff_v2::RuneModel tilted_model(config.camera, config.model, false);
+  auto_buff_v2::NjustRuneModel tilted_model(config.camera, model_config, false);
   tilted_model.set_q_gimbal2world(Eigen::Quaterniond::Identity());
   assert(tilted_model.update(tilted_elements, now));
   assert(std::abs(tilted_model.state()->rotation_angle - seed_angle) < 0.03);
 
-  auto_buff_v2::RuneModel big(config.camera, config.model, true);
+  auto_buff_v2::NjustRuneModel big(config.camera, model_config, true);
   auto yaml = YAML::LoadFile(path);
-  yaml["buff_v2"]["motion_fit"]["small"]["min_fit_seconds"] = 0.5;
-  yaml["buff_v2"]["motion_fit"]["big"]["min_fit_seconds"] = 2.0;
+  yaml["buff_v2"]["model"]["njust"]["motion_fit"]["small"]["min_fit_seconds"] = 0.5;
+  yaml["buff_v2"]["model"]["njust"]["motion_fit"]["big"]["min_fit_seconds"] = 2.0;
   std::ofstream(path) << yaml;
   const auto fit_config = auto_buff_v2::BuffConfig::load(path);
-  yaml["buff_v2"]["prediction_method"] = "ekf";
+  const auto fit_model_config = auto_buff_v2::NjustRuneModel::Config::load(
+    fit_config.model.parameters["njust"]);
+  yaml["buff_v2"]["model"]["njust"]["prediction_method"] = "ekf";
   std::ofstream(path) << yaml;
   const auto ekf_config = auto_buff_v2::BuffConfig::load(path);
-  auto_buff_v2::RuneModel ekf_small(ekf_config.camera, ekf_config.model, false);
-  auto_buff_v2::RuneModel big_with_ekf_config(ekf_config.camera, ekf_config.model, true);
+  const auto ekf_model_config = auto_buff_v2::NjustRuneModel::Config::load(
+    ekf_config.model.parameters["njust"]);
+  auto_buff_v2::NjustRuneModel ekf_small(ekf_config.camera, ekf_model_config, false);
+  auto_buff_v2::NjustRuneModel big_with_ekf_config(ekf_config.camera, ekf_model_config, true);
   assert(ekf_small.update(elements, now));
   assert(big_with_ekf_config.update(elements, now));
   assert(big_with_ekf_config.state()->prediction_method ==
          auto_buff_v2::RunePredictionMethod::weighted_least_squares);
-  auto_buff_v2::RuneModel fast_small(fit_config.camera, fit_config.model, false);
-  auto_buff_v2::RuneModel slow_big(fit_config.camera, fit_config.model, true);
+  auto_buff_v2::NjustRuneModel fast_small(fit_config.camera, fit_model_config, false);
+  auto_buff_v2::NjustRuneModel slow_big(fit_config.camera, fit_model_config, true);
   assert(fast_small.update(elements, now));
   assert(slow_big.update(elements, now));
   big.set_q_gimbal2world(Eigen::Quaterniond::Identity());

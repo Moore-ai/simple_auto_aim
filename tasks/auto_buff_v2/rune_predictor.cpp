@@ -1,4 +1,5 @@
 #include "rune_predictor.hpp"
+#include "rune_ekf_state.hpp"
 
 #include <cmath>
 
@@ -16,6 +17,8 @@ RuneEstimate RunePredictor::predict(const RuneEstimate & estimate,
   if (prediction_time <= estimate.timestamp) return predicted;
   const double seconds =
     std::chrono::duration<double>(prediction_time - estimate.timestamp).count();
+  predicted.center = Eigen::AngleAxisd(estimate.center_yaw_speed * seconds,
+    Eigen::Vector3d::UnitZ()) * estimate.center;
   if (predicted.prediction_method == RunePredictionMethod::ekf) {
     RuneEkfState::Vector values;
     values << estimate.center.x(), estimate.center.y(), estimate.center.z(),

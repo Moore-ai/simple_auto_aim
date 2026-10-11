@@ -6,6 +6,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "tasks/auto_buff_v2/buff_config.hpp"
+#include "tasks/auto_buff_v2/models/rune_model_factory.hpp"
 #include "tasks/auto_buff_v2/aimers/rune_aimer_factory.hpp"
 #include "tasks/auto_buff_v2/planners/mpc_buff_tracking.hpp"
 #include "tasks/auto_buff_v2/detectors/rune_detector_factory.hpp"
@@ -61,20 +62,28 @@ int main()
     "  rune_shoot_duration: 0.9\n"
     "  yaw_tolerance: 0.001\n"
     "  pitch_tolerance: 0.001\n"
-    "  timeout_seconds: 1.2\n"
-    "  noise_x: 0.02\n"
-    "  noise_y: 0.03\n"
-    "  noise_z: 0.04\n"
-    "  noise_rotation_speed: 1.1\n"
-    "  noise_rotation_angle: 0.002\n"
-    "  noise_face_yaw: 0.005\n"
-    "  noise_observation: 12\n"
-    "  gate_threshold: 10\n"
-    "  init_seed_mean_error: 9\n"
-    "  init_seed_max_error: 19\n"
-    "  init_center_gate: 29\n"
-    "  init_pitch_bound: 18\n"
-    "  diverge_face_angle: 40\n";
+    "  timeout_seconds: 99\n"
+    "  noise_rotation_angle: 99\n"
+    "  model:\n"
+    "    type: njust\n"
+    "    sp:\n"
+    "      timeout_seconds: 0.05\n"
+    "      observation_yaw: 0.02\n"
+    "    njust:\n"
+    "      timeout_seconds: 1.2\n"
+    "      noise_x: 0.02\n"
+    "      noise_y: 0.03\n"
+    "      noise_z: 0.04\n"
+    "      noise_rotation_speed: 1.1\n"
+    "      noise_rotation_angle: 0.002\n"
+    "      noise_face_yaw: 0.005\n"
+    "      noise_observation: 12\n"
+    "      gate_threshold: 10\n"
+    "      init_seed_mean_error: 9\n"
+    "      init_seed_max_error: 19\n"
+    "      init_center_gate: 29\n"
+    "      init_pitch_bound: 18\n"
+    "      diverge_face_angle: 40\n";
 
   const auto config = auto_buff_v2::BuffConfig::load(path);
 
@@ -88,8 +97,9 @@ int main()
   assert(njust.active_threshold == 0.3);
   assert(njust.max_perspective == 55);
   assert(njust.min_distance == 2.1 && njust.match_threshold == 0.6);
-  assert(config.model.timeout_seconds == 1.2 && config.model.noise_rotation_angle == 0.002);
-  assert(config.model.diverge_face_angle == 40);
+  const auto model = auto_buff_v2::NjustRuneModel::Config::load(config.model.parameters["njust"]);
+  assert(model.timeout_seconds == 1.2 && model.noise_rotation_angle == 0.002);
+  assert(model.diverge_face_angle == 40);
   assert(config.planner.mode == "njust");
   assert(config.planner.aimer == "njust");
   assert(config.planner.ballistic.type == "vacuum");
@@ -138,36 +148,38 @@ int main()
   assert((config.camera.t_camera2gimbal - Eigen::Vector3d(0.1, 0.2, 0.3)).norm() < 1e-12);
 
   auto yaml = YAML::LoadFile(path);
-  assert(config.model.small_motion_fit.window_seconds == 6.0);
-  assert(config.model.small_motion_fit.min_fit_seconds == 1.5);
-  assert(config.model.small_motion_fit.weight_half_life_seconds == 3.0);
-  assert(config.model.big_motion_fit.window_seconds == 6.0);
-  assert(config.model.big_motion_fit.min_fit_seconds == 1.5);
-  assert(config.model.big_motion_fit.weight_half_life_seconds == 3.0);
-  yaml["buff_v2"]["motion_fit"]["small"]["window_seconds"] = 2.5;
-  yaml["buff_v2"]["motion_fit"]["small"]["min_fit_seconds"] = 0.5;
-  yaml["buff_v2"]["motion_fit"]["small"]["weight_half_life_seconds"] = 1.0;
-  yaml["buff_v2"]["motion_fit"]["big"]["window_seconds"] = 8.0;
-  yaml["buff_v2"]["motion_fit"]["big"]["min_fit_seconds"] = 2.0;
-  yaml["buff_v2"]["motion_fit"]["big"]["weight_half_life_seconds"] = 4.0;
+  assert(model.small_motion_fit.window_seconds == 6.0);
+  assert(model.small_motion_fit.min_fit_seconds == 1.5);
+  assert(model.small_motion_fit.weight_half_life_seconds == 3.0);
+  assert(model.big_motion_fit.window_seconds == 6.0);
+  assert(model.big_motion_fit.min_fit_seconds == 1.5);
+  assert(model.big_motion_fit.weight_half_life_seconds == 3.0);
+  yaml["buff_v2"]["model"]["njust"]["motion_fit"]["small"]["window_seconds"] = 2.5;
+  yaml["buff_v2"]["model"]["njust"]["motion_fit"]["small"]["min_fit_seconds"] = 0.5;
+  yaml["buff_v2"]["model"]["njust"]["motion_fit"]["small"]["weight_half_life_seconds"] = 1.0;
+  yaml["buff_v2"]["model"]["njust"]["motion_fit"]["big"]["window_seconds"] = 8.0;
+  yaml["buff_v2"]["model"]["njust"]["motion_fit"]["big"]["min_fit_seconds"] = 2.0;
+  yaml["buff_v2"]["model"]["njust"]["motion_fit"]["big"]["weight_half_life_seconds"] = 4.0;
   std::ofstream(path) << yaml;
   const auto fit_config = auto_buff_v2::BuffConfig::load(path);
-  assert(fit_config.model.small_motion_fit.window_seconds == 2.5);
-  assert(fit_config.model.small_motion_fit.min_fit_seconds == 0.5);
-  assert(fit_config.model.small_motion_fit.weight_half_life_seconds == 1.0);
-  assert(fit_config.model.big_motion_fit.window_seconds == 8.0);
-  assert(fit_config.model.big_motion_fit.min_fit_seconds == 2.0);
-  assert(fit_config.model.big_motion_fit.weight_half_life_seconds == 4.0);
-  yaml["buff_v2"]["prediction_method"] = "unknown";
+  const auto fit_model = auto_buff_v2::NjustRuneModel::Config::load(
+    fit_config.model.parameters["njust"]);
+  assert(fit_model.small_motion_fit.window_seconds == 2.5);
+  assert(fit_model.small_motion_fit.min_fit_seconds == 0.5);
+  assert(fit_model.small_motion_fit.weight_half_life_seconds == 1.0);
+  assert(fit_model.big_motion_fit.window_seconds == 8.0);
+  assert(fit_model.big_motion_fit.min_fit_seconds == 2.0);
+  assert(fit_model.big_motion_fit.weight_half_life_seconds == 4.0);
+  yaml["buff_v2"]["model"]["njust"]["prediction_method"] = "unknown";
   std::ofstream(path) << yaml;
   bool invalid_prediction_rejected = false;
   try {
-    auto_buff_v2::BuffConfig::load(path);
+    auto_buff_v2::make_rune_model(config.camera, auto_buff_v2::BuffConfig::load(path).model, false);
   } catch (const std::invalid_argument &) {
     invalid_prediction_rejected = true;
   }
   assert(invalid_prediction_rejected);
-  yaml["buff_v2"]["prediction_method"] = "weighted_least_squares";
+  yaml["buff_v2"]["model"]["njust"]["prediction_method"] = "weighted_least_squares";
   yaml["buff_v2"]["aimer"]["type"] = "climber";
   yaml["buff_v2"]["aimer"]["climber"]["fire_gap_time"] = 0.3;
   yaml["buff_v2"]["aimer"]["climber"]["predict_time"] = 0.08;
@@ -205,5 +217,28 @@ int main()
     rejected = true;
   }
   assert(rejected);
+
+  for (const auto & type : {"njust", "sp"}) {
+    yaml["buff_v2"]["model"]["type"] = type;
+    std::ofstream(path) << yaml;
+    assert(auto_buff_v2::BuffConfig::load(path).model.type == type);
+  }
+  const auto sp = auto_buff_v2::SPRuneModel::Config::load(
+    auto_buff_v2::BuffConfig::load(path).model.parameters["sp"]);
+  assert(sp.timeout_seconds == 0.05 && sp.observation_yaw == 0.02);
+  yaml["buff_v2"]["model"]["njust"]["prediction_method"] = "unknown";
+  std::ofstream(path) << yaml;
+  assert(auto_buff_v2::make_rune_model(
+    config.camera, auto_buff_v2::BuffConfig::load(path).model, false));
+  assert(config.model.type == "njust");
+  yaml["buff_v2"]["model"]["type"] = "unknown";
+  std::ofstream(path) << yaml;
+  bool invalid_model_rejected = false;
+  try {
+    auto_buff_v2::BuffConfig::load(path);
+  } catch (const std::invalid_argument &) {
+    invalid_model_rejected = true;
+  }
+  assert(invalid_model_rejected);
 
 }

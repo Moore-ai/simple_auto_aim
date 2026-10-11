@@ -9,6 +9,7 @@
 
 #include "tasks/auto_buff_v2/detectors/rune_detector_factory.hpp"
 #include "tasks/auto_buff_v2/buff_frame_processor.hpp"
+#include "tasks/auto_buff_v2/models/njust_rune_model.hpp"
 
 int main()
 {
@@ -82,7 +83,7 @@ int main()
   auto_buff_v2::BuffConfig::Camera camera;
   camera.camera_matrix = (cv::Mat_<double>(3, 3) << 1000, 0, 160, 0, 1000, 160, 0, 0, 1);
   camera.distort_coeffs = cv::Mat::zeros(1, 5, CV_64F);
-  auto_buff_v2::RuneModel rune_model(camera, {}, false);
+  auto_buff_v2::NjustRuneModel rune_model(camera, {}, false);
   auto_buff_v2::BuffFrameProcessor processor(rune_model, config);
   tools::FrameFacts facts{std::chrono::steady_clock::now(), image,
                           Eigen::Quaterniond::Identity(), {}};

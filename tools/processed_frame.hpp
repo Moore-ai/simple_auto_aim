@@ -5,7 +5,7 @@
 #include <optional>
 
 #include "tasks/auto_aim/target.hpp"
-#include "tasks/auto_buff_v2/rune_model.hpp"
+#include "tasks/auto_buff_v2/models/rune_model.hpp"
 #include "tools/frame_snapshot.hpp"
 
 namespace tools

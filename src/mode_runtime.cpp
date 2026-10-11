@@ -17,6 +17,7 @@
 #include "tasks/auto_buff_v2/planners/buff_planner_factory.hpp"
 #include "tasks/auto_buff_v2/buff_config.hpp"
 #include "tasks/auto_buff_v2/frame_runtime.hpp"
+#include "tasks/auto_buff_v2/models/rune_model_factory.hpp"
 #include "tools/detect_factory.hpp"
 #include "tools/exiter.hpp"
 #include "tools/foxglove_visualizer.hpp"
@@ -122,9 +123,9 @@ public:
     tools::FoxgloveVisualizer & foxglove,
     std::optional<io::InfantryEnemyColor> target_color_override)
   : config_(auto_buff_v2::BuffConfig::load(config_path)), gimbal_(gimbal),
-    model_(config_.camera, config_.model, big_buff),
+    model_(auto_buff_v2::make_rune_model(config_.camera, config_.model, big_buff)),
     buff_planner_(auto_buff_v2::make_buff_planner(config_.planner, config_path)),
-    runtime_(camera, gimbal, model_, config_.detector, target_color_override), foxglove_(foxglove)
+    runtime_(camera, gimbal, *model_, config_.detector, target_color_override), foxglove_(foxglove)
   {
     target_queue_.push({0, Target{}});
     plan_thread_ = std::thread([this] { plan(); });
@@ -169,7 +170,7 @@ private:
 
   auto_buff_v2::BuffConfig config_;
   io::Gimbal & gimbal_;
-  auto_buff_v2::RuneModel model_;
+  std::unique_ptr<auto_buff_v2::RuneModel> model_;
   std::unique_ptr<auto_buff_v2::BuffPlanStrategy> buff_planner_;
   auto_buff_v2::FrameRuntime runtime_;
   tools::FoxgloveVisualizer & foxglove_;

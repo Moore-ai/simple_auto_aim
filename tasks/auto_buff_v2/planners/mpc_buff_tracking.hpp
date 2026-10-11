@@ -7,7 +7,7 @@
 
 #include "../aimers/rune_aimer.hpp"
 #include "../buff_config.hpp"
-#include "../rune_model.hpp"
+#include "../models/rune_model.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
 

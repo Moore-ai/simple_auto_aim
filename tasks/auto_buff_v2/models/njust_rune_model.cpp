@@ -1,20 +1,71 @@
-#include "rune_model.hpp"
+#include "njust_rune_model.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 #include <tuple>
 #include <vector>
 
 #include <fmt/format.h>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/eigen.hpp>
-#include "hungarian.hpp"
-#include "rune_predictor.hpp"
+#include "../hungarian.hpp"
+#include "../rune_predictor.hpp"
 
 namespace auto_buff_v2
 {
-RuneModel::RuneModel(BuffConfig::Camera camera, Config config, bool big_rune)
+NjustRuneModel::Config NjustRuneModel::Config::load(const YAML::Node & node)
+{
+  Config result;
+  if (!node) return result;
+  const auto prediction_method =
+    node["prediction_method"].as<std::string>("weighted_least_squares");
+  if (prediction_method == "ekf") {
+    result.prediction_method = RunePredictionMethod::ekf;
+  } else if (prediction_method != "weighted_least_squares") {
+    throw std::invalid_argument(
+      "buff_v2.model.njust.prediction_method must be weighted_least_squares or ekf");
+  }
+  const auto motion_fit = node["motion_fit"];
+  if (motion_fit) {
+    const auto load_fit = [](const YAML::Node & node, BuffConfig::MotionFit & fit) {
+      if (!node) return;
+      fit.window_seconds = node["window_seconds"].as<double>(fit.window_seconds);
+      fit.min_fit_seconds = node["min_fit_seconds"].as<double>(fit.min_fit_seconds);
+      fit.weight_half_life_seconds =
+        node["weight_half_life_seconds"].as<double>(fit.weight_half_life_seconds);
+    };
+    load_fit(motion_fit["small"], result.small_motion_fit);
+    load_fit(motion_fit["big"], result.big_motion_fit);
+  }
+  result.timeout_seconds = node["timeout_seconds"].as<double>(result.timeout_seconds);
+  result.noise_x = node["noise_x"].as<double>(result.noise_x);
+  result.noise_y = node["noise_y"].as<double>(result.noise_y);
+  result.noise_z = node["noise_z"].as<double>(result.noise_z);
+  result.noise_rotation_speed =
+    node["noise_rotation_speed"].as<double>(result.noise_rotation_speed);
+  result.noise_rotation_angle =
+    node["noise_rotation_angle"].as<double>(result.noise_rotation_angle);
+  result.noise_face_yaw =
+    node["noise_face_yaw"].as<double>(result.noise_face_yaw);
+  result.noise_observation =
+    node["noise_observation"].as<double>(result.noise_observation);
+  result.gate_threshold = node["gate_threshold"].as<double>(result.gate_threshold);
+  result.init_seed_mean_error =
+    node["init_seed_mean_error"].as<double>(result.init_seed_mean_error);
+  result.init_seed_max_error =
+    node["init_seed_max_error"].as<double>(result.init_seed_max_error);
+  result.init_center_gate =
+    node["init_center_gate"].as<double>(result.init_center_gate);
+  result.init_pitch_bound =
+    node["init_pitch_bound"].as<double>(result.init_pitch_bound);
+  result.diverge_face_angle =
+    node["diverge_face_angle"].as<double>(result.diverge_face_angle);
+  return result;
+}
+
+NjustRuneModel::NjustRuneModel(BuffConfig::Camera camera, Config config, bool big_rune)
 : camera_matrix_(std::move(camera.camera_matrix)),
   distort_coeffs_(std::move(camera.distort_coeffs)),
   R_camera2gimbal_(camera.R_camera2gimbal),
@@ -25,12 +76,12 @@ RuneModel::RuneModel(BuffConfig::Camera camera, Config config, bool big_rune)
 {
 }
 
-void RuneModel::set_q_gimbal2world(const Eigen::Quaterniond & q_gimbal2world)
+void NjustRuneModel::set_q_gimbal2world(const Eigen::Quaterniond & q_gimbal2world)
 {
   q_gimbal2world_ = q_gimbal2world;
 }
 
-void RuneModel::reset()
+void NjustRuneModel::reset()
 {
   diagnostic_.clear();
   state_.reset();
@@ -40,7 +91,7 @@ void RuneModel::reset()
   force_sine_until_ = Timestamp{};
 }
 
-std::optional<RuneEstimate> RuneModel::state() const { return state_; }
+std::optional<RuneEstimate> NjustRuneModel::state() const { return state_; }
 
 namespace
 {
@@ -124,7 +175,7 @@ Eigen::Matrix<double, 2, 6> observation_jacobian(
 
 bool solve_seed(const RuneIcon & icon, const RuneBullseye & bull, const cv::Mat & camera_matrix,
                 const cv::Mat & distortion, const Eigen::Matrix3d & R_camera2world,
-                const Eigen::Vector3d & t_camera2world, const RuneModel::Config & config,
+                const Eigen::Vector3d & t_camera2world, const NjustRuneModel::Config & config,
                 RuneEstimate & state, double & seed_sse, double & seed_max_error,
                 std::string & rejection)
 {
@@ -232,7 +283,7 @@ void correct_initial_observation(RuneEkfState & x, Matrix & covariance, int feat
 }
 }  // namespace
 
-std::vector<RuneReprojectedFeature> RuneModel::reprojected_features() const
+std::vector<RuneReprojectedFeature> NjustRuneModel::reprojected_features() const
 {
   if (!state_) return {};
   const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() * R_camera2gimbal_;
@@ -248,7 +299,7 @@ std::vector<RuneReprojectedFeature> RuneModel::reprojected_features() const
   return result;
 }
 
-std::optional<cv::Point2f> RuneModel::reprojected_center() const
+std::optional<cv::Point2f> NjustRuneModel::reprojected_center() const
 {
   if (!state_) return std::nullopt;
   const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() * R_camera2gimbal_;
@@ -264,7 +315,7 @@ std::optional<cv::Point2f> RuneModel::reprojected_center() const
   return pixels.front();
 }
 
-bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
+bool NjustRuneModel::update(const RuneElements & elements, Timestamp timestamp)
 {
   const Eigen::Matrix3d R_camera2world = q_gimbal2world_.toRotationMatrix() * R_camera2gimbal_;
   const Eigen::Vector3d t_camera2world = q_gimbal2world_ * t_camera2gimbal_;
@@ -367,7 +418,7 @@ bool RuneModel::update(const RuneElements & elements, Timestamp timestamp)
   return true;
 }
 
-bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
+bool NjustRuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
                            const Eigen::Matrix3d & R_camera2world,
                            const Eigen::Vector3d & t_camera2world)
 {
@@ -482,7 +533,7 @@ bool RuneModel::initialize(const RuneElements & elements, Timestamp timestamp,
   return true;
 }
 
-void RuneModel::update_motion_fit(RuneEstimate & state, double elapsed_seconds)
+void NjustRuneModel::update_motion_fit(RuneEstimate & state, double elapsed_seconds)
 {
   fitter_.push(elapsed_seconds, state.rotation_angle);
   const auto linear = fitter_.fit_linear();
@@ -507,7 +558,7 @@ void RuneModel::update_motion_fit(RuneEstimate & state, double elapsed_seconds)
   }
 }
 
-bool RuneModel::diverged() const
+bool NjustRuneModel::diverged() const
 {
   if (!ekf_state_.all_finite() || !covariance_.allFinite()) return true;
   if (covariance_(0, 0) > 150 || covariance_(1, 1) > 150 ||

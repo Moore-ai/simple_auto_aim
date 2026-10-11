@@ -115,6 +115,11 @@ target_compile_options(buff_v2_model_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_model_test PRIVATE auto_buff_v2)
 add_test(NAME buff_v2_model_test COMMAND buff_v2_model_test)
 
+add_executable(buff_v2_model_factory_test tests/buff_v2_model_factory_test.cpp)
+target_compile_options(buff_v2_model_factory_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_model_factory_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_model_factory_test COMMAND buff_v2_model_factory_test)
+
 add_executable(buff_v2_config_test tests/buff_v2_config_test.cpp)
 target_compile_options(buff_v2_config_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_config_test PRIVATE auto_buff_v2)
