@@ -10,25 +10,18 @@ int main()
 {
   using namespace std::chrono_literals;
   constexpr char path[] = "/tmp/buff_v2_planner_factory_test.yaml";
+  // Buff MPC must work without any auto-aim planner configuration.
   std::ofstream(path) <<
-    "ballistic_model: vacuum\n"
-    "yaw_offset: 0\n"
-    "pitch_offset: 0\n"
-    "fire_thresh: 0.0035\n"
-    "decision_speed: 7\n"
-    "high_speed_delay_time: 0\n"
-    "low_speed_delay_time: 0\n"
-    "rho: 1.0\n"
-    "max_iter: 10\n"
-    "bullet_speed_min: 10\n"
-    "bullet_speed_max: 25\n"
-    "bullet_speed_default: 23.4\n"
-    "max_yaw_acc: 50\n"
-    "Q_yaw: [9e6, 0]\n"
-    "R_yaw: [1]\n"
-    "max_pitch_acc: 100\n"
-    "Q_pitch: [9e6, 0]\n"
-    "R_pitch: [1]\n";
+    "buff_v2:\n"
+    "  mpc:\n"
+    "    rho: 1.0\n"
+    "    max_iter: 10\n"
+    "    max_yaw_acc: 50\n"
+    "    Q_yaw: [9e6, 0]\n"
+    "    R_yaw: [1]\n"
+    "    max_pitch_acc: 100\n"
+    "    Q_pitch: [9e6, 0]\n"
+    "    R_pitch: [1]\n";
 
   const auto start = std::chrono::steady_clock::now();
   auto_buff_v2::RuneEstimate target;

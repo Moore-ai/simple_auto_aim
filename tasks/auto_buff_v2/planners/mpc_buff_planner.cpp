@@ -3,7 +3,7 @@
 namespace auto_buff_v2
 {
 MpcBuffPlanner::MpcBuffPlanner(const BuffConfig::Planner & config, const std::string & path)
-: planner_(path), tracking_(config)
+: planner_(path, auto_aim::Planner::ConfigScope::buff_mpc), tracking_(config)
 {
 }
 

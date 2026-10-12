@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <optional>
+#include <yaml-cpp/yaml.h>
 
 #include "armor_selection_hysteresis.hpp"
 #include "tasks/auto_aim/target.hpp"
@@ -51,7 +52,8 @@ class Planner
 {
 public:
   Eigen::Vector4d debug_xyza;
-  Planner(const std::string & config_path);
+  enum class ConfigScope { auto_aim, buff_mpc };
+  Planner(const std::string & config_path, ConfigScope scope = ConfigScope::auto_aim);
 
   // Run the shared yaw/pitch MPC. The trajectory's yaw row is relative to yaw0.
   Plan plan(const Trajectory & trajectory, double yaw0, double distance);
@@ -103,8 +105,8 @@ private:
   bool yaw_nonconvergence_logged_{false};
   bool pitch_nonconvergence_logged_{false};
 
-  void setup_yaw_solver(const std::string & config_path);
-  void setup_pitch_solver(const std::string & config_path);
+  void setup_yaw_solver(const YAML::Node & yaml);
+  void setup_pitch_solver(const YAML::Node & yaml);
 
   int select_armor(const Target & target);
   void update_high_speed_state(const TargetState & state);

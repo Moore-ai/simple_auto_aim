@@ -156,8 +156,8 @@ ukf_obs:
   sigma_kappa: 0.0            # UKF 次级缩放参数
 
 #####-----MPC 参数-----#####
-yaw_offset: 0 # degree，瞄准 yaw 修正量
-pitch_offset: 0 # degree，瞄准 pitch 修正量
+yaw_offset: 0 # degree，自瞄 yaw 修正量
+pitch_offset: 0 # degree，自瞄 pitch 修正量
 decision_speed_enable: false # 启用 decision_speed 高低速阈值（控制发弹延迟与反小陀螺）
 speed_hysteresis: 0.6 # rad/s 滞回半宽，防临界抖动
 extra_delay: 0.153 # s 关闭高低速阈值时使用的固定延迟
@@ -280,6 +280,15 @@ predict_time: 0.120     # s
 
 buff_v2: # 新打符入口使用的源项目参数
   planner_mode: njust # 打符规划器：mpc 或 njust
+  mpc: # 打符 MPC 独立参数，仅 planner_mode=mpc 使用
+    rho: 1.0 # ADMM 惩罚参数，影响收敛速度
+    max_iter: 10 # ADMM 最大迭代次数
+    max_yaw_acc: 50 # rad/s²，yaw 最大角加速度约束
+    Q_yaw: [9e6, 0] # yaw 跟踪权重 [角度误差, 角速度误差]
+    R_yaw: [1] # yaw 控制量惩罚
+    max_pitch_acc: 100 # rad/s²，pitch 最大角加速度约束
+    Q_pitch: [9e6, 0] # pitch 跟踪权重 [角度误差, 角速度误差]
+    R_pitch: [1] # pitch 控制量惩罚
   model: # 状态估计模型，独立于 detector、planner_mode 和 aimer
     type: njust # njust=原 v2 模型；sp=旧 auto_buff 球坐标 EKF 模型
     njust: # 像素重投影 EKF 与运动拟合参数
@@ -331,6 +340,8 @@ buff_v2: # 新打符入口使用的源项目参数
       divergence_factor: 1.5 # 大符振幅 [0.78/f,1.045*f]、频率 [1.884/f,2.0*f] 发散边界
   aimer: # 打符瞄准器配置，独立于 detector 和 planner_mode
     type: njust # njust 或 climber
+    yaw_offset: 0 # degree，打符 yaw 修正量
+    pitch_offset: 0 # degree，打符 pitch 修正量
     ballistic: # 打符弹道解算器配置，独立于自瞄根层配置
       type: vacuum # njust、vacuum 或 climber；climber 为常州大学线性阻力实现
       njust:

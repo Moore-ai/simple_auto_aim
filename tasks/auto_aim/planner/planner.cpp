@@ -38,9 +38,17 @@ Plan invalid_plan(const char * reason)
 }
 }  // namespace
 
-Planner::Planner(const std::string & config_path)
+Planner::Planner(const std::string & config_path, ConfigScope scope)
 {
   auto yaml = tools::load(config_path);
+  if (scope == ConfigScope::buff_mpc) {
+    const auto mpc = yaml["buff_v2"]["mpc"];
+    rho_ = tools::read<double>(mpc, "rho");
+    max_iter_ = tools::read<int>(mpc, "max_iter");
+    setup_yaw_solver(mpc);
+    setup_pitch_solver(mpc);
+    return;
+  }
   const auto ballistic_model =
     yaml["ballistic_model"].as<std::string>("vacuum");
   tools::BallisticSolverConfig ballistic_config;
@@ -135,8 +143,8 @@ Planner::Planner(const std::string & config_path)
     }
   }
 
-  setup_yaw_solver(config_path);
-  setup_pitch_solver(config_path);
+  setup_yaw_solver(yaml);
+  setup_pitch_solver(yaml);
 }
 
 Plan Planner::plan(const Trajectory & trajectory, double yaw0, double distance)
@@ -363,9 +371,8 @@ Plan Planner::plan(std::optional<Target> target, double bullet_speed)
   return result;
 }
 
-void Planner::setup_yaw_solver(const std::string & config_path)
+void Planner::setup_yaw_solver(const YAML::Node & yaml)
 {
-  auto yaml = tools::load(config_path);
   auto max_yaw_acc = tools::read<double>(yaml, "max_yaw_acc");
   auto Q_yaw = tools::read<std::vector<double>>(yaml, "Q_yaw");
   auto R_yaw = tools::read<std::vector<double>>(yaml, "R_yaw");
@@ -395,9 +402,8 @@ void Planner::setup_yaw_solver(const std::string & config_path)
   yaw_solver_->settings->max_iter = max_iter_;
 }
 
-void Planner::setup_pitch_solver(const std::string & config_path)
+void Planner::setup_pitch_solver(const YAML::Node & yaml)
 {
-  auto yaml = tools::load(config_path);
   auto max_pitch_acc = tools::read<double>(yaml, "max_pitch_acc");
   auto Q_pitch = tools::read<std::vector<double>>(yaml, "Q_pitch");
   auto R_pitch = tools::read<std::vector<double>>(yaml, "R_pitch");
