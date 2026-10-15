@@ -3,68 +3,17 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
 #include <tuple>
 #include <vector>
 
 #include <fmt/format.h>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/eigen.hpp>
-#include "../hungarian.hpp"
-#include "../rune_predictor.hpp"
+#include "hungarian.hpp"
+#include "rune_predictor.hpp"
 
 namespace auto_buff_v2
 {
-NjustRuneModel::Config NjustRuneModel::Config::load(const YAML::Node & node)
-{
-  Config result;
-  if (!node) return result;
-  const auto prediction_method =
-    node["prediction_method"].as<std::string>("weighted_least_squares");
-  if (prediction_method == "ekf") {
-    result.prediction_method = RunePredictionMethod::ekf;
-  } else if (prediction_method != "weighted_least_squares") {
-    throw std::invalid_argument(
-      "buff_v2.model.njust.prediction_method must be weighted_least_squares or ekf");
-  }
-  const auto motion_fit = node["motion_fit"];
-  if (motion_fit) {
-    const auto load_fit = [](const YAML::Node & node, BuffConfig::MotionFit & fit) {
-      if (!node) return;
-      fit.window_seconds = node["window_seconds"].as<double>(fit.window_seconds);
-      fit.min_fit_seconds = node["min_fit_seconds"].as<double>(fit.min_fit_seconds);
-      fit.weight_half_life_seconds =
-        node["weight_half_life_seconds"].as<double>(fit.weight_half_life_seconds);
-    };
-    load_fit(motion_fit["small"], result.small_motion_fit);
-    load_fit(motion_fit["big"], result.big_motion_fit);
-  }
-  result.timeout_seconds = node["timeout_seconds"].as<double>(result.timeout_seconds);
-  result.noise_x = node["noise_x"].as<double>(result.noise_x);
-  result.noise_y = node["noise_y"].as<double>(result.noise_y);
-  result.noise_z = node["noise_z"].as<double>(result.noise_z);
-  result.noise_rotation_speed =
-    node["noise_rotation_speed"].as<double>(result.noise_rotation_speed);
-  result.noise_rotation_angle =
-    node["noise_rotation_angle"].as<double>(result.noise_rotation_angle);
-  result.noise_face_yaw =
-    node["noise_face_yaw"].as<double>(result.noise_face_yaw);
-  result.noise_observation =
-    node["noise_observation"].as<double>(result.noise_observation);
-  result.gate_threshold = node["gate_threshold"].as<double>(result.gate_threshold);
-  result.init_seed_mean_error =
-    node["init_seed_mean_error"].as<double>(result.init_seed_mean_error);
-  result.init_seed_max_error =
-    node["init_seed_max_error"].as<double>(result.init_seed_max_error);
-  result.init_center_gate =
-    node["init_center_gate"].as<double>(result.init_center_gate);
-  result.init_pitch_bound =
-    node["init_pitch_bound"].as<double>(result.init_pitch_bound);
-  result.diverge_face_angle =
-    node["diverge_face_angle"].as<double>(result.diverge_face_angle);
-  return result;
-}
-
 NjustRuneModel::NjustRuneModel(BuffConfig::Camera camera, Config config, bool big_rune)
 : camera_matrix_(std::move(camera.camera_matrix)),
   distort_coeffs_(std::move(camera.distort_coeffs)),
@@ -96,7 +45,7 @@ std::optional<RuneEstimate> NjustRuneModel::state() const { return state_; }
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
-using Vector = RuneEkfState::Vector;
+using Vector = NjustEkfState::Vector;
 using Matrix = Eigen::Matrix<double, 6, 6>;
 
 double normalize_angle(double angle)
@@ -111,15 +60,15 @@ double squared_pixel_error(const cv::Point2f & a, const cv::Point2f & b)
   return dx * dx + dy * dy;
 }
 
-RuneEkfState ekf_state_from(const RuneEstimate & state)
+NjustEkfState ekf_state_from(const RuneEstimate & state)
 {
   Vector result;
   result << state.center.x(), state.center.y(), state.center.z(), state.rotation_speed,
     state.rotation_angle, state.face_yaw;
-  return RuneEkfState(result);
+  return NjustEkfState(result);
 }
 
-void ekf_state_into(RuneEstimate & state, const RuneEkfState & value)
+void ekf_state_into(RuneEstimate & state, const NjustEkfState & value)
 {
   state.center = {value.center_x(), value.center_y(), value.center_z()};
   state.rotation_speed = value.rotation_speed();
@@ -128,7 +77,7 @@ void ekf_state_into(RuneEstimate & state, const RuneEkfState & value)
 }
 
 std::optional<cv::Point2f> project_feature(
-  const RuneEkfState & value, int feature, const Eigen::Matrix3d & R_camera2world,
+  const NjustEkfState & value, int feature, const Eigen::Matrix3d & R_camera2world,
   const Eigen::Vector3d & t_camera2world, const cv::Mat & camera_matrix,
   const cv::Mat & distortion)
 {
@@ -153,7 +102,7 @@ std::optional<cv::Point2f> project_feature(
 }
 
 Eigen::Matrix<double, 2, 6> observation_jacobian(
-  const RuneEkfState & x, int feature, const Eigen::Matrix3d & R_camera2world,
+  const NjustEkfState & x, int feature, const Eigen::Matrix3d & R_camera2world,
   const Eigen::Vector3d & t_camera2world, const cv::Mat & camera_matrix,
   const cv::Mat & distortion)
 {
@@ -162,8 +111,8 @@ Eigen::Matrix<double, 2, 6> observation_jacobian(
                                           camera_matrix, distortion);
   if (!predicted) return H;
   for (int j = 0; j < 6; ++j) {
-    RuneEkfState perturb = x;
-    perturb.add_component(static_cast<RuneEkfStateComponent>(j), 1e-4);
+    NjustEkfState perturb = x;
+    perturb.add_component(static_cast<NjustEkfStateComponent>(j), 1e-4);
     const auto p = project_feature(perturb, feature, R_camera2world, t_camera2world,
                                    camera_matrix, distortion);
     if (!p) continue;
@@ -255,7 +204,7 @@ bool solve_seed(const RuneIcon & icon, const RuneBullseye & bull, const cv::Mat 
          state.center.allFinite();
 }
 
-void correct_initial_observation(RuneEkfState & x, Matrix & covariance, int feature,
+void correct_initial_observation(NjustEkfState & x, Matrix & covariance, int feature,
                                   const cv::Point2f & observed,
                                   const Eigen::Matrix3d & R_camera2world,
                                   const Eigen::Vector3d & t_camera2world,
@@ -271,7 +220,7 @@ void correct_initial_observation(RuneEkfState & x, Matrix & covariance, int feat
   const Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * observation_noise;
   const Eigen::Matrix2d S = H * covariance * H.transpose() + R;
   const Eigen::Matrix<double, 6, 2> K = covariance * H.transpose() * S.inverse();
-  RuneEkfState corrected(x.vector() + K * residual);
+  NjustEkfState corrected(x.vector() + K * residual);
   corrected.set_face_yaw(normalize_angle(corrected.face_yaw()));
   if (!corrected.all_finite()) return;
   const Matrix I = Matrix::Identity() - K * H;
@@ -332,7 +281,7 @@ bool NjustRuneModel::update(const RuneElements & elements, Timestamp timestamp)
   const double dt = std::chrono::duration<double>(timestamp - state.timestamp).count();
   if (dt < 0) { reset(); diagnostic_ = "timestamp reversed"; return false; }
   state = RunePredictor{}.predict(state, timestamp);
-  RuneEkfState x = ekf_state_.predict(dt);
+  NjustEkfState x = ekf_state_.predict(dt);
   Matrix F = Matrix::Identity();
   F(4, 3) = dt;
   Matrix Q = Matrix::Zero();
@@ -385,7 +334,7 @@ bool NjustRuneModel::update(const RuneElements & elements, Timestamp timestamp)
                         Eigen::Matrix2d::Identity() * config_.noise_observation;
     if (residual.transpose() * S.inverse() * residual > kGate) continue;
     const Eigen::Matrix<double, 6, 2> K = covariance_ * H.transpose() * S.inverse();
-    x = RuneEkfState(x.vector() + K * residual);
+    x = NjustEkfState(x.vector() + K * residual);
     x.set_face_yaw(normalize_angle(x.face_yaw()));
     const Matrix I = Matrix::Identity() - K * H;
     covariance_ = I * covariance_ * I.transpose() + K *
@@ -466,7 +415,7 @@ bool NjustRuneModel::initialize(const RuneElements & elements, Timestamp timesta
       double seed_sse = 0, seed_max_error = 0;
       if (!solve_seed(icon, bull, camera_matrix_, distort_coeffs_, R_camera2world,
                       t_camera2world, config_, seed, seed_sse, seed_max_error, rejection)) continue;
-      const RuneEkfState x = ekf_state_from(seed);
+      const NjustEkfState x = ekf_state_from(seed);
       const auto projected_icon = project_feature(x, 0, R_camera2world, t_camera2world,
                                                    camera_matrix_, distort_coeffs_);
       const auto projected_seed = project_feature(x, 1, R_camera2world, t_camera2world,

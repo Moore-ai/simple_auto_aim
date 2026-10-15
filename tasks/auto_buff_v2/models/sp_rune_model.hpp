@@ -3,6 +3,7 @@
 
 #include <memory>
 
+#include "../buff_config.hpp"
 #include "rune_model.hpp"
 #include "sp_rune_config.hpp"
 #include "sp_motion_fitter.hpp"

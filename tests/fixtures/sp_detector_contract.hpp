@@ -4,7 +4,7 @@
 
 #include "tasks/auto_buff_v2/aimers/rune_aimer_factory.hpp"
 #include "tasks/auto_buff_v2/models/sp_rune_model.hpp"
-#include "tasks/auto_buff_v2/rune_predictor.hpp"
+#include "tasks/auto_buff_v2/models/rune_predictor.hpp"
 
 // 使用检测器的实际输出，保留其关键点和状态标记。
 inline void check_sp_detector_contract(

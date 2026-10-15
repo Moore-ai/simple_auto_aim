@@ -4,16 +4,16 @@
 #include <type_traits>
 #include <utility>
 
-#include "tasks/auto_buff_v2/rune_energy_fitter.hpp"
+#include "tasks/auto_buff_v2/models/njust_energy_fitter.hpp"
 #include "tasks/auto_buff_v2/models/rune_model.hpp"
-#include "tasks/auto_buff_v2/rune_predictor.hpp"
+#include "tasks/auto_buff_v2/models/rune_predictor.hpp"
 
 static_assert(std::is_same_v<
-              decltype(std::declval<auto_buff_v2::RuneEnergyFitter>().fit_linear()),
-              std::optional<auto_buff_v2::RuneEnergyFitter::LinearFitResult>>);
+              decltype(std::declval<auto_buff_v2::NjustEnergyFitter>().fit_linear()),
+              std::optional<auto_buff_v2::NjustEnergyFitter::LinearFitResult>>);
 static_assert(std::is_same_v<
-              decltype(std::declval<auto_buff_v2::RuneEnergyFitter>().fit_sine()),
-              std::optional<auto_buff_v2::RuneEnergyFitter::SineFitResult>>);
+              decltype(std::declval<auto_buff_v2::NjustEnergyFitter>().fit_sine()),
+              std::optional<auto_buff_v2::NjustEnergyFitter::SineFitResult>>);
 
 int main()
 {
@@ -61,7 +61,7 @@ int main()
   assert(std::abs(estimate.rotation_angle) < 1e-12);
   assert(std::abs(estimate.rotation_speed - 1) < 1e-12);
 
-  auto_buff_v2::RuneEnergyFitter fitter;
+  auto_buff_v2::NjustEnergyFitter fitter;
   for (int i = 0; i <= 40; ++i) {
     const double t = 0.05 * i;
     fitter.push(t, 0.3 + 1.2 * t);
@@ -82,7 +82,7 @@ int main()
   assert(std::abs(sine->a - 0.35) < 0.03);
   assert(std::abs(sine->omega - 2.0) < 0.03);
 
-  auto_buff_v2::RuneEnergyFitter short_window({2.0, 1.0, 1.0});
+  auto_buff_v2::NjustEnergyFitter short_window({2.0, 1.0, 1.0});
   short_window.push(0, 100);
   short_window.push(1, 0);
   short_window.push(2, 1);
@@ -99,7 +99,7 @@ int main()
   assert(short_window.fit_linear());
   assert(short_window.fit_sine());
 
-  auto_buff_v2::RuneEnergyFitter weighted({6.0, 1.0, 1.0});
+  auto_buff_v2::NjustEnergyFitter weighted({6.0, 1.0, 1.0});
   weighted.push(0, 0);
   weighted.push(1, 0);
   weighted.push(2, 3);
@@ -110,14 +110,14 @@ int main()
   assert(std::abs(weighted_linear->cost - 36.0 / 91) < 1e-9);
 
   for (const auto & invalid : {
-         auto_buff_v2::BuffConfig::MotionFit{0, 1, 1},
-         auto_buff_v2::BuffConfig::MotionFit{2, -1, 1},
-         auto_buff_v2::BuffConfig::MotionFit{2, 1, 0},
-         auto_buff_v2::BuffConfig::MotionFit{1, 2, 1},
-         auto_buff_v2::BuffConfig::MotionFit{2, 1, std::numeric_limits<double>::infinity()}}) {
+         auto_buff_v2::NjustEnergyFitter::Config{0, 1, 1},
+         auto_buff_v2::NjustEnergyFitter::Config{2, -1, 1},
+         auto_buff_v2::NjustEnergyFitter::Config{2, 1, 0},
+         auto_buff_v2::NjustEnergyFitter::Config{1, 2, 1},
+         auto_buff_v2::NjustEnergyFitter::Config{2, 1, std::numeric_limits<double>::infinity()}}) {
     bool rejected = false;
     try {
-      auto_buff_v2::RuneEnergyFitter invalid_fitter(invalid);
+      auto_buff_v2::NjustEnergyFitter invalid_fitter(invalid);
     } catch (const std::invalid_argument &) {
       rejected = true;
     }

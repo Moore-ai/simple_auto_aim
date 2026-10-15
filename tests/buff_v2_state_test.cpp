@@ -1,11 +1,11 @@
 #include <cassert>
 
-#include "tasks/auto_buff_v2/rune_ekf_state.hpp"
+#include "tasks/auto_buff_v2/models/njust_ekf_state.hpp"
 
 int main()
 {
   const auto values = (Eigen::Matrix<double, 6, 1>() << 1, 2, 3, 4, 5, 6).finished();
-  auto_buff_v2::RuneEkfState state(values);
+  auto_buff_v2::NjustEkfState state(values);
   assert(state.center_x() == 1);
   assert(state.center_y() == 2);
   assert(state.center_z() == 3);

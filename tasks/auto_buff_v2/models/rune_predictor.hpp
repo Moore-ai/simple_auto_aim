@@ -3,7 +3,7 @@
 
 #include <optional>
 
-#include "models/rune_model.hpp"
+#include "rune_model.hpp"
 
 namespace auto_buff_v2
 {

@@ -11,7 +11,7 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core/eigen.hpp>
 #include "tasks/auto_buff_v2/models/sp_rune_model.hpp"
-#include "tasks/auto_buff_v2/rune_predictor.hpp"
+#include "tasks/auto_buff_v2/models/rune_predictor.hpp"
 #include "tools/math_tools.hpp"
 using namespace auto_buff_v2;
 

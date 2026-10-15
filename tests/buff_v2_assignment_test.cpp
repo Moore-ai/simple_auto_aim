@@ -2,7 +2,7 @@
 
 #include <Eigen/Core>
 
-#include "tasks/auto_buff_v2/hungarian.hpp"
+#include "tasks/auto_buff_v2/models/hungarian.hpp"
 
 int main()
 {

@@ -7,12 +7,8 @@
 #include <opencv2/core.hpp>
 #include <yaml-cpp/yaml.h>
 
-#include "tools/ballistic_solver.hpp"
-
 namespace auto_buff_v2
 {
-enum class RunePredictionMethod { weighted_least_squares, ekf };
-
 struct BuffConfig
 {
   struct Camera
@@ -30,13 +26,6 @@ struct BuffConfig
     double fy = 0;
     YAML::Node parameters;  // buff_v2.detector，由所选检测器解析其专属参数。
   } detector;
-
-  struct MotionFit
-  {
-    double window_seconds = 6.0;
-    double min_fit_seconds = 1.5;
-    double weight_half_life_seconds = 3.0;
-  };
 
   struct Model
   {

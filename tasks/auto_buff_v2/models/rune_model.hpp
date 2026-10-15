@@ -10,11 +10,12 @@
 #include <Eigen/Geometry>
 #include <opencv2/core.hpp>
 
-#include "../buff_config.hpp"
 #include "../rune.hpp"
 
 namespace auto_buff_v2
 {
+enum class RunePredictionMethod { weighted_least_squares, ekf };
+
 using Timestamp = std::chrono::steady_clock::time_point;
 
 struct RuneEstimate

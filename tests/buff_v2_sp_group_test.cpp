@@ -4,7 +4,7 @@
 #include "fixtures/climber_6f8ae25/buff_big_group.hpp"
 #include "fixtures/sp_scene.hpp"
 #include "tasks/auto_buff_v2/models/sp_rune_model.hpp"
-#include "tasks/auto_buff_v2/rune_predictor.hpp"
+#include "tasks/auto_buff_v2/models/rune_predictor.hpp"
 
 using namespace auto_buff_v2;
 

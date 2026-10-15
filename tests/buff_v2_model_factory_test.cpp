@@ -7,7 +7,7 @@
 #include <opencv2/core/eigen.hpp>
 
 #include "tasks/auto_buff_v2/models/rune_model_factory.hpp"
-#include "tasks/auto_buff_v2/rune_predictor.hpp"
+#include "tasks/auto_buff_v2/models/rune_predictor.hpp"
 
 using namespace auto_buff_v2;
 

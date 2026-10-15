@@ -52,9 +52,9 @@ SzuRuneDetector::SzuRuneDetector(const YAML::Node & config)
   armor_area_error_ = config["armor_area_relative_error"].as<double>(armor_area_error_);
   armor_solidity_ = config["armor_solidity"].as<double>(armor_solidity_);
   armor_border_margin_ = config["armor_border_margin"].as<int>(armor_border_margin_);
-  // 检查概率参数是否为有限值且位于 [0,1]。
+  // 闭区间判断同时排除 NaN 和无穷值。
   auto probability = [](double value) {
-    return std::isfinite(value) && value >= 0 && value <= 1;
+    return value >= 0 && value <= 1;
   };
   if (!probability(confidence_threshold_) || !probability(keypoint_confidence_threshold_) ||
       !std::isfinite(nms_distance_) || nms_distance_ <= 0 ||
@@ -63,8 +63,8 @@ SzuRuneDetector::SzuRuneDetector(const YAML::Node & config)
       !std::isfinite(roi_scale_) || roi_scale_ < 1 ||
       gaussian_kernel_size_ <= 0 || gaussian_kernel_size_ % 2 == 0 ||
       !std::isfinite(gaussian_sigma_) || gaussian_sigma_ < 0 ||
-      !std::isfinite(red_threshold_) || red_threshold_ < 0 || red_threshold_ > 255 ||
-      !std::isfinite(blue_threshold_) || blue_threshold_ < 0 || blue_threshold_ > 255 ||
+      !(red_threshold_ >= 0 && red_threshold_ <= 255) ||
+      !(blue_threshold_ >= 0 && blue_threshold_ <= 255) ||
       !std::isfinite(armor_area_error_) || armor_area_error_ < 0 ||
       !probability(armor_solidity_) || armor_border_margin_ < 0)
     throw std::invalid_argument("invalid buff_v2.detector.szu detector parameters");

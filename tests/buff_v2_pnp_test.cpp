@@ -7,7 +7,7 @@
 #include "tasks/auto_buff_v2/aimers/rune_aimer_factory.hpp"
 #include "tasks/auto_buff_v2/buff_config.hpp"
 #include "tasks/auto_buff_v2/models/njust_rune_model.hpp"
-#include "tasks/auto_buff_v2/rune_predictor.hpp"
+#include "tasks/auto_buff_v2/models/rune_predictor.hpp"
 
 int main()
 {

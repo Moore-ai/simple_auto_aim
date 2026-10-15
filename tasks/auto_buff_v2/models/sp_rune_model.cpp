@@ -4,7 +4,7 @@
 #include <cmath>
 
 #include "tools/math_tools.hpp"
-#include "../rune_predictor.hpp"
+#include "rune_predictor.hpp"
 
 namespace auto_buff_v2
 {

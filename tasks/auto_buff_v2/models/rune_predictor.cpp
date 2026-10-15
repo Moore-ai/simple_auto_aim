@@ -1,5 +1,4 @@
 #include "rune_predictor.hpp"
-#include "rune_ekf_state.hpp"
 
 #include <cmath>
 
@@ -20,11 +19,7 @@ RuneEstimate RunePredictor::predict(const RuneEstimate & estimate,
   predicted.center = Eigen::AngleAxisd(estimate.center_yaw_speed * seconds,
     Eigen::Vector3d::UnitZ()) * estimate.center;
   if (predicted.prediction_method == RunePredictionMethod::ekf) {
-    RuneEkfState::Vector values;
-    values << estimate.center.x(), estimate.center.y(), estimate.center.z(),
-      estimate.rotation_speed, estimate.rotation_angle, estimate.face_yaw;
-    const auto future = RuneEkfState(values).predict(seconds);
-    predicted.rotation_angle = future.rotation_angle();
+    predicted.rotation_angle += estimate.rotation_speed * seconds;
   } else if (predicted.sine_valid) {
     const auto old_phase = predicted.sine_phase;
     predicted.sine_t += seconds;

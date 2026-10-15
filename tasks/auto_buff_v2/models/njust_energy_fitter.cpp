@@ -1,4 +1,4 @@
-#include "rune_energy_fitter.hpp"
+#include "njust_energy_fitter.hpp"
 
 #include <Eigen/Dense>
 
@@ -8,22 +8,21 @@
 namespace auto_buff_v2
 {
 
-RuneEnergyFitter::RuneEnergyFitter(BuffConfig::MotionFit config) : config_(config)
+NjustEnergyFitter::NjustEnergyFitter(NjustEnergyFitter::Config config) : config_(config)
 {
   if (!std::isfinite(config_.window_seconds) || config_.window_seconds <= 0 ||
-      !std::isfinite(config_.min_fit_seconds) || config_.min_fit_seconds <= 0 ||
-      !std::isfinite(config_.weight_half_life_seconds) || config_.weight_half_life_seconds <= 0 ||
-      config_.min_fit_seconds > config_.window_seconds)
+      !(config_.min_fit_seconds > 0 && config_.min_fit_seconds <= config_.window_seconds) ||
+      !std::isfinite(config_.weight_half_life_seconds) || config_.weight_half_life_seconds <= 0)
     throw std::invalid_argument(
       "buff_v2.motion_fit: durations must be finite and positive, min_fit_seconds <= window_seconds");
 }
 
-double RuneEnergyFitter::sample_weight(double t, double reference_t) const
+double NjustEnergyFitter::sample_weight(double t, double reference_t) const
 {
   return std::exp2((t - reference_t) / config_.weight_half_life_seconds);
 }
 
-void RuneEnergyFitter::push(double t, double theta)
+void NjustEnergyFitter::push(double t, double theta)
 {
   buffer_.push_back({t, theta});
 
@@ -31,10 +30,10 @@ void RuneEnergyFitter::push(double t, double theta)
     buffer_.pop_front();
 }
 
-void RuneEnergyFitter::reset() { buffer_.clear(); }
+void NjustEnergyFitter::reset() { buffer_.clear(); }
 
 template <typename Pred>
-double RuneEnergyFitter::compute_weighted_cost(
+double NjustEnergyFitter::compute_weighted_cost(
   const std::deque<Point> & buffer, Pred && pred_fn) const
 {
 
@@ -50,7 +49,7 @@ double RuneEnergyFitter::compute_weighted_cost(
   return weighted_sum / weight_sum;
 }
 
-std::optional<RuneEnergyFitter::LinearFitResult> RuneEnergyFitter::fit_linear() const
+std::optional<NjustEnergyFitter::LinearFitResult> NjustEnergyFitter::fit_linear() const
 {
   if (buffer_.size() < 2) return std::nullopt;
   if (buffer_.back().t - buffer_.front().t < config_.min_fit_seconds) return std::nullopt;
@@ -79,7 +78,7 @@ std::optional<RuneEnergyFitter::LinearFitResult> RuneEnergyFitter::fit_linear() 
   return LinearFitResult{C, speed, cost};
 }
 
-std::optional<RuneEnergyFitter::SineFitResult> RuneEnergyFitter::fit_sine() const
+std::optional<NjustEnergyFitter::SineFitResult> NjustEnergyFitter::fit_sine() const
 {
   if (buffer_.size() < 2) return std::nullopt;
   if (buffer_.back().t - buffer_.front().t < config_.min_fit_seconds) return std::nullopt;

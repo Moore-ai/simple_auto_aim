@@ -4,7 +4,7 @@
 #include <cmath>
 #include <utility>
 
-#include "../rune_predictor.hpp"
+#include "../models/rune_predictor.hpp"
 #include "tools/ballistic_solver.hpp"
 
 namespace auto_buff_v2

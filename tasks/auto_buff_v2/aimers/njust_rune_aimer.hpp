@@ -3,7 +3,9 @@
 
 #include <memory>
 
+#include "../buff_config.hpp"
 #include "rune_aimer.hpp"
+#include "tools/ballistic_solver.hpp"
 
 namespace auto_buff_v2
 {
