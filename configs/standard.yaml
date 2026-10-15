@@ -212,10 +212,6 @@ virtual_serial:
     roll: 0.0                      # 原始反馈 roll（单位由 feedback_angles_in_degrees 决定）
     pitch: 0.0                     # 原始反馈 pitch（单位由 feedback_angles_in_degrees 决定）
     yaw: 0.0                       # 原始反馈 yaw（单位由 feedback_angles_in_degrees 决定）
-yaw_kp: 0
-yaw_kd: 0
-pitch_kp: 0
-pitch_kd: 0
 
 #####-----planner-----#####
 fire_thresh: 0.0035              # MPC 开火阈值（rad）：参考轨迹与规划轨迹在发射时刻的偏差 < 此值才开火
@@ -270,13 +266,6 @@ vel_clamp:
   enable: false                    # 启用速度限幅（钳位 EKF 速度状态）
   max_linear_speed: 5.0           # m/s 最大线速度（均适用 vx/vy/vz）
   max_yaw_rate: 10.0              # rad/s 最大 yaw 角速度
-
-#####-----buff_detector参数-----#####
-model: "assets/yolo11_buff_int8.xml"
-
-#####-----buff_aimer参数-----#####
-fire_gap_time: 0.700   # s
-predict_time: 0.120     # s
 
 buff_v2: # 新打符入口使用的源项目参数
   planner_mode: njust # 打符规划器：mpc 或 njust
