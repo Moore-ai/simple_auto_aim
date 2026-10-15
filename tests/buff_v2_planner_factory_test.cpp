@@ -10,7 +10,7 @@ int main()
 {
   using namespace std::chrono_literals;
   constexpr char path[] = "/tmp/buff_v2_planner_factory_test.yaml";
-  // Buff MPC must work without any auto-aim planner configuration.
+  // 打符 MPC 必须能够在没有自瞄规划器配置时运行。
   std::ofstream(path) <<
     "buff_v2:\n"
     "  mpc:\n"
@@ -53,6 +53,14 @@ int main()
   gimbal.pitch = njust_plan.pitch;
   const auto shooting_plan = njust->plan(1, target, 20, gimbal, start + 450ms);
   assert(shooting_plan.fire);
+  auto coast = target;
+  coast.predicted = true;
+  // Njust 的纯预测状态沿用原有开火判断；SP 的纯预测状态禁止开火。
+  const auto coast_plan = njust->plan(1, coast, 20, gimbal, start + 455ms);
+  assert(coast_plan.control && coast_plan.fire);
+  coast.slot_id = 0;
+  const auto sp_coast_plan = njust->plan(1, coast, 20, gimbal, start + 456ms);
+  assert(sp_coast_plan.control && !sp_coast_plan.fire);
   assert(shooting_plan.njust_aim_debug && shooting_plan.njust_aim_debug->shoot_phase);
   assert(shooting_plan.njust_aim_debug->yaw_error == 0);
   assert(shooting_plan.njust_aim_debug->pitch_error == 0);
@@ -60,8 +68,8 @@ int main()
   assert(!njust->plan(1, std::nullopt, 20, gimbal, start + 460ms).control);
   assert(!njust->plan(2, target, 20, gimbal, start + 470ms).fire);
 
-  // Independent vacuum-ballistic fixtures with 80 ms observation age and 40 ms delay.
-  // The fast target reaches the five-solve limit; the sine target converges in two solves.
+  // 独立真空弹道测试场景：观测距今 80 毫秒，附加延迟 40 毫秒。
+  // 高速目标达到五次解算上限；正弦运动目标在两次解算内收敛。
   for (const auto & mode : {"mpc", "njust"}) {
     config.mode = mode;
     auto moving_planner = auto_buff_v2::make_buff_planner(config, path);
@@ -86,7 +94,7 @@ int main()
     assert(std::abs(sine.debug_xyza.z() - 1.643051028439865) < 1e-8);
   }
 
-  // Either planner consumes the selected Climber aimer, including its fallback speed.
+  // 两种规划器均使用所选的 Climber 瞄准器及其回退弹速。
   config.aimer = "climber";
   config.ballistic.type = "climber";
   target.center.z() = 0;

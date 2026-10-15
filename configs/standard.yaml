@@ -35,7 +35,7 @@ outpost_v2: # v2 模型专用配置；id=0/1/2 表示初始化相位及其后两
   direction_compare_interval: 3 # 方向判定时比较的帧间隔
   direction_stable_threshold: 0.005 # 判定静止方向的角度变化门限，单位 rad
   direction_jump_threshold: 0.4 # 过滤角度跳变的门限，单位 rad
-observation_mode: "pnp" # pnp | reprojection
+observation_mode: "pnp" # 观测模式：PnP 位姿或重投影
 
 pnp:
   enable_lightbar_assist: false
@@ -65,7 +65,7 @@ foxglove:
   image_fps: 30 # 三路调试图像的最大发布频率，单位 FPS
   draw_roi: true # R 标调试程序在 /image 上绘制绿色局部 ROI 框；false 关闭
 
-#####-----ROI-----#####
+#####-----感兴趣区域-----#####
 roi:
   x: 420
   y: 50
@@ -213,7 +213,7 @@ virtual_serial:
     pitch: 0.0                     # 原始反馈 pitch（单位由 feedback_angles_in_degrees 决定）
     yaw: 0.0                       # 原始反馈 yaw（单位由 feedback_angles_in_degrees 决定）
 
-#####-----planner-----#####
+#####-----规划器-----#####
 fire_thresh: 0.0035              # MPC 开火阈值（rad）：参考轨迹与规划轨迹在发射时刻的偏差 < 此值才开火
 rho: 1.0                         # ADMM 惩罚参数，影响收敛速度
 max_iter: 10                     # ADMM 最大迭代次数，越大求解越精确但耗时更长
@@ -279,7 +279,7 @@ buff_v2: # 新打符入口使用的源项目参数
     Q_pitch: [9e6, 0] # pitch 跟踪权重 [角度误差, 角速度误差]
     R_pitch: [1] # pitch 控制量惩罚
   model: # 状态估计模型，独立于 detector、planner_mode 和 aimer
-    type: njust # njust=原 v2 模型；sp=旧 auto_buff 球坐标 EKF 模型
+    type: njust # njust=原 v2 模型；sp=Climber 最新七/十维球坐标 EKF 模型
     njust: # 像素重投影 EKF 与运动拟合参数
       prediction_method: weighted_least_squares # 仅 Njust 小符预测：weighted_least_squares（加权拟合外推）或 ekf（EKF 恒角速度预测）；大符固定使用加权拟合外推
       motion_fit: # Njust 模型运动拟合参数，独立于检测器、规划器和瞄准器
@@ -305,28 +305,70 @@ buff_v2: # 新打符入口使用的源项目参数
       init_center_gate: 30.0 # px，初始叶片中心和其他未激活叶片的匹配阈值
       init_pitch_bound: 20.0 # deg，符面倾角上限
       diverge_face_angle: 45.0 # deg，符面朝向与符心方向最大偏差
-    sp: # 球坐标 EKF 参数，几何尺寸沿用旧模型
-      max_lost_frames: 6 # 累计丢帧超过此值后，重获帧不输出，下一帧重新初始化
-      small_speed_tolerance: 0.17453292519943295 # rad/s，小符速度偏离初始速度绝对值的发散阈值
-      small_yaw_acceleration_noise: 0.001 # 小符符心 yaw 加速度过程噪声方差
-      big_yaw_acceleration_noise: 0.9 # 大符符心 yaw 加速度过程噪声方差
-      big_rotation_angle_noise: 0.09 # 大符每帧转角过程噪声方差
-      big_rotation_speed_noise: 0.5 # 大符每帧角速度过程噪声方差
-      big_phase_noise: 1.0 # 大符每帧正弦相位过程噪声方差
-      observation_yaw: 0.01 # rad²，符心及靶心 yaw 观测噪声
-      observation_pitch: 0.01 # rad²，符心及靶心 pitch 观测噪声
-      observation_distance: 0.5 # m²，符心及靶心距离观测噪声
-      observation_rotation_angle: 0.1 # rad²，符叶转角观测噪声
-      initial_small_speed: 1.0471975511965976 # rad/s，小符初始角速度绝对值
-      initial_big_speed: 1.1775 # rad/s，大符初始角速度
-      initial_amplitude: 0.9125 # rad/s，大符初始正弦振幅
-      initial_frequency: 1.942 # rad/s，大符初始正弦频率
-      initial_phase: 0.0 # rad，大符初始正弦相位
-      initial_covariance: 10.0 # 初始状态协方差对角项，速度及相位单独覆盖
-      small_speed_covariance: 0.01 # 小符初始角速度方差
-      big_speed_covariance: 100.0 # 大符初始角速度方差
-      big_phase_covariance: 400.0 # 大符初始正弦相位方差
-      divergence_factor: 1.5 # 大符振幅 [0.78/f,1.045*f]、频率 [1.884/f,2.0*f] 发散边界
+    sp: # Climber 6f8ae25 SmallTarget / BigTarget / BigTargetGroup 状态估计
+      # PnP：符系 x 为面法线，z 从几何原点指向靶心；关键点为上、左、下、右
+      pnp_mode: 4i # 4=四点 IPPE，4i=再用四点 ITERATIVE 精化，5=加入检测 R 标精化
+      target_radius: 0.700 # m，几何原点至靶心
+      target_top: 0.115 # m，靶心至径向外侧关键点
+      target_bottom: 0.115 # m，靶心至径向内侧关键点，须小于 target_radius
+      target_left: 0.150 # m，靶心至符系 +y 关键点
+      target_right: 0.115 # m，靶心至符系 -y 关键点
+      r_center_z: 0.0 # m，5 点 PnP 使用的 R 标符系 z 坐标，与几何原点分开
+      min_depth: 0.1 # m，有效相机深度下界，射线平面求交同样检查
+      max_depth: 20.0 # m，有效相机深度上界
+      # 实例生命周期与槽位关联；两种符均短时传播，纯预测帧禁止开火
+      max_lost_frames: 20 # 连续丢失最多预测帧数，第 21 帧失效
+      max_prediction_gap: 1.0 # s，帧间隔达到此值则重置，重获观测可立即初始化
+      max_blade_missed_frames: 30 # 物理符叶 ID 最多保留的未见帧数
+      slot_match_angle: 0.6283185307179586 # rad，物理 ID 最邻近匹配门限，最大 π/5
+      max_center_angle_residual: 0.55 # rad，符心 yaw/pitch 观测残差门限
+      max_center_distance_residual: 2.5 # m，符心距离观测残差门限
+      max_roll_residual: 0.55 # rad，槽位校正后转角残差门限
+      phase_switch_threshold: 0.2617993877991494 # rad，超过 15° 时尝试以 72° 对齐参考符叶
+      phase_match_tolerance: 0.6283185307179586 # rad，参考符叶对齐容差，最大 π/5
+      direction_vote_min_count: 5 # 小符允许翻转速度符号所需票数绝对值
+      direction_vote_limit: 50 # 方向投票累计上限（沿用 Climber 的超过上限后冻结规则）
+      direction_vote_max_delta: 0.7853981633974483 # rad，45° 以内的相邻转角差参与方向投票
+      # 小符七维 EKF：[R_yaw, R_yaw_rate, R_pitch, R_distance, face_yaw, roll, speed]
+      initial_small_speed: 1.047 # rad/s，方向投票未知时先取正值，5 票后可翻转
+      small_speed_tolerance: 0.524 # rad/s，相对标称速度绝对值的发散容差
+      small_yaw_acceleration_noise: 0.001 # 符心 yaw 过程噪声强度，按 dt 四次方等缩放
+      small_rotation_acceleration_noise: 0.005 # 转角过程噪声强度，按 dt 四次方等缩放
+      # 大符十维 EKF：额外 [amplitude, frequency, phase]，速度为无符号瞬时量
+      initial_big_speed: 1.1775 # rad/s，初始角速度绝对值
+      initial_amplitude: 0.9125 # rad/s，初始正弦振幅
+      initial_frequency: 1.942 # rad/s，初始正弦角频率
+      initial_phase: 0.0 # rad，实例时间原点处正弦相位
+      speed_baseline: 2.09 # rad/s，速度模型 a*sin(w*t+phi)+baseline-a
+      big_speed_limit: 4.0 # rad/s，独立于振幅/频率检查的瞬时速度绝对值发散上限
+      amplitude_min: 0.78 # rad/s，标称振幅范围下界
+      amplitude_max: 1.045 # rad/s，标称振幅范围上界
+      frequency_min: 1.884 # rad/s，标称角频率范围下界
+      frequency_max: 2.0 # rad/s，标称角频率范围上界
+      divergence_factor: 1.5 # 发散边界为 [min/factor, max*factor]，触发当帧即失效
+      big_yaw_acceleration_noise: 0.9 # 符心 yaw 过程噪声强度，按 dt 缩放
+      big_rotation_angle_noise: 0.09 # rad²，每帧转角过程噪声方差
+      big_rotation_speed_noise: 0.5 # (rad/s)²，每帧角速度过程噪声方差
+      big_phase_noise: 1.0 # rad²，每帧正弦相位过程噪声方差
+      # R1：符心球坐标与转角；小符使用检测 R 的平面求交位置，大符使用融合几何原点
+      observation_yaw: 0.05 # rad²，R1 yaw 观测方差
+      observation_pitch: 0.05 # rad²，R1 pitch 观测方差
+      observation_distance: 1.0 # m²，R1 距离观测方差
+      observation_rotation_angle: 0.004 # rad²，R1 转角观测方差
+      # R2：仅大符使用靶心球坐标约束；最新版 Climber 小符执行路径没有 R2 更新
+      blade_observation_yaw: 0.1 # rad²，R2 yaw 观测方差
+      blade_observation_pitch: 0.1 # rad²，R2 pitch 观测方差
+      blade_observation_distance: 1.0 # m²，R2 距离观测方差
+      initial_covariance: 10.0 # 初始状态协方差对角项，以下分量单独覆盖
+      small_speed_covariance: 0.01 # (rad/s)²，小符初始速度方差
+      big_speed_covariance: 100.0 # (rad/s)²，大符初始速度方差
+      big_phase_covariance: 400.0 # rad²，大符初始正弦相位方差
+      # 独立 RANSAC 速度诊断，不用其结果替换 EKF 预测；固定随机种子保证复现
+      fit_iterations: 100 # 每帧随机三点拟合次数
+      fit_history: 150 # 拟合历史长度，沿用 Climber 的窗口维护规则
+      fit_threshold: 0.5 # rad/s，RANSAC 内点残差门限
+      fit_max_speed: 2.1 # rad/s，进入诊断拟合的瞬时速度上界
+      fit_output_limit: 4.0 # rad/s，诊断输出超过此绝对值时置零
   aimer: # 打符瞄准器配置，独立于 detector 和 planner_mode
     type: njust # njust 或 climber
     yaw_offset: 0 # degree，打符 yaw 修正量

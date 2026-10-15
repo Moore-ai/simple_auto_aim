@@ -53,7 +53,7 @@ int main()
   const auto request = planner.prepare(1, target, 20, start);
   assert(request);
   assert(std::abs(request->distance - target.center.head<2>().norm()) < 1e-12);
-  // A stationary blade is at z=1.7: report its ballistic time, not center.norm()/speed.
+  // 静止扇叶位于 z=1.7：应输出其弹道飞行时间，而非中心距离除以弹速。
   assert(std::abs(request->fly_time - 0.176280533350353) < 1e-9);
   for (const auto [height, expected_time] :
        {std::pair{0.0, 0.155435314095256}, std::pair{4.0, 0.294925697745734},
@@ -76,6 +76,16 @@ int main()
   gimbal.yaw = mpc_plan.yaw;
   gimbal.pitch = mpc_plan.pitch;
   assert(planner.fire_advice(*request, mpc_plan, gimbal, start + 450ms));
+  auto coast_target = target;
+  coast_target.predicted = true;
+  const auto coast_request = planner.prepare(1, coast_target, 20, start + 455ms);
+  assert(coast_request);
+  // Njust 纯预测帧保留原有开火行为，SP 纯预测帧单独禁止开火。
+  assert(planner.fire_advice(*coast_request, mpc_plan, gimbal, start + 455ms));
+  coast_target.slot_id = 0;
+  const auto sp_coast_request = planner.prepare(1, coast_target, 20, start + 456ms);
+  assert(sp_coast_request);
+  assert(!planner.fire_advice(*sp_coast_request, mpc_plan, gimbal, start + 456ms));
   gimbal.yaw = mpc_plan.yaw + 0.05;
   assert(!planner.fire_advice(*request, mpc_plan, gimbal, start + 470ms));
   gimbal.yaw = mpc_plan.yaw;

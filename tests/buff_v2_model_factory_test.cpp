@@ -19,11 +19,11 @@ RuneElements observation(const BuffConfig::Camera & camera, double angle, double
   cv::eigen2cv(rotation, rmat);
   cv::Rodrigues(rmat, rvec);
   std::vector<cv::Point2f> pixels;
-  // SP's original planar target dimensions, independent of its solver.
+  // 独立于解算器构造 Climber 当前使用的非对称平面靶面尺寸。
   const Eigen::Vector3d center = camera.R_camera2gimbal.transpose() *
     (Eigen::AngleAxisd(center_yaw, Eigen::Vector3d::UnitZ()) * Eigen::Vector3d(3, -0.05, -0.03));
-  cv::projectPoints(std::vector<cv::Point3f>{{0, 0, 0.827f}, {0, 0.127f, 0.7f},
-    {0, 0, 0.573f}, {0, -0.127f, 0.7f}, {0, 0, 0.7f}, {0, 0, 0}},
+  cv::projectPoints(std::vector<cv::Point3f>{{0, 0, 0.815f}, {0, 0.150f, 0.7f},
+    {0, 0, 0.585f}, {0, -0.115f, 0.7f}, {0, 0, 0.7f}, {0, 0, 0}},
     rvec, cv::Vec3d(center.x(), center.y(), center.z()),
     camera.camera_matrix, camera.distort_coeffs, pixels);
   RuneElements result;
@@ -70,8 +70,8 @@ int main()
       assert(std::abs(std::remainder(state->rotation_angle - expected, 2 * M_PI)) < 0.08);
       assert(model->reprojected_features().size() == 6);
       assert(model->reprojected_center());
-      assert(!model->update({}, state->timestamp + std::chrono::milliseconds(20)));
-      assert(!model->state());
+      assert(model->update({}, state->timestamp + std::chrono::milliseconds(20)));
+      assert(model->state()->predicted);
       assert(!model->update({}, state->timestamp + std::chrono::seconds(2)));
       assert(!model->state());
       assert(model->update(observation(config.camera, 0.2), start + std::chrono::seconds(10)));
@@ -84,19 +84,18 @@ int main()
   auto model = make_rune_model(config.camera, config.model, false);
   assert(!model->update(active, start) && !model->state());
   assert(model->update(observation(config.camera, 0.2), start));
-  assert(std::abs(model->state()->rotation_speed - M_PI / 3) < 1e-9);
+  assert(std::abs(model->state()->rotation_speed - 1.047) < 1e-9);
   assert(RunePredictor{}.aimpoint_at(*model->state(), start));
-  for (int i = 1; i <= 7; ++i)
-    assert(!model->update({}, start + std::chrono::milliseconds(i * 20)));
-  assert(!model->update(observation(config.camera, 0.2),
-    start + std::chrono::milliseconds(160)));
+  for (int i = 1; i <= 20; ++i)
+    assert(model->update({}, start + std::chrono::milliseconds(i * 20)));
+  assert(!model->update({}, start + std::chrono::milliseconds(420)));
   assert(!model->state());
   assert(model->update(observation(config.camera, 0.2),
-    start + std::chrono::milliseconds(180)));
-  assert(RunePredictor{}.aimpoint_at(*model->state(), start + std::chrono::milliseconds(180)));
+    start + std::chrono::milliseconds(440)));
+  assert(RunePredictor{}.aimpoint_at(*model->state(), start + std::chrono::milliseconds(440)));
   assert(!model->update(observation(config.camera, 0.2), start - std::chrono::seconds(1)));
   assert(!model->state());
-  // The spherical center yaw rate must survive conversion to the planning snapshot.
+  // 预测未来位置时，Climber 位姿锚点保持在最近一次测量的中心。
   auto moving = make_rune_model(config.camera, config.model, false);
   for (int i = 0; i <= 200; ++i) {
     const double t = i * 0.02;
@@ -107,7 +106,7 @@ int main()
   assert(moving_state);
   const auto moving_future = RunePredictor{}.predict(*moving_state,
     moving_state->timestamp + std::chrono::milliseconds(200));
-  const Eigen::Vector3d expected_center = Eigen::AngleAxisd(0.42, Eigen::Vector3d::UnitZ()) *
+  const Eigen::Vector3d expected_center = Eigen::AngleAxisd(0.4, Eigen::Vector3d::UnitZ()) *
     Eigen::Vector3d(3, -0.05, -0.03);
   assert((moving_future.center - expected_center).norm() < 0.02);
   auto rotated = make_rune_model(config.camera, config.model, false);
@@ -117,7 +116,7 @@ int main()
   const Eigen::Vector3d rotated_center = Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitZ()) *
     Eigen::Vector3d(3, -0.05, -0.03);
   assert((rotated->state()->center - rotated_center).norm() < 0.03);
-  // Factory must use SP parameters rather than Njust or former root settings.
+  // 工厂必须使用 SP 参数，不读取 Njust 参数或旧的根节点配置。
   config.model.parameters = YAML::Load(R"(
 sp:
   max_lost_frames: 2
@@ -129,10 +128,11 @@ njust:
   auto configured = make_rune_model(config.camera, config.model, false);
   assert(configured->update(observation(config.camera, 0.2), start));
   assert(std::abs(configured->state()->rotation_speed - 0.6) < 1e-12);
-  for (int i = 1; i <= 3; ++i)
-    assert(!configured->update({}, start + std::chrono::milliseconds(i * 20)));
+  for (int i = 1; i <= 2; ++i)
+    assert(configured->update({}, start + std::chrono::milliseconds(i * 20)));
+  assert(!configured->update({}, start + std::chrono::milliseconds(60)));
   assert(!configured->state());
-  assert(!configured->update(observation(config.camera, 0.2),
+  assert(configured->update(observation(config.camera, 0.2),
     start + std::chrono::milliseconds(80)));
   assert(configured->update(observation(config.camera, 0.2),
     start + std::chrono::milliseconds(100)));

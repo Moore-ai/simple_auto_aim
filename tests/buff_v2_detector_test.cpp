@@ -1,4 +1,5 @@
 #include <cassert>
+#include "fixtures/sp_detector_contract.hpp"
 #include <cmath>
 #include <stdexcept>
 #include <type_traits>
@@ -92,7 +93,14 @@ int main()
   assert(icon_result.icons.size() == 1);
   assert(cv::norm(icon_result.icons.front().center - expected_icon_center) < 0.1);
 
-  // Diagnostics must retain measurements even when the size gates reject the R.
+  auto_buff_v2::RuneElements sp_elements = cross;
+  sp_elements.icons = icon_result.icons;
+  auto_buff_v2::BuffConfig::Camera sp_camera;
+  sp_camera.camera_matrix = (cv::Mat_<double>(3, 3) << 1000, 0, 200, 0, 1000, 200, 0, 0, 1);
+  sp_camera.distort_coeffs = cv::Mat::zeros(1, 5, CV_64F);
+  check_sp_detector_contract(sp_elements, sp_camera);
+
+  // 即使尺寸门限拒绝 R 标，诊断数据也必须保留测量值。
   detector.measurements.emplace();
   const auto & debug = *detector.measurements;
   detector.config.fx = 100;

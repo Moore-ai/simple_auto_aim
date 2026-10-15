@@ -17,6 +17,7 @@ struct MpcBuffTrackingRequest
 {
   auto_aim::Trajectory trajectory;
   double yaw0 = 0;
+  bool inhibit_fire = false;  // 仅 SP 模型的纯预测帧禁止开火。
   double distance = -1;
   double fly_time = 0;
   Eigen::Vector3d rune_center = Eigen::Vector3d::Zero();

@@ -1,4 +1,5 @@
 #include <cassert>
+#include "fixtures/sp_detector_contract.hpp"
 #include <cmath>
 #include <filesystem>
 
@@ -13,7 +14,7 @@
 
 int main()
 {
-  // A real inference fixture: red, duplicate red, second red, and blue candidates.
+  // 实际推理测试场景：红色、重复红色、第二个红色及蓝色候选。
   std::vector<float> data(33 * 4, 0);
   auto put = [&](int row, int col, float value) { data[row * 4 + col] = value; };
   const std::array<cv::Point2f, 9> points = {
@@ -54,7 +55,7 @@ int main()
   const auto original = image.clone();
   detector->set_enemy_red(true);
   auto red = detector->detect(image);
-  assert(red.bullseyes.size() == 2);  // Deduplicate even when NMS retains overlapping boxes.
+  assert(red.bullseyes.size() == 2);  // 即使非极大值抑制保留了重叠框，也须去重。
   assert(red.icons.size() == 1);
   assert(red.candidates.size() == 3);
   assert(red.candidates[0].box == cv::Rect(90, 90, 20, 20));
@@ -83,11 +84,27 @@ int main()
   auto_buff_v2::BuffConfig::Camera camera;
   camera.camera_matrix = (cv::Mat_<double>(3, 3) << 1000, 0, 160, 0, 1000, 160, 0, 0, 1);
   camera.distort_coeffs = cv::Mat::zeros(1, 5, CV_64F);
+  check_sp_detector_contract(red, camera);
   auto_buff_v2::NjustRuneModel rune_model(camera, {}, false);
   auto_buff_v2::BuffFrameProcessor processor(rune_model, config);
   tools::FrameFacts facts{std::chrono::steady_clock::now(), image,
                           Eigen::Quaterniond::Identity(), {}};
   facts.target_color_override = io::InfantryEnemyColor::red;
+  auto sp_camera = camera;
+  sp_camera.R_camera2gimbal << 0, 0, 1, -1, 0, 0, 0, -1, 0;
+  auto_buff_v2::SPRuneModel sp_model(sp_camera, {}, false);
+  auto_buff_v2::BuffFrameProcessor sp_processor(sp_model, config);
+  const auto sp_frame = sp_processor.process(facts);
+  assert(sp_frame.buff_target);
+  assert(sp_frame.snapshot.buff_debug.reprojected_features.size() == 6);
+  assert(sp_frame.snapshot.buff_debug.info.find("observed") != std::string::npos);
+  auto lost_facts = facts;
+  lost_facts.image = cv::Mat{};
+  lost_facts.timestamp += std::chrono::milliseconds(20);
+  const auto coast_frame = sp_processor.process(lost_facts);
+  assert(coast_frame.buff_target && coast_frame.buff_target->predicted);
+  assert(coast_frame.snapshot.buff_debug.info.find("predicted") != std::string::npos);
+
   const auto processed = processor.process(facts);
   assert(processed.snapshot.buff_debug.candidates.size() == 3);
   assert(processed.snapshot.buff_debug.candidates[0].box == cv::Rect(90, 90, 20, 20));
@@ -98,7 +115,7 @@ int main()
   assert(cv::norm(single_result.bullseyes[0].center - cv::Point2f(100, 100)) < 0.01);
   config.parameters["climber"]["max_bullseyes"] = 2;
 
-  // Preprocessing dimensions follow the model, including rectangular inputs.
+  // 预处理尺寸以模型为准，同时支持矩形输入。
   auto rectangular_model = std::make_shared<ov::Model>(
     ov::OutputVector{result}, ov::ParameterVector{input});
   rectangular_model->reshape(ov::PartialShape{1, 3, 320, 640});
@@ -125,7 +142,7 @@ int main()
   assert(invalid_device_rejected);
   config.parameters["climber"]["device"] = "CPU";
 
-  // Contour correction is bounded relative to the network's R center.
+  // 相对于网络输出的 R 标中心，限制轮廓修正幅度。
   assert(config.parameters["climber"]["model"].as<std::string>() ==
          (dir / "model.xml").string());
   detector->set_enemy_red(true);

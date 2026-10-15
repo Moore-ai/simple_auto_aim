@@ -66,6 +66,11 @@ tools::ProcessedFrame BuffFrameProcessor::process(const tools::FrameFacts & fact
     } else {
       buff_debug.info = fmt::format("theta_ekf={:+.2f}", target->rotation_angle);
     }
+    if (target->slot_id >= 0) {
+      buff_debug.info += fmt::format(" slot={} blade={} candidates={} {}",
+        target->slot_id, target->blade_id, model_.candidates().size(),
+        target->predicted ? "predicted" : "observed");
+    }
   } else {
     buff_debug.info = model_.diagnostic();
     buff_debug.info_anchor = cv::Point2f(10, 50);

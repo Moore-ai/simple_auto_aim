@@ -1,4 +1,5 @@
 #include <cassert>
+#include "fixtures/sp_detector_contract.hpp"
 #include <cmath>
 #include <filesystem>
 #include <limits>
@@ -218,6 +219,7 @@ int main()
   assert(!real_result.bullseyes[0].active);
   assert(cv::norm(real_result.bullseyes[0].center - cv::Point2f(516, 282)) < 10);
   assert(cv::norm(real_result.icons[0].center - cv::Point2f(234, 422)) < 10);
+  check_sp_detector_contract(real_result, real_config.camera);
   assert(real->detect(cv::Mat::zeros(480, 640, CV_8UC3)).bullseyes.empty());
   std::filesystem::remove_all(dir);
 }

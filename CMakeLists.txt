@@ -71,7 +71,7 @@ target_link_libraries(standard PRIVATE
 add_test(NAME standard_cli_test
   COMMAND ${PROJECT_SOURCE_DIR}/tests/standard_cli_test.sh $<TARGET_FILE:standard>)
 
-# Njust-only R icon and bullseye debug support is not linked into standard.
+# Njust 专用的 R 标与靶心检测调试模块不链接到 standard。
 add_library(njust_buff_detector_debug STATIC
   tools/njust_buff_detector_debug.cpp
   tools/foxglove_visualizer.cpp)
@@ -121,7 +121,7 @@ target_link_libraries(buff_v2_model_factory_test PRIVATE auto_buff_v2)
 add_test(NAME buff_v2_model_factory_test COMMAND buff_v2_model_factory_test)
 
 add_executable(buff_v2_sp_equivalence_test
-  tests/buff_v2_sp_equivalence_test.cpp tests/fixtures/sp_legacy_target.cpp)
+  tests/buff_v2_sp_equivalence_test.cpp tests/fixtures/climber_6f8ae25/buff_target.cpp)
 target_compile_options(buff_v2_sp_equivalence_test PRIVATE -UNDEBUG)
 target_link_libraries(buff_v2_sp_equivalence_test PRIVATE auto_buff_v2)
 foreach(size small big)
@@ -250,3 +250,16 @@ target_link_libraries(foxglove_visualizer_image_test PRIVATE
 add_test(NAME foxglove_visualizer_image_test COMMAND foxglove_visualizer_image_test)
 set_tests_properties(foxglove_visualizer_image_test PROPERTIES
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+add_executable(buff_v2_sp_geometry_test tests/buff_v2_sp_geometry_test.cpp
+  tests/fixtures/climber_6f8ae25/buff_solver.cpp)
+target_compile_options(buff_v2_sp_geometry_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_sp_geometry_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_sp_geometry_test COMMAND buff_v2_sp_geometry_test)
+
+add_executable(buff_v2_sp_group_test tests/buff_v2_sp_group_test.cpp
+  tests/fixtures/climber_6f8ae25/buff_target.cpp
+  tests/fixtures/climber_6f8ae25/buff_big_group.cpp)
+target_compile_options(buff_v2_sp_group_test PRIVATE -UNDEBUG)
+target_link_libraries(buff_v2_sp_group_test PRIVATE auto_buff_v2)
+add_test(NAME buff_v2_sp_group_test COMMAND buff_v2_sp_group_test)

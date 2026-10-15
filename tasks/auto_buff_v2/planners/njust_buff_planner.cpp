@@ -16,7 +16,7 @@ auto_aim::Plan NjustBuffPlanner::plan(
   const auto aimed = aimer_->aim(generation, target, speed, gimbal, now);
   if (!aimed) return {};
   auto result = aimed->plan;
-  result.fire = aimer_->fire_advice(
+  result.fire = !(target->slot_id >= 0 && target->predicted) && aimer_->fire_advice(
     target->center, result.debug_xyza.head<3>(), result, gimbal, now);
   result.njust_aim_debug = aimer_->njust_debug();
   return result;

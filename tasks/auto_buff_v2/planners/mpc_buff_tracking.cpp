@@ -54,6 +54,7 @@ std::optional<MpcBuffTrackingRequest> MpcBuffTracking::prepare(
 
   MpcBuffTrackingRequest request;
   request.trajectory = *trajectory;
+  request.inhibit_fire = target->slot_id >= 0 && target->predicted;
   request.yaw0 = aimed->solution.angles.x();
   request.distance = std::hypot(target->center.x(), target->center.y());
   request.fly_time = aimed->plan.fly_time;
@@ -66,6 +67,7 @@ bool MpcBuffTracking::fire_advice(
   const MpcBuffTrackingRequest & request, const auto_aim::Plan & plan,
   const io::GimbalState & gimbal, Timestamp now)
 {
-  return aimer_->fire_advice(request.rune_center, request.aimpoint, plan, gimbal, now);
+  return !request.inhibit_fire &&
+         aimer_->fire_advice(request.rune_center, request.aimpoint, plan, gimbal, now);
 }
 }  // namespace auto_buff_v2

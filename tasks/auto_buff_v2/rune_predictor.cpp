@@ -55,8 +55,8 @@ std::optional<Eigen::Vector3d> RunePredictor::aimpoint_at(
   for (std::size_t i = 0; i < predicted.inactive.size(); ++i) {
     if (!predicted.inactive[i]) continue;
     const double angle = predicted.rotation_angle + i * 2 * kPi / 5;
-    const Eigen::Vector3d local(0, -kRuneGlobalRadius * std::sin(angle),
-                                kRuneGlobalRadius * std::cos(angle));
+    const Eigen::Vector3d local(0, -predicted.target_radius * std::sin(angle),
+                                predicted.target_radius * std::cos(angle));
     return predicted.center +
            Eigen::AngleAxisd(predicted.face_yaw, Eigen::Vector3d::UnitZ()) * local;
   }

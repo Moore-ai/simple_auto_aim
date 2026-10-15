@@ -8,10 +8,10 @@ namespace auto_buff_v2
 {
 namespace
 {
-Eigen::Vector3d blade_position(const Eigen::VectorXd & x)
+Eigen::Vector3d blade_position(const Eigen::VectorXd & x, double radius, double pitch)
 {
   return tools::ypd2xyz(Eigen::Vector3d(x[0], x[2], x[3])) +
-    tools::rotation_matrix(Eigen::Vector3d(x[4], 0, x[5])) * Eigen::Vector3d(0, 0, 0.7);
+    tools::rotation_matrix(Eigen::Vector3d(x[4], pitch, x[5])) * Eigen::Vector3d(0, 0, radius);
 }
 }  // namespace
 
@@ -20,11 +20,20 @@ void SPTracker::initialize(const SPRuneObservation & observation, double elapsed
   last_time_ = elapsed;
   const int size = big_rune_ ? 10 : 7;
   Eigen::VectorXd x = Eigen::VectorXd::Zero(size);
-  x.head<7>() << observation.ypd_in_world[0], 0, observation.ypd_in_world[1],
-    observation.ypd_in_world[2], observation.ypr_in_world[0], observation.ypr_in_world[2],
-    big_rune_ ? config_.initial_big_speed : direction() * config_.initial_small_speed;
+  const Eigen::Vector3d center_ypd = !big_rune_ &&
+    observation.detected_r_in_world.norm() > 1e-6 ?
+    tools::xyz2ypd(observation.detected_r_in_world) : observation.ypd_in_world;
+  x.head<7>() << center_ypd[0], 0, center_ypd[1], center_ypd[2],
+    observation.ypr_in_world[0], observation.ypr_in_world[2],
+    big_rune_ ? config_.initial_big_speed :
+      (direction() == 0 ? 1 : direction()) * config_.initial_small_speed;
   Eigen::MatrixXd P = Eigen::MatrixXd::Identity(size, size) * config_.initial_covariance;
   if (big_rune_) {
+    if (slot_ < 0) slot_ = (static_cast<int>(std::round(x[5] / (kSPSlotAngle))) % 5 + 5) % 5;
+    last_canonical_ = tools::limit_rad(x[5] + slot_ * kSPSlotAngle);
+    unwrapped_phase_ = last_canonical_ - slot_ * kSPSlotAngle;
+    phase_initialized_ = true;
+    x[5] = unwrapped_phase_;
     x.tail<3>() << config_.initial_amplitude, config_.initial_frequency, config_.initial_phase;
     P(6, 6) = config_.big_speed_covariance;
     P(9, 9) = config_.big_phase_covariance;
@@ -64,6 +73,11 @@ void SPTracker::predict(double dt)
     Q(5, 5) = config_.big_rotation_angle_noise;
     Q(6, 6) = config_.big_rotation_speed_noise;
     Q(9, 9) = config_.big_phase_noise;
+  } else {
+    const double v = config_.small_rotation_acceleration_noise;
+    Q(5, 5) = std::pow(dt, 4) / 4 * v;
+    Q(5, 6) = Q(6, 5) = std::pow(dt, 3) / 2 * v;
+    Q(6, 6) = dt * dt * v;
   }
   const auto transition = [&](const Eigen::VectorXd & x) -> Eigen::VectorXd {
     Eigen::VectorXd result = x;
@@ -72,8 +86,8 @@ void SPTracker::predict(double dt)
       const double a = x[7], w = x[8], phi = x[9];
       result[5] = x[5] + direction() *
         (-a / w * std::cos(w * time + phi) + a / w * std::cos(w * last_time_ + phi) +
-         (2.09 - a) * dt);
-      result[6] = a * std::sin(w * time + phi) + 2.09 - a;
+         (config_.speed_baseline - a) * dt);
+      result[6] = a * std::sin(w * time + phi) + config_.speed_baseline - a;
     } else {
       result[5] = x[5] + dt * x[6];
     }
@@ -83,11 +97,28 @@ void SPTracker::predict(double dt)
   ekf_.predict(F, Q, transition);
 }
 
+void SPTracker::set_slot(int slot)
+{
+  if (slot < 0 || slot >= 5) return;
+  if (initialized_ && phase_initialized_ && slot_ >= 0 && slot != slot_) {
+    const double canonical = ekf_.x[5] + slot_ * kSPSlotAngle;
+    ekf_.x[5] = canonical - slot * kSPSlotAngle;
+    unwrapped_phase_ = ekf_.x[5];
+    last_canonical_ = tools::limit_rad(canonical);
+  }
+  slot_ = slot;
+}
+
 void SPTracker::reset()
 {
-  // Legacy reinitialization retains the clock and direction votes.
   initialized_ = false;
+  predicted_ = false;
   lost_count_ = 0;
+  direction_votes_ = 0;
+  start_timestamp_.reset();
+  last_time_ = 0;
+  slot_ = -1;
+  phase_initialized_ = false;
 }
 
 bool SPTracker::update(const SPRuneObservation & observation, Timestamp timestamp)
@@ -95,51 +126,86 @@ bool SPTracker::update(const SPRuneObservation & observation, Timestamp timestam
   return update(std::optional<SPRuneObservation>(observation), timestamp);
 }
 
-bool SPTracker::update(const std::optional<SPRuneObservation> & observation, Timestamp timestamp)
+bool SPTracker::update(const std::optional<SPRuneObservation> & input, Timestamp timestamp)
 {
-  if (!observation) {
-    ++lost_count_;
-    return false;
-  }
   if (!start_timestamp_) start_timestamp_ = timestamp;
   const double elapsed = std::chrono::duration<double>(timestamp - *start_timestamp_).count();
+  const double dt = elapsed - last_time_;
+  if (dt < 0 || (initialized_ && dt >= config_.max_prediction_gap)) {
+    reset();
+    if (!input) return false;
+    return update(input, timestamp);
+  }
+  auto observation = input;
+  if (observation && (!observation->ypd_in_world.allFinite() ||
+      !observation->ypr_in_world.allFinite() || !observation->blade_ypd_in_world.allFinite() ||
+      observation->ypd_in_world[2] <= config_.min_depth)) observation.reset();
+  if (!observation) {
+    if (!initialized_ || lost_count_ >= config_.max_lost_frames) {
+      reset();
+      return false;
+    }
+    predict(dt);
+    last_time_ = elapsed;
+    ++lost_count_;
+    predicted_ = true;
+    return ekf_.x.allFinite() && ekf_.P.allFinite();
+  }
   if (!initialized_) initialize(*observation, elapsed);
-  if (lost_count_ > config_.max_lost_frames) {
+  if (!correct(*observation, elapsed)) {
     reset();
     return false;
   }
-  correct(*observation, elapsed);
-  if (!big_rune_ &&
-      (std::abs(ekf_.x[6]) > config_.initial_small_speed + config_.small_speed_tolerance ||
-       std::abs(ekf_.x[6]) < config_.initial_small_speed - config_.small_speed_tolerance)) {
+  lost_count_ = 0;
+  predicted_ = false;
+  if (!ekf_.x.allFinite() || !ekf_.P.allFinite() || ekf_.x[3] <= 0 ||
+      (!big_rune_ && std::abs(std::abs(ekf_.x[6]) - config_.initial_small_speed) >
+        config_.small_speed_tolerance) ||
+      (big_rune_ && (std::abs(ekf_.x[6]) > config_.big_speed_limit ||
+       ekf_.x[7] > config_.amplitude_max * config_.divergence_factor ||
+       ekf_.x[7] < config_.amplitude_min / config_.divergence_factor ||
+       ekf_.x[8] > config_.frequency_max * config_.divergence_factor ||
+       ekf_.x[8] < config_.frequency_min / config_.divergence_factor))) {
+    // 当前帧发散时，不向下游瞄准模块输出该帧状态。
     initialized_ = false;
     return false;
-  }
-  if (big_rune_ &&
-      (ekf_.x[7] > 1.045 * config_.divergence_factor ||
-       ekf_.x[7] < 0.78 / config_.divergence_factor ||
-       ekf_.x[8] > 2.0 * config_.divergence_factor ||
-       ekf_.x[8] < 1.884 / config_.divergence_factor)) {
-    // BigTarget exposes this frame, then initializes on the next observation.
-    initialized_ = false;
   }
   return true;
 }
 
-void SPTracker::correct(const SPRuneObservation & observation, double elapsed)
+bool SPTracker::correct(const SPRuneObservation & observation, double elapsed)
 {
-  const double roll = observation.ypr_in_world[2];
-  if (std::abs(roll - ekf_.x[5]) > CV_PI / 12) {
+  double roll = observation.ypr_in_world[2];
+  if (big_rune_ && phase_initialized_) {
+    const double canonical = tools::limit_rad(roll + slot_ * kSPSlotAngle);
+    unwrapped_phase_ += tools::limit_rad(canonical - last_canonical_);
+    last_canonical_ = canonical;
+    roll = unwrapped_phase_;
+  }
+  if (std::abs(roll - ekf_.x[5]) > config_.phase_switch_threshold) {
     for (int i = -5; i <= 5; ++i) {
-      if (std::abs(ekf_.x[5] + i * 2 * CV_PI / 5 - roll) < CV_PI / 5) {
-        ekf_.x[5] += i * 2 * CV_PI / 5;
+      if (std::abs(ekf_.x[5] + i * kSPSlotAngle - roll) < config_.phase_match_tolerance) {
+        ekf_.x[5] += i * kSPSlotAngle;
         break;
       }
     }
   }
-  if (std::abs(direction_votes_) <= 50) direction_votes_ += ekf_.x[5] > roll ? -1 : 1;
-  if (!big_rune_ && direction() * ekf_.x[6] < 0) ekf_.x[6] *= -1;
+  const double delta = tools::limit_rad(roll - ekf_.x[5]);
+  if (std::abs(direction_votes_) <= config_.direction_vote_limit &&
+      std::abs(delta) <= config_.direction_vote_max_delta)
+    direction_votes_ += delta < 0 ? -1 : 1;
+  if (!big_rune_ && std::abs(direction_votes_) >= config_.direction_vote_min_count &&
+      direction() * ekf_.x[6] < 0)
+    ekf_.x[6] *= -1;
   predict(elapsed - last_time_);
+
+  const Eigen::Vector3d center_ypd = !big_rune_ &&
+    observation.detected_r_in_world.norm() > 1e-6 ?
+    tools::xyz2ypd(observation.detected_r_in_world) : observation.ypd_in_world;
+  if (std::abs(tools::limit_rad(center_ypd[0] - ekf_.x[0])) > config_.max_center_angle_residual ||
+      std::abs(tools::limit_rad(center_ypd[1] - ekf_.x[2])) > config_.max_center_angle_residual ||
+      std::abs(center_ypd[2] - ekf_.x[3]) > config_.max_center_distance_residual ||
+      std::abs(tools::limit_rad(roll - ekf_.x[5])) > config_.max_roll_residual) return false;
 
   Eigen::MatrixXd H = Eigen::MatrixXd::Zero(4, ekf_.x.size());
   H(0, 0) = H(1, 2) = H(2, 3) = H(3, 5) = 1;
@@ -147,7 +213,7 @@ void SPTracker::correct(const SPRuneObservation & observation, double elapsed)
   R.diagonal() << config_.observation_yaw, config_.observation_pitch,
     config_.observation_distance, config_.observation_rotation_angle;
   Eigen::Vector4d z;
-  z << observation.ypd_in_world, observation.ypr_in_world[2];
+  z << center_ypd, roll;
   const auto subtract_pose = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b)
     -> Eigen::VectorXd {
     Eigen::VectorXd result = a - b;
@@ -156,22 +222,33 @@ void SPTracker::correct(const SPRuneObservation & observation, double elapsed)
   };
   ekf_.update(z, H, R, subtract_pose);
 
-  const Eigen::MatrixXd Hb = blade_jacobian();
-  Eigen::Matrix3d Rb = Eigen::Matrix3d::Zero();
-  Rb.diagonal() << config_.observation_yaw, config_.observation_pitch,
-    config_.observation_distance;
-  const auto observe_blade = [](const Eigen::VectorXd & x) -> Eigen::VectorXd {
-    return tools::xyz2ypd(blade_position(x));
-  };
-  const auto subtract_blade = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b)
-    -> Eigen::VectorXd {
-    Eigen::VectorXd result = a - b;
-    result[0] = tools::limit_rad(result[0]);
-    result[1] = tools::limit_rad(result[1]);
-    return result;
-  };
-  ekf_.update(observation.blade_ypd_in_world, Hb, Rb, observe_blade, subtract_blade);
+  if (big_rune_) {
+    observed_pitch_ = observation.ypr_in_world[1];
+    const Eigen::MatrixXd Hb = blade_jacobian();
+    Eigen::Matrix3d Rb = Eigen::Matrix3d::Zero();
+    Rb.diagonal() << config_.blade_observation_yaw, config_.blade_observation_pitch,
+      config_.blade_observation_distance;
+    const auto observe_blade = [&](const Eigen::VectorXd & x) -> Eigen::VectorXd {
+      return tools::xyz2ypd(blade_position(x, config_.target_radius, observed_pitch_));
+    };
+    const auto subtract_blade = [](const Eigen::VectorXd & a, const Eigen::VectorXd & b)
+      -> Eigen::VectorXd {
+      Eigen::VectorXd result = a - b;
+      result[0] = tools::limit_rad(result[0]);
+      result[1] = tools::limit_rad(result[1]);
+      return result;
+    };
+    ekf_.update(observation.blade_ypd_in_world, Hb, Rb, observe_blade, subtract_blade);
+    ekf_.x[0] = center_ypd[0];
+    ekf_.x[2] = center_ypd[1];
+    ekf_.x[3] = center_ypd[2];
+  }
+  // 与上游一致，在运动状态和协方差校正后，仅锚定位姿分量。
+  ekf_.x[4] = observation.ypr_in_world[0];
+  ekf_.x[5] = big_rune_ ? roll : observation.ypr_in_world[2];
+  observed_pitch_ = observation.ypr_in_world[1];
   last_time_ = elapsed;
+  return true;
 }
 
 Eigen::MatrixXd SPTracker::blade_jacobian() const
@@ -185,10 +262,11 @@ Eigen::MatrixXd SPTracker::blade_jacobian() const
   const double cr = std::cos(x[5]), sr = std::sin(x[5]);
   Eigen::Matrix<double, 3, 5> H2;
   // clang-format off
-  H2 << 1, 0, 0, 0.7 * cy * sr,  0.7 * sy * cr,
-        0, 1, 0, 0.7 * sy * sr, -0.7 * cy * cr,
-        0, 0, 1,              0,        -0.7 * sr;
+  H2 << 1, 0, 0, config_.target_radius * cy * sr,  config_.target_radius * sy * cr,
+        0, 1, 0, config_.target_radius * sy * sr, -config_.target_radius * cy * cr,
+        0, 0, 1,              0,        -config_.target_radius * sr;
   // clang-format on
-  return tools::xyz2ypd_jacobian(blade_position(x)) * H2 * H1 * H0;
+  return tools::xyz2ypd_jacobian(blade_position(x, config_.target_radius, observed_pitch_)) *
+         H2 * H1 * H0;
 }
 }  // namespace auto_buff_v2
