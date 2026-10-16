@@ -1,241 +1,67 @@
-# simple_auto_aim 环境配置
+# simple_auto_aim
 
-## 1 项目环境
+RoboMaster 自瞄与打符程序，支持普通装甲板、前哨站、小能量机关和大能量机关。
+统一入口为 `src/standard.cpp`，通过串口与下位机通信，通过 Foxglove 查看图像与运行数据。
 
-- 操作系统：Ubuntu 22.04
-- 运算平台：NUC12WSKI7（i7-1260P，16GB）
-- 相机型号：海康 MV-CS016-10UC
-- 镜头型号：海康官方 6mm 镜头
-- 下位机型号：RoboMaster 开发板 C 型（STM32F407）
-- IMU 型号：C 板内置 BMI088
-- 通信方式：USB2CAN 或 MicroUSB 虚拟串口
+## 1. 环境配置
 
-## 2 依赖安装
+环境配置参考 [同济大学 SuperPower 的 sp_vision_25](https://github.com/TongjiSuperPower/sp_vision_25#32-编译方式)，并按本仓库当前依赖调整。
 
-### 2.1 第三方 SDK
+### 系统与依赖
 
-根据相机型号安装以下 SDK 之一：
-
-- [MindVision SDK](https://mindvision.com.cn/category/software/sdk-installation-package/)
-- [HikRobot SDK](https://www.hikrobotics.com/cn2/source/support/software/MVS_STD_GML_V2.1.2_231116.zip)
-
-安装以下库：
-
-- [OpenVINO](https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html)
-- [Ceres Solver](http://ceres-solver.org/installation.html)
-
-### 2.2 系统软件包
+使用 Ubuntu 22.04，支持 x86_64 和 ARM64。WSL 开发时，运行实机程序需要先将相机和串口设备接入上位机。
 
 ```bash
+sudo apt update
 sudo apt install -y \
     git \
     g++ \
     cmake \
-    can-utils \
     libopencv-dev \
     libfmt-dev \
     libeigen3-dev \
     libspdlog-dev \
     libyaml-cpp-dev \
     libusb-1.0-0-dev \
+    libcurl4-openssl-dev \
     nlohmann-json3-dev \
     openssh-server \
     screen
 ```
 
-## 3 编译与运行
+根据使用的工业相机安装对应 SDK：
 
-在项目根目录执行：
+- [海康 HikRobot SDK](https://www.hikrobotics.com/cn2/service/download/)
+- [迈德威 MindVision SDK](https://mindvision.com.cn/category/software/sdk-installation-package/)
 
-```bash
-cmake -S . -B build
-cmake --build build --parallel 1
-```
+另需安装 [OpenVINO Runtime](https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html)。
+当前 CMake 中的 `OpenVINO_DIR` 指向 `/usr/local/runtime/cmake`；若安装路径不同，需同步修改
+顶层和 `tasks/auto_aim/CMakeLists.txt` 中的路径。
 
-运行自瞄或打符：
+Foxglove SDK 已包含在 `thirdparty/foxglove_x64` 和 `thirdparty/foxglove_arm64`，构建时会自动选择对应架构，无需手动设置。
 
-```bash
-./build/standard configs/standard.yaml --mode=0 # 自瞄
-./build/standard configs/standard.yaml --mode=1 # 小符
-./build/standard configs/standard.yaml --mode=2 # 大符
-```
+### 串口权限与固定设备名（可选）
 
-打符瞄准器由 `buff_v2.aimer.type` 选择，独立于检测器和 `buff_v2.planner_mode`，两种 planner
-均支持两种 aimer。实现位于 `tasks/auto_buff_v2/aimers/`，通过 `RuneAimer` 接口和工厂创建。
-默认 `njust` 保留现有迭代弹道解算与开火窗口，专属参数位于 `buff_v2.aimer.njust`：
-`shoot_delay`、`rune_idle_duration`、`rune_shoot_duration`（秒）以及
-`yaw_tolerance`、`pitch_tolerance`（米），由 `NjustRuneAimer::Config` 解析。
-`climber` 适配 `Climber_Vision_26/tasks/auto_buff/buff_aimer.*`，支持
-两次飞行时间解算（允许 30 ms 差值）、切叶时持续控制并抑制开火，以及定时开火。
-MPC 差分采样分别从原始状态向前和向后预测，不修改模型状态；预测帧保留控制但禁止开火。
-专属参数位于 `buff_v2.aimer.climber`：`predict_time` 为额外预测时间，`fire_gap_time` 为开火间隔，
-单位均为秒。
-弹速低于 10 或高于 28 m/s 时回退到 24 m/s。
-
-打符弹道由 `buff_v2.aimer.ballistic.type` 独立选择，支持 `njust`、`vacuum` 和 `climber`，
-两个 aimer 均使用所选弹道解算器。`buff_v2.aimer.ballistic.njust.air_resistance` 为南理工二次阻力系数；
-`buff_v2.aimer.ballistic.climber.air_resistance_k` 为常州大学线性阻力系数（s⁻¹），0 使用真空弹道。
-常州大学实现位于 `tools/ballistic_solver.cpp`，保留原来的
-±60° 低弧限制、128 段寻根、60 次二分求解及重力常数。Climber aimer 搭配 `climber`
-弹道即可保留原来的解算行为。自瞄读取根层的 `ballistic_model`、`njust_air_resistance` 和 `climber_air_resistance_k`，
-修改它们不会影响打符弹道；示例配置选用 `vacuum`，保持当前运行配置的解算结果。
-
-打符状态模型由 `buff_v2.model.type` 独立选择，默认 `njust`。接口和工厂位于
-`tasks/auto_buff_v2/models/`：`RuneModel` 为抽象接口，`NjustRuneModel` 保留原 v2
-五叶重投影 EKF 和加权运动拟合；`SPRuneModel` 移植旧 `auto_buff` 的小符 7 维、
-大符 10 维球坐标 EKF，包含方向投票、扇叶切换补偿和大符正弦积分预测。
-SP 的 PnP 解算、EKF 跟踪和 v2 状态适配分别由 solver、tracker、model 负责，
-不链接旧检测器或旧瞄准器。切换方式：
-
-```yaml
-buff_v2:
-  model:
-    type: sp # njust 或 sp；省略时使用 njust
-```
-
-两种模型共用 `RuneEstimate`、现有 planner/aimer 和 Foxglove 重投影接口；
-SP 的中心方位角速度随状态快照传递，规划预测继续外推中心位置。
-Njust 的 `prediction_method`、`motion_fit`、像素 EKF 噪声和初始化参数位于
-`buff_v2.model.njust`。SP 的累计丢帧阈值、大小符过程噪声、球坐标观测噪声、初始状态及协方差、
-发散阈值位于 `buff_v2.model.sp`，完整默认值见 `configs/standard.yaml`。
-每种模型负责解析自己的配置，未选择的模型参数不影响运行；旧 `buff_v2` 根层模型参数不再读取。
-SP 保留 127 mm 平面靶心半径、700 mm 符臂尺寸。
-SP 每帧选择一个未激活靶心作为第零叶；Njust 继续进行五叶多候选关联。
-SP 默认参数的状态更新以 `bdc4e2023eb588b89644ecd16ab49e1f525d6fe5` 的
-`SmallTarget`/`BigTarget` 为基准：首帧执行完整更新，累计丢帧超过 6 次后重获帧不输出，
-下一帧重新初始化并保留方向投票和时间原点。小符发散帧不输出；大符发散帧仍输出，
-下一帧重新初始化。SP 没有 Njust 的 3 秒/6 秒瞄准预热，且不再读取 `model.sp.timeout_seconds`。
-
-打符检测器由 `buff_v2.detector.type` 选择，默认 `njust`；设置为 `climber` 可使用移植自
-`Climber_Vision_26` 的 `ClimberRuneDetector`，参数位于 `buff_v2.detector.climber`。
-随仓库提供的 `assets/buff_repvgg.xml` / `.bin` 为该源项目模型，默认使用 CPU 推理，
-可通过 `buff_v2.detector.climber.device` 选择设备。预处理尺寸从模型输入 FP32 `[1,3,H,W]`
-读取（附带模型为 640×640），输出为 `[1,33,N]`（红/蓝两类、9 点关键点）。
-`buff_v2.detector.climber.max_bullseyes` 设置未激活靶心输出上限，可选 1 或 2，默认 2；
-同时输出一个细化后的 R 标。五叶关联和丢失处理交给
-`RuneModel`，小符和大符共用多候选检测。颜色直接遵循主入口传入的检测颜色，
-可用 `--target-color=red` 或 `--target-color=blue` 指定。
-
-设置 `buff_v2.detector.type: szu` 可使用深圳大学 `RP-26Rune` / `RuneDetectionModel`
-移植的 `SzuRuneDetector`，专属参数位于 `buff_v2.detector.szu`。附带模型为
-`assets/szu_rune.onnx`，使用 OpenVINO 推理，支持 `[1,18,N]` / `[1,N,18]`
-三类状态、五点输出。检测过程包含居中 letterbox、关键点置信度筛选、距离 NMS、
-敌方颜色差分和靶心/R 标轮廓精修；颜色同样由 `--target-color` 或云台反馈指定。
-未激活类别输出 `active=false`，小符/大符已激活类别均输出 `active=true`。
-仅发布同时通过靶心和 R 标轮廓验证的候选，缺失或错误颜色的轮廓不会退回网络点。
-三维解算和跟踪继续使用 `RuneModel`；没有引入源项目的 `PowerRunePlane` 优化链路。
-
-使用 `buff_v2.detector.type: climber` 时，`standard` 的 `/image` 用蓝色绘制网络候选的边框、
-六个关键点（上、左、下、右、靶心、R 标）和 `#编号: 置信度`。候选为置信度筛选及 NMS 后、
-靶心去重和数量限制前的全部结果；绿色仍表示最终检测，黄色表示模型重投影。
-编号仅对应当前帧，不代表跨帧跟踪 ID。
-`/buff_v2/climber/refine_center_contours` 发布与 `/image` 同尺寸的白底图片，用黑色轮廓线
-绘制 `ClimberRuneDetector::refine_center()` 中二值化、膨胀及 R 标圆形掩膜处理后提取的
-全部 contours。无轮廓时发布纯白图；时间戳及发布频率与 `/image` 一致。
-
-标定可执行文件：
+将当前用户加入 `dialout` 组，注销并重新登录后生效：
 
 ```bash
-./build/capture -c configs/calibration.yaml -o assets/img_with_q
-./build/calibrate_camera -c configs/calibration.yaml assets/img_with_q
-./build/calibrate_handeye -c configs/calibration.yaml assets/img_with_q
+sudo usermod -a -G dialout "$USER"
 ```
 
-## 4 开机自启
-
-确保已安装 `screen`：
-
-```bash
-sudo apt install screen
-```
-
-创建自启文件：
-
-```bash
-mkdir -p ~/.config/autostart/
-touch ~/.config/autostart/simple_auto_aim.desktop
-```
-
-写入以下内容。`Exec` 必须使用项目的绝对路径：
-
-```ini
-[Desktop Entry]
-Type=Application
-Exec=/home/rm/Desktop/simple_auto_aim/autostart.sh
-Name=simple_auto_aim
-```
-
-授予启动脚本执行权限：
-
-```bash
-chmod +x autostart.sh
-```
-
-## 5 USB2CAN 设置（可选）
-
-创建 udev 规则文件：
-
-```bash
-sudo touch /etc/udev/rules.d/99-can-up.rules
-```
-
-写入：
-
-```udev
-ACTION=="add", KERNEL=="can0", RUN+="/sbin/ip link set can0 up type can bitrate 1000000"
-ACTION=="add", KERNEL=="can1", RUN+="/sbin/ip link set can1 up type can bitrate 1000000"
-```
-
-## 6 GPU 推理（可选）
-
-以下示例安装 Intel GPU 运行时依赖：
-
-```bash
-mkdir -p neo
-cd neo
-
-wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.13463.18/intel-igc-core_1.0.13463.18_amd64.deb
-wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.13463.18/intel-igc-opencl_1.0.13463.18_amd64.deb
-wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-level-zero-gpu-dbgsym_1.3.25812.14_amd64.ddeb
-wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-level-zero-gpu_1.3.25812.14_amd64.deb
-wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-opencl-icd-dbgsym_23.09.25812.14_amd64.ddeb
-wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-opencl-icd_23.09.25812.14_amd64.deb
-wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/libigdgmm12_22.3.0_amd64.deb
-wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/ww09.sum
-
-sha256sum -c ww09.sum
-sudo dpkg -i *.deb
-```
-
-使用 GPU 异步推理（`async-infer`）时，最高显示分辨率限制为 1920×1080（24 Hz）。
-
-## 7 串口设置
-
-将当前用户加入 `dialout` 组：
-
-```bash
-sudo usermod -a -G dialout $USER
-```
-
-获取设备信息（将设备名替换为实际端口）：
+可直接在配置中使用 `/dev/ttyACM0` 等设备名。如需固定为 `/dev/gimbal`，先查询实际设备信息：
 
 ```bash
 udevadm info -a -n /dev/ttyACM0 | grep -E '({serial}|{idVendor}|{idProduct})'
-```
-
-创建规则文件：
-
-```bash
 sudo touch /etc/udev/rules.d/99-usb-serial.rules
 ```
 
-写入规则，并将示例 ID 替换为实际值：
+在规则文件中写入以下内容，将示例 ID 替换为查询结果：
 
 ```udev
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1234", ATTRS{idProduct}=="1234", ATTRS{serial}=="A1234567", SYMLINK+="gimbal"
 ```
 
-重新加载规则并检查软链接：
+加载规则并检查设备：
 
 ```bash
 sudo udevadm control --reload-rules
@@ -243,115 +69,134 @@ sudo udevadm trigger
 ls -l /dev/gimbal
 ```
 
-## 8 手眼标定
+使用固定设备名时，将 `configs/standard.yaml` 的 `com_port` 改为 `/dev/gimbal`。
 
-本机
-```powershell
-$env:DISPLAY = "127.0.0.1:0.0"
-ssh -Y hfut@192.168.xxx.xx
-```
-进入远程后
-```bash
-cd ~/simple_auto_aim
-./build/capture
-```
+## 2. 构建与运行
 
-## 9 buff_v2 Njust R 标检测调试
-
-此程序仅适用于 Njust 检测器，配置必须设置 `buff_v2.detector.type: njust`。
-选择其他检测器时会在连接相机和串口前报错退出。
-
-独立入口为 `src/buff_v2_njust_r_detector_debug.cpp`。它复用 `standard` 的相机、云台反馈、
-`BuffConfig`、颜色选择、`FrameCapture`、`NjustRuneDetector` 和 Foxglove SDK。
-调试处理和发布分别封装在 `tools/njust_buff_detector_debug.*` 的 `NjustBuffDetectorDebug` 和
-`NjustBuffDetectorDebugVisualizer` 中，仅两个调试目标链接此模块。
-调试入口仅运行检测，不启动状态估计、云台规划或发射线程。
+在仓库根目录执行：
 
 ```bash
 cmake -S . -B build
-cmake --build build --target buff_v2_njust_r_detector_debug -j2
+cmake --build build --target standard -j2
+```
+
+运行前，先检查 `configs/standard.yaml` 中的相机、串口、模型路径及标定参数。
+以下示例由下位机反馈决定目标颜色：
+
+```bash
+./build/standard configs/standard.yaml --mode=0 --target-color=none # 自瞄与前哨站
+./build/standard configs/standard.yaml --mode=1 --target-color=none # 小符
+./build/standard configs/standard.yaml --mode=2 --target-color=none # 大符
+```
+
+`--target-color` 为必填参数：`red` 检测红色目标，`blue` 检测蓝色目标，`none` 使用下位机反馈。
+例如固定检测蓝色小符：
+
+```bash
+./build/standard configs/standard.yaml --mode=1 --target-color=blue
+```
+
+使用 `./build/standard --help` 查看命令行说明。
+
+## 3. 相机与手眼标定
+
+标定使用 [configs/calibration.yaml](configs/calibration.yaml)，请先检查其中的相机与标定板参数。
+
+```yaml
+# 对称圆点阵标定板
+pattern_cols: 11
+pattern_rows: 8
+center_distance_mm: 20
+```
+
+流程为先启动./build/capture采集图片，然后用./build/calibrate_camera标定相机或者./build/calibrate_handeye手眼标定。手眼标定程序可能存在问题，几次标定的外参里 t_gimbal_to_camera 总是接近零，因此建议直接从机械结构获取此变换
+
+```bash
+cmake --build build --target capture calibrate_camera calibrate_handeye -j2
+
+# 采集图像与云台姿态
+./build/capture -c configs/calibration.yaml -o assets/img_with_q
+
+# 相机内参标定
+./build/calibrate_camera -c configs/calibration.yaml assets/img_with_q
+
+# 手眼标定
+./build/calibrate_handeye -c configs/calibration.yaml assets/img_with_q
+```
+
+完成后，将相机内参、畸变和手眼外参更新到 `configs/standard.yaml`。
+当前使用 `camera2gimbal_mode: xyz_ypr`；若使用标定输出的矩阵外参，改为 `matrix`，
+并填写 `R_camera2gimbal` 和 `t_camera2gimbal`。
+
+## 4. Foxglove 调试
+
+开启 `foxglove.enable`，启动程序后，在 Foxglove 中建立 WebSocket 连接：
+
+```text
+ws://localhost:8765
+```
+
+远程连接时，将 `localhost` 替换为运行程序的主机 IP。
+Image 面板可选择 `/image_raw`（原始图像）、`/image_detection`（检测图像）和 `/image`（运行标注）。
+Plot 面板可选择目标状态、规划和云台相关数据。
+
+### Njust 检测专用入口
+
+这部分主要用于调试南京理工的纯传统大符检测器，**效果不好不打算使用，可以跳过**
+
+两个调试程序分别查看 R 标和靶心检测，仅运行检测与数据发布。
+使用前将 `buff_v2.detector.type` 改为 `njust`，并开启 `foxglove.enable`。
+
+```bash
+cmake --build build --target buff_v2_njust_r_detector_debug buff_v2_njust_bullseye_detector_debug -j2
+
+# R 标检测
 ./build/buff_v2_njust_r_detector_debug configs/standard.yaml --mode=1 --target-color=blue
-```
 
-`--mode=2` 对应大符模式；两个模式的检测过程和参数相同。`--target-color=red` 检测红色，`--target-color=none`
-由下位机反馈决定颜色，与主入口相同。检测参数直接读取同一份配置中的相机内参和
-`buff_v2.detector.njust` 下的检测参数，无需维护第二份参数。配置中的 `foxglove.enable` 需要开启。
-
-在 Foxglove 中连接 `ws://localhost:8765`，新增 Plot 面板并添加以下路径：
-
-| 数据 | 路径 | 单位 |
-| --- | --- | --- |
-| 当前帧轮廓半径 | `/buff_v2/njust/detector.candidates[:].radius` | 像素 |
-| 靶心半径下限 | `/buff_v2/njust/detector.min_radius` | 像素 |
-| 靶心半径上限 | `/buff_v2/njust/detector.max_radius` | 像素 |
-| 当前帧轮廓面积 | `/buff_v2/njust/detector.candidates[:].area` | 像素² |
-| R 标面积下限 | `/buff_v2/njust/detector.min_icon_area` | 像素² |
-| R 标面积上限 | `/buff_v2/njust/detector.max_icon_area` | 像素² |
-| R 标骨架得分 | `/buff_v2/njust/detector.icon_scores[:].score` | 无量纲 |
-| R 标匹配阈值 | `/buff_v2/njust/detector.match_threshold` | 无量纲 |
-| 骨架端点数量 | `/buff_v2/njust/detector.icon_scores[:].endpoints` | 个 |
-| 骨架下半部分端点数量 | `/buff_v2/njust/detector.icon_scores[:].lower_endpoints` | 个 |
-| 骨架分支像素数量 | `/buff_v2/njust/detector.icon_scores[:].branches` | 个 |
-| 最大外轮廓内部孔洞数量 | `/buff_v2/njust/detector.icon_scores[:].holes` | 个 |
-
-建议分别建立半径图和面积图。用 `candidates[0].radius` 等路径可以只查看某个编号。
-得分图中同时添加 `icon_scores[:].score` 和 `match_threshold`，比较得分与配置阈值。
-`icon_scores` 记录所有进入骨架评分阶段的候选，包括低于阈值、未识别成功的候选；
-未进入评分阶段的轮廓不会产生得分。每项同时包含 `center_x`、`center_y`，
-其数组下标独立于成功识别的 `candidates`，且不代表跨帧跟踪 ID。
-骨架判定要求 `endpoints >= 1`、`lower_endpoints >= 1`、`8 <= branches <= 50`、
-`holes <= 2`。`branches` 统计邻居数量至少为 3 的骨架像素。
-若骨架连通分量检查提前拒绝候选，尚未计算的这四个计数为 0，得分也为 0。
-新增 Image 面板选择 `/buff_v2/njust/image`，黄色圆圈及 `#0`、`#1` 等标注对应当前帧的候选数组下标。
-检测成功的 R 标复用主链路的绿色圆圈和 `R: 得分` 标注；仅检测到 R 标、尚未建立
-完整打符模型时也会显示。此入口只标注 R 标，不发布靶心观测或联合模型重投影标注。
-`/buff_v2/njust/image_raw` 发布原始图像，`/buff_v2/njust/image` 发布带标注的图像。
-`foxglove.draw_roi: true`（默认开启）会在 `/buff_v2/njust/image` 上用同样的绿色绘制每个已识别 R 标
-用于骨架评分的局部 ROI 框；设为 `false` 可关闭。框包含轮廓外扩的 5 像素，并裁剪到图像边界。
-编号随每帧轮廓顺序变化，不代表跨帧跟踪 ID。
-
-记录点位于 `NjustRuneDetector::detect` 中计算 `radius` 和 `area` 后、形状与尺寸筛选之前，
-R 标调试封装随后按主检测器最终识别结果严格过滤，只发布通过面积、椭圆形状、
-靶心内部排除及 R 标骨架评分检查的轮廓。亮点、非 R 形状和识别失败的轮廓不进入 `candidates`；
-识别失败时候选数组为空，但尺寸阈值继续发布。
-`radius_pass` 和 `icon_area_pass` 分别表示尺寸阈值
-是否通过，不代表最终识别成功；实际识别还会检查形状、靶心分支及 R 标骨架得分。
-半径阈值属于靶心分支，R 标面积分支只在半径范围不匹配时进入。
-
-无候选时数组为空，阈值继续发布。数值数据按处理帧发布，图像受
-`foxglove.image_fps` 限制；发布队列沿用主链路的最新帧机制，客户端较慢时可能跳帧。
-`standard` 不采集这些候选诊断数据，也不创建 `/buff_v2/njust/detector` 通道。两个入口使用相同端口，应分别运行。
-
-## 10 buff_v2 Njust 靶心检测调试
-
-此程序仅适用于 Njust 检测器，配置必须设置 `buff_v2.detector.type: njust`。
-选择其他检测器时会在连接相机和串口前报错退出。
-
-独立入口为 `src/buff_v2_njust_bullseye_detector_debug.cpp`，同样复用主链路的相机、云台反馈、
-颜色选择、配置、`NjustRuneDetector` 和 Foxglove SDK，使用同一调试封装，不启动状态估计、
-规划或发射线程。
-
-```bash
-cmake -S . -B build
-cmake --build build --target buff_v2_njust_bullseye_detector_debug -j2
+# 靶心检测
 ./build/buff_v2_njust_bullseye_detector_debug configs/standard.yaml --mode=1 --target-color=blue
 ```
 
-`--mode=2` 对应大符模式（检测参数与小符一致）；`--target-color=red|blue|none` 的含义与 R 标调试入口相同。
-开启配置中的 `foxglove.enable`，连接 `ws://localhost:8765`，Image 面板选择 `/buff_v2/njust/image`。
-检测成功的靶心沿用主链路绿色圆圈和 `B: 得分` 标注，未激活靶心还会显示四个绿色角点；
-无需先建立完整打符模型。`/buff_v2/njust/image_raw` 提供原始图像。
+Image 面板选择 `/buff_v2/njust/image` 或 `/buff_v2/njust/image_raw`。
+Plot 面板常用路径：
 
-Plot 面板使用 `/buff_v2/njust/detector.candidates[:].radius`、
-`/buff_v2/njust/detector.min_radius`、`/buff_v2/njust/detector.max_radius` 比较轮廓半径和靶心尺寸范围，
-使用 `/buff_v2/njust/detector.candidates[:].area` 查看面积，
-`/buff_v2/njust/detector.candidates[:].radius_pass` 查看是否通过半径筛选。
-黄色候选标注的编号与数组下标一致，仅包含靶心分支的轮廓，包括被后续筛选拒绝的候选。
-尺寸通过后仍需满足主链路的椭圆形状、圆度和靶心特征检查。
+| 数据 | 路径 |
+| --- | --- |
+| 候选半径 | `/buff_v2/njust/detector.candidates[:].radius` |
+| 候选面积 | `/buff_v2/njust/detector.candidates[:].area` |
+| 靶心半径范围 | `/buff_v2/njust/detector.min_radius`、`/buff_v2/njust/detector.max_radius` |
+| R 标面积范围 | `/buff_v2/njust/detector.min_icon_area`、`/buff_v2/njust/detector.max_icon_area` |
+| R 标评分 | `/buff_v2/njust/detector.icon_scores[:].score` |
+| R 标评分阈值 | `/buff_v2/njust/detector.match_threshold` |
 
-靶心与 R 标仍由主链路同一个检测器联合检测，但两个调试入口分别过滤发布内容：
-靶心入口仅发布靶心候选和成功检测标注，R 标入口仅发布 R 标候选和成功检测标注。
-靶心候选按主检测器的半径分支划分；R 标候选必须通过主检测器最终的 R 标识别，
-仅半径落在靶心范围之外不足以成为 R 标观测。
-阈值读取自 `buff_v2.detector.njust`，属于 Njust 的共用检测参数，不代表另一类对象的观测。两个调试入口均不发布联合模型重投影标注。
-三个运行入口使用同一相机、串口和 Foxglove 端口，应分别运行。
+主入口与两个检测调试入口共用相机、串口和 Foxglove 端口，每次运行其中一个。
+
+## 5. 项目结构
+
+```text
+simple_auto_aim/
+├── CMakeLists.txt                # 构建配置
+├── src/
+│   ├── standard.cpp              # 自瞄与打符统一入口
+│   ├── mode_runtime.*            # 模式运行时
+│   ├── buff_v2_njust_r_detector_debug.cpp
+│   └── buff_v2_njust_bullseye_detector_debug.cpp
+├── configs/
+│   ├── standard.yaml             # 运行配置，参数说明见行尾注释
+│   └── calibration.yaml          # 标定配置
+├── tasks/
+│   ├── auto_aim/                 # 装甲板检测与目标估计
+│   │   └── planner/              # MPC 轨迹规划
+│   ├── auto_buff_v2/             # 当前打符链路
+│   │   ├── detectors/            # 检测器
+│   │   ├── models/               # 状态模型与运动预测
+│   │   ├── aimers/               # 瞄准器
+│   │   └── planners/             # 规划器
+│   └── auto_buff/                # 保留的旧打符代码（目前暂未启用）
+├── io/                           # 相机、串口与云台通信
+├── tools/                        # 弹道、滤波、日志、录像与 Foxglove 工具
+├── calibration/                  # 标定数据采集、相机与手眼标定
+├── assets/                       # 模型权重与示例素材
+├── thirdparty/                   # Foxglove SDK
+└── tests/                        # 测试与回归检查，主要由 gpt 编写
+```
