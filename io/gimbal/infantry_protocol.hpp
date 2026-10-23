@@ -21,7 +21,7 @@ constexpr uint32_t kInfantryReadTimeoutMs = 2;
 constexpr uint32_t kInfantryWriteTimeoutMs = 5;
 constexpr float kInfantryPi = 3.14159265358979323846F;
 
-// 下位机反馈模式中的目标颜色约定：0=红，1=蓝。
+// 下位机反馈 mode 为己方颜色（0=红，1=蓝），返回对应敌方颜色。
 enum class InfantryEnemyColor : uint8_t
 {
   red,
@@ -38,9 +38,9 @@ inline std::optional<InfantryEnemyColor> infantry_enemy_color(uint8_t mode)
 {
   switch (mode) {
     case 0:
-      return InfantryEnemyColor::red;
-    case 1:
       return InfantryEnemyColor::blue;
+    case 1:
+      return InfantryEnemyColor::red;
     default:
       return std::nullopt;
   }
@@ -96,10 +96,12 @@ inline uint8_t infantry_crc8(const uint8_t * data, size_t size)
 inline std::array<uint8_t, kInfantryCommandPacketSize> make_infantry_command_packet(
   bool control, InfantryFireCommand fire, float pitch_sp, float yaw_sp, float distance,
   float pitch_vel_sp,
-  float yaw_vel_sp, float pitch_acc_sp, float yaw_acc_sp, bool command_angles_in_degrees = false)
+  float yaw_vel_sp, float /*pitch_acc_sp*/, float /*yaw_acc_sp*/,
+  bool command_angles_in_degrees = false)
 {
   InfantryCommandPacket command;
-  command.fire = control ? static_cast<uint8_t>(fire) : 0;
+  command.mode = control ? static_cast<uint8_t>(fire) : 0;
+  command.target_id = control ? 0 : -1;
   command.pitch = infantry_pitch(
     infantry_angle_to_wire(finite_or_zero(pitch_sp), command_angles_in_degrees));
   command.yaw = infantry_angle_to_wire(finite_or_zero(yaw_sp), command_angles_in_degrees);
@@ -107,9 +109,6 @@ inline std::array<uint8_t, kInfantryCommandPacketSize> make_infantry_command_pac
   command.pitch_vel = infantry_pitch(
     infantry_angle_to_wire(finite_or_zero(pitch_vel_sp), command_angles_in_degrees));
   command.yaw_vel = infantry_angle_to_wire(finite_or_zero(yaw_vel_sp), command_angles_in_degrees);
-  command.pitch_acc = infantry_pitch(
-    infantry_angle_to_wire(finite_or_zero(pitch_acc_sp), command_angles_in_degrees));
-  command.yaw_acc = infantry_angle_to_wire(finite_or_zero(yaw_acc_sp), command_angles_in_degrees);
   command.crc8 = infantry_crc8(
     reinterpret_cast<const uint8_t *>(&command), offsetof(InfantryCommandPacket, crc8));
 

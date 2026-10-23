@@ -227,6 +227,12 @@ target_link_libraries(planner_anti_spin_test PRIVATE
 add_executable(gimbal_virtual_serial_test tests/gimbal_virtual_serial_test.cpp)
 target_compile_options(gimbal_virtual_serial_test PRIVATE -UNDEBUG)
 target_link_libraries(gimbal_virtual_serial_test PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)
+add_test(NAME gimbal_virtual_serial_test COMMAND gimbal_virtual_serial_test)
+set_tests_properties(gimbal_virtual_serial_test PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+add_executable(sentry_serial_protocol_test tests/sentry_serial_protocol_test.cpp)
+target_compile_options(sentry_serial_protocol_test PRIVATE -UNDEBUG)
+add_test(NAME sentry_serial_protocol_test COMMAND sentry_serial_protocol_test)
 
 add_executable(outpost_snapshot_test tests/outpost_snapshot_test.cpp)
 target_link_libraries(outpost_snapshot_test PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)

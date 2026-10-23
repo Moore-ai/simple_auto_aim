@@ -328,13 +328,12 @@ nlohmann::json detail::command_packet_values(
   const auto distance = packet.distance;
   const auto pitch_vel = packet.pitch_vel;
   const auto yaw_vel = packet.yaw_vel;
-  const auto pitch_acc = packet.pitch_acc;
-  const auto yaw_acc = packet.yaw_acc;
+  const auto target_id = packet.target_id;
   return Json{
-    {"fire", packet.fire},          {"pitch", pitch},
+    {"mode", packet.mode},          {"pitch", pitch},
     {"yaw", yaw},                   {"distance", distance},
     {"pitch_vel", pitch_vel},       {"yaw_vel", yaw_vel},
-    {"pitch_acc", pitch_acc},       {"yaw_acc", yaw_acc}};
+    {"target_id", target_id}};
 }
 
 nlohmann::json detail::feedback_packet_values(

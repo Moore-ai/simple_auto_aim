@@ -24,7 +24,7 @@ int main()
   cv::circle(image, {200, 200}, 42, {255, 0, 0}, cv::FILLED);
   const auto timestamp = std::chrono::steady_clock::now();
   tools::FrameFacts facts{timestamp, image, Eigen::Quaterniond::Identity(), {}};
-  facts.received.state.mode = static_cast<std::uint8_t>(io::InfantryEnemyColor::blue);
+  facts.received.state.mode = 0;  // 己方红色，检测蓝色目标。
 
   const auto processed = processor.process(facts);
 
@@ -39,11 +39,11 @@ int main()
   assert(processed.snapshot.buff_debug.info_anchor);
   assert(processed.snapshot.buff_debug.detections.front().label.find("active") !=
          std::string::npos);
-  facts.received.state.mode = static_cast<std::uint8_t>(io::InfantryEnemyColor::red);
+  facts.received.state.mode = 1;  // 己方蓝色，检测红色目标。
   assert(processor.process(facts).snapshot.buff_debug.detections.empty());
   facts.target_color_override = io::InfantryEnemyColor::blue;
   assert(processor.process(facts).snapshot.buff_debug.detections.size() == 1);
   facts.target_color_override = io::InfantryEnemyColor::red;
-  facts.received.state.mode = static_cast<std::uint8_t>(io::InfantryEnemyColor::blue);
+  facts.received.state.mode = 0;
   assert(processor.process(facts).snapshot.buff_debug.detections.empty());
 }

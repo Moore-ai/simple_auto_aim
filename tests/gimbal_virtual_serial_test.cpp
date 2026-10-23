@@ -88,14 +88,14 @@ int main()
       0.0F, 0.0F, 0.0F, 0.0F);
     io::InfantryCommandPacket raw_command;
     std::memcpy(&raw_command, command_packet.data(), sizeof(raw_command));
-    assert(raw_command.fire == 1);
+    assert(raw_command.mode == 1);
     assert(std::abs(raw_command.yaw - 0.3F) < 1e-6F);
 
     const auto disabled_packet = io::make_infantry_command_packet(
       false, io::InfantryFireCommand::fire, 0.0F, 0.0F, 0.0F,
       0.0F, 0.0F, 0.0F, 0.0F);
     std::memcpy(&raw_command, disabled_packet.data(), sizeof(raw_command));
-    assert(raw_command.fire == 0);
+    assert(raw_command.mode == 0);
   }
 
   {
@@ -112,13 +112,12 @@ int main()
     const auto packet = gimbal.command_with_packet().packet;
     io::InfantryCommandPacket raw_command;
     std::memcpy(&raw_command, packet.data(), sizeof(raw_command));
-    assert(raw_command.fire == 1);
+    assert(raw_command.mode == 1);
     assert(std::abs(raw_command.pitch - 0.2F * kRadToDeg) < 1e-5F);
     assert(std::abs(raw_command.yaw - 0.3F * kRadToDeg) < 1e-5F);
     assert(std::abs(raw_command.pitch_vel - 0.1F * kRadToDeg) < 1e-5F);
     assert(std::abs(raw_command.yaw_vel - 0.1F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.pitch_acc - 0.4F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.yaw_acc - 0.2F * kRadToDeg) < 1e-5F);
+    for (auto byte : raw_command.reserved) assert(byte == 0);
   }
 
   std::filesystem::remove(path);

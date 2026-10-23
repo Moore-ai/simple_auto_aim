@@ -28,9 +28,9 @@ int main()
 
   auto color_facts = facts;
   color_facts.received.state.mode = 0;
-  assert(color_facts.enemy_color() == io::InfantryEnemyColor::red);
-  color_facts.received.state.mode = 1;
   assert(color_facts.enemy_color() == io::InfantryEnemyColor::blue);
+  color_facts.received.state.mode = 1;
+  assert(color_facts.enemy_color() == io::InfantryEnemyColor::red);
   color_facts.received.state.mode = 2;
   assert(!color_facts.enemy_color());
 
