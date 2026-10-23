@@ -32,9 +32,9 @@ int main()
     assert(initial_q.coeffs().allFinite());
     const auto configured_state = gimbal.state();
     assert(configured_state.mode == 1);
-    assert(configured_state.roll == 0.1F);
-    assert(configured_state.pitch == -0.2F);
-    assert(configured_state.yaw == 0.3F);
+    assert(std::abs(configured_state.roll - (0.1F * io::kInfantryPi / 180.0F)) < 1e-6F);
+    assert(std::abs(configured_state.pitch - (-0.2F * io::kInfantryPi / 180.0F)) < 1e-6F);
+    assert(std::abs(configured_state.yaw - (0.3F * io::kInfantryPi / 180.0F)) < 1e-6F);
 
     gimbal.send(true, io::InfantryFireCommand::none, 0.3F, 0.1F, 0.0F,
                 -0.2F, 0.0F, 0.0F, 5.0F);
@@ -45,13 +45,11 @@ int main()
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
     const auto state = gimbal.state();
     assert(state.mode == 1);
-    assert(state.roll == 0.1F);
-    assert(state.pitch == -0.2F);
-    assert(state.yaw == 0.3F);
+    assert(std::abs(state.roll - (0.1F * io::kInfantryPi / 180.0F)) < 1e-6F);
+    assert(std::abs(state.pitch - (-0.2F * io::kInfantryPi / 180.0F)) < 1e-6F);
+    assert(std::abs(state.yaw - (0.3F * io::kInfantryPi / 180.0F)) < 1e-6F);
   }
 
-  config["command_angles_in_degrees"] = true;
-  config["feedback_angles_in_degrees"] = true;
   config["virtual_serial"]["feedback"]["roll"] = 10.0F;
   config["virtual_serial"]["feedback"]["pitch"] = 20.0F;
   config["virtual_serial"]["feedback"]["yaw"] = 30.0F;
@@ -64,7 +62,6 @@ int main()
   {
     const auto packet = io::make_infantry_feedback_packet(1, 10.0F, 20.0F, 30.0F);
     io::InfantryFeedbackStreamParser parser;
-    parser.set_feedback_angles_in_degrees(true);
     parser.push(packet.data(), packet.size());
     io::InfantryFeedback feedback{};
     assert(parser.pop(feedback));
@@ -81,7 +78,7 @@ int main()
     parser.push(feedback_packet.data(), feedback_packet.size());
     io::InfantryFeedback feedback{};
     assert(parser.pop(feedback));
-    assert(std::abs(feedback.yaw - 0.3F) < 1e-6F);
+    assert(std::abs(feedback.yaw - 0.0052359878F) < 1e-6F);
 
     const auto command_packet = io::make_infantry_command_packet(
       true, io::InfantryFireCommand::fire, 0.0F, 0.3F, 0.0F,
@@ -89,7 +86,7 @@ int main()
     io::InfantryCommandPacket raw_command;
     std::memcpy(&raw_command, command_packet.data(), sizeof(raw_command));
     assert(raw_command.mode == 1);
-    assert(std::abs(raw_command.yaw - 0.3F) < 1e-6F);
+    assert(std::abs(raw_command.yaw - 17.188734F) < 1e-5F);
 
     const auto disabled_packet = io::make_infantry_command_packet(
       false, io::InfantryFireCommand::fire, 0.0F, 0.0F, 0.0F,

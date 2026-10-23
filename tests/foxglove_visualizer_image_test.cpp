@@ -474,8 +474,8 @@ int main()
     -0.1F, 0.4F, -0.2F, 0.8F);
   const auto command_packet_values = tools::detail::command_packet_values(command_packet);
   assert(command_packet_values.at("mode") == 1);
-  assert(std::abs(command_packet_values.at("pitch").get<float>() - 0.5F) < 1e-6F);
-  assert(std::abs(command_packet_values.at("yaw").get<float>() - 0.2F) < 1e-6F);
+  assert(std::abs(command_packet_values.at("pitch").get<float>() - 28.64789F) < 1e-5F);
+  assert(std::abs(command_packet_values.at("yaw").get<float>() - 11.459156F) < 1e-5F);
   assert(command_packet_values.at("target_id") == 0);
   assert(!command_packet_values.contains("yaw_acc"));
   assert(!command_packet_values.contains("crc8"));

@@ -23,12 +23,12 @@ int main()
     -0.1F, 0.4F, -0.5F, 0.6F);
   assert(command.size() == 64);
   assert(command[0] == 0xFF && command[1] == 0 && command[63] == 0x0D);
-  assert(read_at<float>(command, 2) == 0.2F);
-  assert(read_at<float>(command, 6) == 0.3F);
+  assert(std::abs(read_at<float>(command, 2) - 11.459156F) < 1e-5F);
+  assert(std::abs(read_at<float>(command, 6) - 17.188734F) < 1e-5F);
   assert(read_at<float>(command, 10) == 5.0F);
   assert(read_at<int32_t>(command, 14) == 0);
-  assert(read_at<float>(command, 18) == 0.1F);
-  assert(read_at<float>(command, 22) == 0.4F);
+  assert(std::abs(read_at<float>(command, 18) - 5.729578F) < 1e-5F);
+  assert(std::abs(read_at<float>(command, 22) - 22.918312F) < 1e-5F);
   for (size_t i = 26; i < 62; ++i) assert(command[i] == 0);
   assert(command[62] == io::infantry_crc8(command.data(), 62));
   const auto firing = io::make_infantry_command_packet(
@@ -50,7 +50,9 @@ int main()
   feedback_bytes[63] = 0x0D;
   io::InfantryFeedback feedback{};
   assert(io::parse_infantry_feedback_packet(feedback_bytes.data(), feedback));
-  assert(feedback.roll == 10.0F && feedback.yaw == 30.0F && feedback.pitch == -20.0F);
+  assert(std::abs(feedback.roll - 0.17453293F) < 1e-6F);
+  assert(std::abs(feedback.yaw - 0.52359878F) < 1e-6F);
+  assert(std::abs(feedback.pitch + 0.34906585F) < 1e-6F);
   assert(io::infantry_enemy_color(feedback.mode) == io::InfantryEnemyColor::blue);
   assert(io::infantry_enemy_color(1) == io::InfantryEnemyColor::red);
   assert(!io::infantry_enemy_color(2));
@@ -65,8 +67,8 @@ int main()
   assert(!parser.pop(feedback));
   parser.push(feedback_bytes.data() + 17, feedback_bytes.size() - 17);
   parser.push(feedback_bytes.data(), feedback_bytes.size());
-  assert(parser.pop(feedback) && feedback.yaw == 30.0F);
-  assert(parser.pop(feedback) && feedback.pitch == -20.0F);
+  assert(parser.pop(feedback) && std::abs(feedback.yaw - 0.52359878F) < 1e-6F);
+  assert(parser.pop(feedback) && std::abs(feedback.pitch + 0.34906585F) < 1e-6F);
   assert(!parser.pop(feedback));
   feedback_bytes[63] = 0;
   assert(!io::parse_infantry_feedback_packet(feedback_bytes.data(), feedback));

@@ -203,15 +203,13 @@ camera2gimbal_ypr: [-0.03, 0.01, 0.0]
 com_port: "/dev/ttyACM0"           # 串口路径
 baudrate: 115200                   # 串口波特率
 bytesize: 8                        # 数据位宽
-command_angles_in_degrees: false   # false=发送 rad、rad/s；true=发送 deg、deg/s（串口包不含角加速度）
-feedback_angles_in_degrees: false  # false=反馈按 rad 解析；true=反馈按 deg 解析后转内部弧度
 virtual_serial:
   enable: false                    # 使用虚拟串口，不连接真实云台
   feedback:                        # 虚拟下位机固定发送的 Infantry 反馈包字段
     mode: 0                        # 下位机己方颜色：0=红、1=蓝
-    roll: 0.0                      # 原始反馈 roll（单位由 feedback_angles_in_degrees 决定）
-    pitch: 0.0                     # 原始反馈 pitch（单位由 feedback_angles_in_degrees 决定）
-    yaw: 0.0                       # 原始反馈 yaw（单位由 feedback_angles_in_degrees 决定）
+    roll: 0.0                      # 原始反馈 roll（度）
+    pitch: 0.0                     # 原始反馈 pitch（度）
+    yaw: 0.0                       # 原始反馈 yaw（度）
 
 #####-----规划器-----#####
 fire_thresh: 0.0035              # MPC 开火阈值（rad）：参考轨迹与规划轨迹在发射时刻的偏差 < 此值才开火
