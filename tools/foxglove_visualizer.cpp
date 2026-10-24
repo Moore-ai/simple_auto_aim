@@ -632,7 +632,7 @@ void detail::draw_buff_overlay(cv::Mat & image, const BuffDebugData & debug_data
   if (debug_data.is_buff_mode) {
     const std::string status = "Buff B:" + std::to_string(debug_data.bullseye_count) +
       "/5 R:" + std::to_string(debug_data.icon_count);
-    cv::putText(image, status, {10, 25}, cv::FONT_HERSHEY_SIMPLEX, 0.6, yellow, 2,
+    cv::putText(image, status, {10, 50}, cv::FONT_HERSHEY_SIMPLEX, 0.6, yellow, 2,
                 cv::LINE_AA);
   }
   for (const auto & detection : debug_data.detections) {
@@ -755,6 +755,7 @@ public:
   auto_buff_v2::BuffConfig::Planner buff_config;
   std::unique_ptr<BallisticSolver> buff_ballistic;
   detail::LatestFrameQueue frames;
+  std::optional<FrameSnapshot::Timestamp> last_camera_timestamp;
   std::thread worker;
   std::mutex plan_mutex;
   std::optional<std::pair<std::uint64_t, auto_aim::Plan>> latest_plan;
@@ -879,6 +880,13 @@ void FoxgloveVisualizer::update_plan(
 void FoxgloveVisualizer::publish(FrameSnapshot frame)
 {
   if (!impl_->server) return;
+  // Measure before the visualization queue and image publication rate limit.
+  if (impl_->last_camera_timestamp) {
+    const auto elapsed =
+      std::chrono::duration<double>(frame.timestamp - *impl_->last_camera_timestamp).count();
+    if (elapsed > 0) frame.camera_fps = 1.0 / elapsed;
+  }
+  impl_->last_camera_timestamp = frame.timestamp;
   impl_->frames.push(std::move(frame));
 }
 
@@ -965,11 +973,17 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
     detail::draw_aim_overlay(
       image, frame.detections.armors, impl_->enemy_color, locked_armor, anti_spin_hit_armor);
     detail::draw_buff_overlay(image, buff_debug);
+    const auto fps_text = frame.camera_fps > 0 ?
+      fmt::format("Camera FPS: {:.1f}", frame.camera_fps) : "Camera FPS: --";
+    cv::putText(image, fps_text, {10, 25}, cv::FONT_HERSHEY_SIMPLEX, 0.7,
+                {0, 0, 255}, 2, cv::LINE_AA);
 
     cv::Mat detection_image = frame.image.clone();
     detail::draw_aim_overlay(
       detection_image, frame.detections.armors, impl_->enemy_color, locked_armor,
       anti_spin_hit_armor);
+    cv::putText(detection_image, fps_text, {10, 25}, cv::FONT_HERSHEY_SIMPLEX, 0.7,
+                {0, 0, 255}, 2, cv::LINE_AA);
 
     if (impl_->image_raw) {
       impl_->image_raw->log(
