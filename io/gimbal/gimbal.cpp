@@ -15,11 +15,6 @@ Gimbal::Gimbal(const std::string & config_path)
   virtual_serial_ =
     virtual_serial_yaml && virtual_serial_yaml["enable"] &&
     virtual_serial_yaml["enable"].as<bool>();
-  command_angles_in_degrees_ =
-    yaml["command_angles_in_degrees"] && yaml["command_angles_in_degrees"].as<bool>();
-  feedback_angles_in_degrees_ =
-    yaml["feedback_angles_in_degrees"] && yaml["feedback_angles_in_degrees"].as<bool>();
-  rx_parser_.set_feedback_angles_in_degrees(feedback_angles_in_degrees_);
   const auto baudrate = yaml["baudrate"] ? yaml["baudrate"].as<uint32_t>()
                                           : kInfantryDefaultBaudrate;
   const auto bytesize_node = yaml["bytesize"]
@@ -128,8 +123,7 @@ void Gimbal::send(
   }
 
   const auto packet = make_infantry_command_packet(
-    control, fire, pitch, yaw, distance, pitch_vel, yaw_vel, pitch_acc, yaw_acc,
-    command_angles_in_degrees_);
+    control, fire, pitch, yaw, distance, pitch_vel, yaw_vel, pitch_acc, yaw_acc);
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -153,8 +147,7 @@ void Gimbal::read_thread()
   if (virtual_serial_) {
     while (!quit_) {
       InfantryFeedback feedback;
-      if (parse_infantry_feedback_packet(
-          virtual_feedback_packet_.data(), feedback, feedback_angles_in_degrees_)) {
+      if (parse_infantry_feedback_packet(virtual_feedback_packet_.data(), feedback)) {
         const auto t = std::chrono::steady_clock::now();
         queue_.push({infantry_feedback_q_gimbal2world(feedback), t});
 
