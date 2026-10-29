@@ -50,29 +50,24 @@ int main()
     assert(state.yaw == 0.3F);
   }
 
-  config["command_angles_in_degrees"] = true;
-  config["feedback_angles_in_degrees"] = true;
   config["virtual_serial"]["feedback"]["roll"] = 10.0F;
   config["virtual_serial"]["feedback"]["pitch"] = 20.0F;
   config["virtual_serial"]["feedback"]["yaw"] = 30.0F;
   {
-    std::ofstream degree_output(path);
-    assert(degree_output);
-    degree_output << config;
+    std::ofstream output(path);
+    assert(output);
+    output << config;
   }
 
   {
     const auto packet = io::make_infantry_feedback_packet(1, 10.0F, 20.0F, 30.0F);
     io::InfantryFeedbackStreamParser parser;
-    parser.set_feedback_angles_in_degrees(true);
     parser.push(packet.data(), packet.size());
     io::InfantryFeedback feedback{};
     assert(parser.pop(feedback));
-    constexpr float kPi = 3.14159265358979323846F;
-    constexpr float kRadToDeg = 180.0F / kPi;
-    assert(std::abs(feedback.roll - 10.0F / kRadToDeg) < 1e-6F);
-    assert(std::abs(feedback.pitch + 20.0F / kRadToDeg) < 1e-6F);
-    assert(std::abs(feedback.yaw - 30.0F / kRadToDeg) < 1e-6F);
+    assert(std::abs(feedback.roll - 10.0F) < 1e-6F);
+    assert(std::abs(feedback.pitch + 20.0F) < 1e-6F);
+    assert(std::abs(feedback.yaw - 30.0F) < 1e-6F);
   }
 
   {
@@ -100,12 +95,10 @@ int main()
 
   {
     io::Gimbal gimbal(path.string());
-    constexpr float kPi = 3.14159265358979323846F;
-    constexpr float kRadToDeg = 180.0F / kPi;
     const auto state = gimbal.state();
-    assert(std::abs(state.roll - 10.0F / kRadToDeg) < 1e-6F);
-    assert(std::abs(state.pitch + 20.0F / kRadToDeg) < 1e-6F);
-    assert(std::abs(state.yaw - 30.0F / kRadToDeg) < 1e-6F);
+    assert(std::abs(state.roll - 10.0F) < 1e-6F);
+    assert(std::abs(state.pitch + 20.0F) < 1e-6F);
+    assert(std::abs(state.yaw - 30.0F) < 1e-6F);
 
     gimbal.send(true, io::InfantryFireCommand::fire, 0.3F, 0.1F, 0.2F,
                 -0.2F, -0.1F, -0.4F, 5.0F);
@@ -113,12 +106,12 @@ int main()
     io::InfantryCommandPacket raw_command;
     std::memcpy(&raw_command, packet.data(), sizeof(raw_command));
     assert(raw_command.fire == 1);
-    assert(std::abs(raw_command.pitch - 0.2F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.yaw - 0.3F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.pitch_vel - 0.1F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.yaw_vel - 0.1F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.pitch_acc - 0.4F * kRadToDeg) < 1e-5F);
-    assert(std::abs(raw_command.yaw_acc - 0.2F * kRadToDeg) < 1e-5F);
+    assert(std::abs(raw_command.pitch - 0.2F) < 1e-5F);
+    assert(std::abs(raw_command.yaw - 0.3F) < 1e-5F);
+    assert(std::abs(raw_command.pitch_vel - 0.1F) < 1e-5F);
+    assert(std::abs(raw_command.yaw_vel - 0.1F) < 1e-5F);
+    assert(std::abs(raw_command.pitch_acc - 0.4F) < 1e-5F);
+    assert(std::abs(raw_command.yaw_acc - 0.2F) < 1e-5F);
   }
 
   std::filesystem::remove(path);
