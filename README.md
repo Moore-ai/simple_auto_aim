@@ -98,6 +98,48 @@ cmake --build build --target standard -j2
 
 使用 `./build/standard --help` 查看命令行说明。
 
+### 开机自启动（systemd）
+
+使用 `simple.service` 在开机后启动，无需桌面登录或 `screen`。
+在部署机器上先完成构建、相机与串口权限配置，确认手动运行正常，再从运行程序的普通用户执行：
+
+```bash
+sudo bash scripts/install_auto_aim_service.sh
+```
+
+安装脚本自动记录当前仓库的绝对路径，以调用 sudo 的用户运行，立即启动并启用开机自启动。
+默认延迟 5 秒后执行 `./build/standard configs/standard.yaml --mode=0 --target-color=none`，
+程序退出后等待 3 秒重启；执行 `systemctl stop` 时不会重启。
+日志通过 journald 保存，程序自身的日志仍按原配置输出。
+
+启动参数位于 `/etc/default/simple`：
+
+```bash
+AUTO_AIM_CONFIG="configs/standard.yaml" # 相对仓库根目录，也可填绝对路径
+AUTO_AIM_MODE="0"                     # 0 自瞄，1 小符，2 大符
+AUTO_AIM_TARGET_COLOR="none"          # red、blue 或 none（下位机反馈）
+AUTO_AIM_START_DELAY="5"              # 每次启动前的等待秒数
+```
+
+修改后执行 `sudo systemctl restart simple`。重复安装会保留已有参数；移动仓库后需重新安装。
+SDK 安装在其他位置时，可在该文件增加 `LD_LIBRARY_PATH="实际动态库目录"`。
+
+```bash
+systemctl status simple
+journalctl -u simple -f
+sudo systemctl restart simple
+sudo systemctl stop simple
+sudo systemctl disable --now simple
+
+# 卸载服务，保留 /etc/default/simple
+sudo bash scripts/uninstall_auto_aim_service.sh
+```
+
+手动调试或标定前先停止服务，避免占用相机、串口与 Foxglove 端口。
+若曾配置桌面自启动、cron 或旧 `screen` 守护，应先移除旧启动项。
+`autostart.sh` 现在直接调用同一启动脚本，仅用于手动前台运行；自动重启由 systemd 负责。
+WSL 中安装服务需要启用 systemd，且只在 WSL 实例启动时生效；实车开机自启应在部署机器上安装。
+
 ## 3. 相机与手眼标定
 
 标定使用 [configs/calibration.yaml](configs/calibration.yaml)，请先检查其中的相机与标定板参数。
