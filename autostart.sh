@@ -1,8 +1,5 @@
-sleep 5
-cd ~/Desktop/simple_auto_aim/
-screen \
-    -L \
-    -Logfile logs/$(date "+%Y-%m-%d_%H-%M-%S").screenlog \
-    -d \
-    -m \
-    bash -c "./watchdog.sh"
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec /bin/bash "$PROJECT_DIR/scripts/auto_aim_service.sh"
