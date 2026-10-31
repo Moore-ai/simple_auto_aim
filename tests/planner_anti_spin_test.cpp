@@ -2,6 +2,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 
 #include <yaml-cpp/yaml.h>
@@ -174,6 +175,47 @@ int main()
 
   const auto idle_plan = passing_planner.plan(std::nullopt, bullet_speed);
   assert(near(idle_plan.distance, -1.0));
+
+  // Serial mode with a zero delay must ignore the configured fixed delay.
+  const auto serial_config = write_test_config("low", false);
+  auto delay_config = YAML::LoadFile(serial_config.string());
+  delay_config["use_serial_shoot_delay"] = true;
+  delay_config["extra_delay"] = 0.2;
+  std::ofstream(serial_config) << delay_config;
+  auto_aim::Planner serial_planner(serial_config.string());
+  delay_config["use_serial_shoot_delay"] = false;
+  delay_config["extra_delay"] = 0.0;
+  std::ofstream(serial_config) << delay_config;
+  auto_aim::Planner zero_delay_planner(serial_config.string());
+  delay_config["extra_delay"] = 0.2;
+  std::ofstream(serial_config) << delay_config;
+  auto_aim::Planner fixed_delay_planner(serial_config.string());
+  delay_config["decision_speed_enable"] = true;
+  delay_config["use_serial_shoot_delay"] = true;
+  std::ofstream(serial_config) << delay_config;
+  auto_aim::Planner speed_delay_planner(serial_config.string());
+  std::filesystem::remove(serial_config);
+  auto_aim::Target delay_target(10.0, 0.5, 1.0, 0.0);
+  delay_target.predict(std::chrono::steady_clock::now());
+  delay_target.predict(-delay_target.state().yaw() / 0.5);
+  const auto serial_zero = serial_planner.plan(std::optional{delay_target}, bullet_speed);
+  const auto fixed_zero = zero_delay_planner.plan(std::optional{delay_target}, bullet_speed);
+  assert(serial_zero.control && fixed_zero.control);
+  assert((serial_zero.debug_xyza - fixed_zero.debug_xyza).norm() < 0.01);
+
+  const auto serial_delayed = serial_planner.plan(std::optional{delay_target}, bullet_speed, 200.0);
+  const auto fixed_delayed = fixed_delay_planner.plan(std::optional{delay_target}, bullet_speed, 900.0);
+  assert(serial_delayed.control && fixed_delayed.control);
+  assert((serial_delayed.debug_xyza - fixed_delayed.debug_xyza).norm() < 0.01);
+  assert((serial_delayed.debug_xyza - serial_zero.debug_xyza).norm() > 0.05);
+  const auto speed_delayed = speed_delay_planner.plan(std::optional{delay_target}, bullet_speed, 200.0);
+  assert(speed_delayed.control);
+  assert((speed_delayed.debug_xyza - fixed_zero.debug_xyza).norm() < 0.01);
+  for (double invalid_delay : {-1.0, std::numeric_limits<double>::quiet_NaN()}) {
+    const auto fallback = serial_planner.plan(std::optional{delay_target}, bullet_speed, invalid_delay);
+    assert(fallback.control);
+    assert((fallback.debug_xyza - fixed_delayed.debug_xyza).norm() < 0.01);
+  }
 
   return 0;
 }

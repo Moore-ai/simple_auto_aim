@@ -31,7 +31,7 @@ struct __attribute__((packed)) InfantryFeedbackPacket
   float roll = 0;
   float pitch = 0;
   float yaw = 0;
-  float shoot_delay = 0;
+  float shoot_delay = 0;  // ms，发射至出膛延迟
   uint8_t reserved[4]{};
   uint8_t crc8 = 0;
   uint8_t end = 0x0D;

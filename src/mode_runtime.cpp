@@ -95,7 +95,8 @@ private:
       }
 
       const auto [target_generation, target] = target_queue_.front();
-      const auto plan = planner_.plan(target, gimbal_.state().bullet_speed);
+      const auto state = gimbal_.state();
+      const auto plan = planner_.plan(target, state.bullet_speed, state.shoot_delay);
       foxglove_.update_plan(target_generation, plan);
       const auto fire =
         plan.fire ? io::InfantryFireCommand::fire : io::InfantryFireCommand::none;

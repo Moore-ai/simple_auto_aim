@@ -58,7 +58,7 @@ public:
   // Run the shared yaw/pitch MPC. The trajectory's yaw row is relative to yaw0.
   Plan plan(const Trajectory & trajectory, double yaw0, double distance);
   Plan plan(Target target, double bullet_speed);
-  Plan plan(std::optional<Target> target, double bullet_speed);
+  Plan plan(std::optional<Target> target, double bullet_speed, double shoot_delay_ms = 0.0);
 
 private:
   enum class WaitArmorHeight { low, high };
@@ -71,6 +71,7 @@ private:
   double extra_delay_{0.015};
   double speed_hysteresis_{0.0};
   bool decision_speed_enable_{true};
+  bool use_serial_shoot_delay_{false};
   bool high_speed_state_{false};
   bool anti_spin_enable_{false};
   WaitArmorHeight anti_spin_wait_armor_{WaitArmorHeight::low};

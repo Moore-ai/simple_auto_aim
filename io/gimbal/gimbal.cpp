@@ -28,17 +28,19 @@ Gimbal::Gimbal(const std::string & config_path)
     auto roll = 0.0F;
     auto pitch = 0.0F;
     auto yaw = 0.0F;
+    auto shoot_delay = 0.0F;
     if (feedback_yaml) {
       if (feedback_yaml["mode"]) mode = feedback_yaml["mode"].as<int>();
       if (feedback_yaml["roll"]) roll = feedback_yaml["roll"].as<float>();
       if (feedback_yaml["pitch"]) pitch = feedback_yaml["pitch"].as<float>();
       if (feedback_yaml["yaw"]) yaw = feedback_yaml["yaw"].as<float>();
+      shoot_delay = feedback_yaml["shoot_delay"].as<float>(0.0F);
     }
     if (mode < 0 || mode > 255) {
       throw std::invalid_argument("virtual_serial.feedback.mode must be between 0 and 255");
     }
     virtual_feedback_packet_ = make_infantry_feedback_packet(
-      static_cast<uint8_t>(mode), roll, pitch, yaw);
+      static_cast<uint8_t>(mode), roll, pitch, yaw, shoot_delay);
     feedback_packet_ = virtual_feedback_packet_;
     tools::logger()->info("[Gimbal] Using virtual serial.");
   } else {
@@ -158,6 +160,7 @@ void Gimbal::read_thread()
         state_.pitch = feedback.pitch;
         state_.pitch_vel = 0;
         state_.roll = feedback.roll;
+        state_.shoot_delay = feedback.shoot_delay;
         state_.bullet_speed = 0;
         state_.bullet_count = 0;
       }
@@ -204,6 +207,7 @@ void Gimbal::read_thread()
       state_.pitch = feedback.pitch;
       state_.pitch_vel = 0;
       state_.roll = feedback.roll;
+      state_.shoot_delay = feedback.shoot_delay;
       state_.bullet_speed = 0;
       state_.bullet_count = 0;
 

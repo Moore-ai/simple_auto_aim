@@ -18,6 +18,7 @@ int main()
   config["virtual_serial"]["feedback"]["roll"] = 0.1F;
   config["virtual_serial"]["feedback"]["pitch"] = 0.2F;
   config["virtual_serial"]["feedback"]["yaw"] = 0.3F;
+  config["virtual_serial"]["feedback"]["shoot_delay"] = 153.0F;
 
   const auto path = std::filesystem::temp_directory_path() / "simple_auto_aim_virtual_serial.yaml";
   {
@@ -35,6 +36,7 @@ int main()
     assert(configured_state.roll == 0.1F);
     assert(configured_state.pitch == -0.2F);
     assert(configured_state.yaw == 0.3F);
+    assert(configured_state.shoot_delay == 153.0F);
 
     gimbal.send(true, io::InfantryFireCommand::none, 0.3F, 0.1F, 0.0F,
                 -0.2F, 0.0F, 0.0F, 5.0F);
@@ -48,6 +50,7 @@ int main()
     assert(state.roll == 0.1F);
     assert(state.pitch == -0.2F);
     assert(state.yaw == 0.3F);
+    assert(state.shoot_delay == 153.0F);
   }
 
   config["virtual_serial"]["feedback"]["roll"] = 10.0F;
@@ -60,7 +63,7 @@ int main()
   }
 
   {
-    const auto packet = io::make_infantry_feedback_packet(1, 10.0F, 20.0F, 30.0F);
+    const auto packet = io::make_infantry_feedback_packet(1, 10.0F, 20.0F, 30.0F, 153.0F);
     io::InfantryFeedbackStreamParser parser;
     parser.push(packet.data(), packet.size());
     io::InfantryFeedback feedback{};
@@ -68,6 +71,7 @@ int main()
     assert(std::abs(feedback.roll - 10.0F) < 1e-6F);
     assert(std::abs(feedback.pitch + 20.0F) < 1e-6F);
     assert(std::abs(feedback.yaw - 30.0F) < 1e-6F);
+    assert(feedback.shoot_delay == 153.0F);
   }
 
   {

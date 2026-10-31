@@ -56,6 +56,7 @@ struct InfantryFeedback
   float roll;
   float pitch;
   float yaw;
+  float shoot_delay = 0;  // ms
 };
 
 inline float finite_or_zero(float value) { return std::isfinite(value) ? value : 0.0F; }
@@ -118,14 +119,16 @@ inline bool parse_infantry_feedback_packet(
   feedback.roll = raw.roll;
   feedback.pitch = infantry_pitch(raw.pitch);
   feedback.yaw = raw.yaw;
+  feedback.shoot_delay = raw.shoot_delay;
   return true;
 }
 
 inline std::array<uint8_t, kInfantryFeedbackPacketSize> make_infantry_feedback_packet(
-  uint8_t mode, float roll, float pitch, float yaw)
+  uint8_t mode, float roll, float pitch, float yaw, float shoot_delay = 0.0F)
 {
   InfantryFeedbackPacket feedback;
   feedback.mode = mode;
+  feedback.shoot_delay = shoot_delay;
   feedback.roll = std::isfinite(roll) ? roll : 0.0F;
   feedback.pitch = std::isfinite(pitch) ? pitch : 0.0F;
   feedback.yaw = std::isfinite(yaw) ? yaw : 0.0F;

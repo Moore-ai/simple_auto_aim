@@ -64,6 +64,7 @@ Planner::Planner(const std::string & config_path, ConfigScope scope)
   high_speed_delay_time_ = tools::read<double>(yaml, "high_speed_delay_time");
   low_speed_delay_time_ = tools::read<double>(yaml, "low_speed_delay_time");
   if (yaml["decision_speed_enable"]) decision_speed_enable_ = yaml["decision_speed_enable"].as<bool>();
+  use_serial_shoot_delay_ = yaml["use_serial_shoot_delay"].as<bool>(false);
   if (yaml["extra_delay"]) extra_delay_ = yaml["extra_delay"].as<double>();
   if (yaml["speed_hysteresis"]) speed_hysteresis_ = yaml["speed_hysteresis"].as<double>();
   const auto anti_spin_requested =
@@ -102,6 +103,8 @@ Planner::Planner(const std::string & config_path, ConfigScope scope)
   if (decision_speed_enable_) {
     tools::logger()->info("[Planner] decision speed delay: enable=true, center={:.1f}, hyst={:.1f}, low={:.3f}, high={:.3f}",
                           decision_speed_, speed_hysteresis_, low_speed_delay_time_, high_speed_delay_time_);
+  } else if (use_serial_shoot_delay_) {
+    tools::logger()->info("[Planner] decision speed delay: enable=false, using serial shoot_delay (ms)");
   } else {
     tools::logger()->info("[Planner] decision speed delay: enable=false, fixed delay={:.3f}", extra_delay_);
   }
@@ -333,7 +336,7 @@ Plan Planner::plan(Target target, double bullet_speed)
   return result;
 }
 
-Plan Planner::plan(std::optional<Target> target, double bullet_speed)
+Plan Planner::plan(std::optional<Target> target, double bullet_speed, double shoot_delay_ms)
 {
   if (!target.has_value()) {
     armor_selector_.clear();
@@ -350,7 +353,9 @@ Plan Planner::plan(std::optional<Target> target, double bullet_speed)
     update_high_speed_state(state);
     delay_time = high_speed_state_ ? high_speed_delay_time_ : low_speed_delay_time_;
   } else {
-    delay_time = extra_delay_;
+    delay_time = use_serial_shoot_delay_ && std::isfinite(shoot_delay_ms) && shoot_delay_ms >= 0.0
+                   ? shoot_delay_ms * 1e-3
+                   : extra_delay_;
   }
 
   // AIMD 自适应延迟

@@ -27,6 +27,7 @@ struct GimbalState
   float bullet_speed = 0;
   uint16_t bullet_count = 0;
   float roll = 0;
+  float shoot_delay = 0;  // ms
 };
 
 struct GimbalCommand
