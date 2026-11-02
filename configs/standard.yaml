@@ -164,9 +164,12 @@ extra_delay: 0.153 # s 关闭高低速阈值时使用的固定延迟
 decision_speed: 7 # rad/s，转速阈值，高于此值用高速延迟
 high_speed_delay_time: 0.153 # s，高转速目标发弹延迟
 low_speed_delay_time: 0.153 # s，低转速目标发弹延迟
-anti_spin_enable: false # 高转速时启用反小陀螺策略，仅 decision_speed_enable=true 时生效
+anti_spin_enable: false # 仅非前哨站四装甲板目标：高转速反小陀螺，需 decision_speed_enable=true；可与 outpost_wait 同时开启
 anti_spin_wait_armor: low # 等待板型，只能为 low（低板）或 high（高板）
 anti_spin_fire_thresh: 0.04 # rad，反小陀螺装甲板方位与目标中心方位差的开火阈值
+outpost_wait_enable: false # 对准中心方向等待所选板转入（只对 outpost v2 有效）
+outpost_wait_armor: low # 仅打击 low|medium|high
+outpost_wait_fire_thresh: 0.04 # rad，预测命中时所选近侧板方位与前哨站中心方位差的开火阈值
 
 camera_name: "hikrobot"
 exposure_ms: 1.5

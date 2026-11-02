@@ -224,6 +224,14 @@ target_link_libraries(planner_anti_spin_test PRIVATE
   tools
   io)
 
+add_executable(planner_outpost_wait_test tests/planner_outpost_wait_test.cpp)
+target_compile_options(planner_outpost_wait_test PRIVATE -UNDEBUG)
+target_link_libraries(planner_outpost_wait_test PRIVATE
+  ${OpenCV_LIBS} fmt::fmt yaml-cpp auto_aim tools io)
+add_test(NAME planner_outpost_wait_test COMMAND planner_outpost_wait_test)
+set_tests_properties(planner_outpost_wait_test PROPERTIES
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
 add_executable(gimbal_virtual_serial_test tests/gimbal_virtual_serial_test.cpp)
 target_compile_options(gimbal_virtual_serial_test PRIVATE -UNDEBUG)
 target_link_libraries(gimbal_virtual_serial_test PRIVATE ${OpenCV_LIBS} fmt::fmt yaml-cpp tools io)

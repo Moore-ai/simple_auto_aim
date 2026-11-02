@@ -179,7 +179,7 @@ ws://localhost:8765
 ```
 
 远程连接时，将 `localhost` 替换为运行程序的主机 IP。
-Image 面板可选择 `/image_raw`（原始图像）、`/image_detection`（检测图像）和 `/image`（运行标注）。
+Image 面板可选择 `/image_raw`（原始图像）和 `/image`（运行标注）。
 Plot 面板可选择目标状态、规划和云台相关数据。
 
 ### Njust 检测专用入口

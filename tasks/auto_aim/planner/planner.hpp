@@ -44,6 +44,7 @@ struct Plan
   double fly_time{0.0};
   bool debug_valid{false};
   bool anti_spin_active{false};
+  bool outpost_wait_active{false};
   std::optional<bool> high_speed_mode;
   std::optional<NjustAimDebug> njust_aim_debug;
 };
@@ -61,7 +62,7 @@ public:
   Plan plan(std::optional<Target> target, double bullet_speed);
 
 private:
-  enum class WaitArmorHeight { low, high };
+  enum class WaitArmorHeight { low, medium, high };
 
   double yaw_offset_;
   double pitch_offset_;
@@ -74,6 +75,9 @@ private:
   bool high_speed_state_{false};
   bool anti_spin_enable_{false};
   WaitArmorHeight anti_spin_wait_armor_{WaitArmorHeight::low};
+  bool outpost_wait_enable_{false};
+  WaitArmorHeight outpost_wait_armor_{WaitArmorHeight::low};
+  double outpost_wait_fire_thresh_{0.0};
   bool fly_time_iteration_enabled_{false};
   int fly_time_iteration_max_iteration_{3};
   double fly_time_iteration_convergence_threshold_{1e-3};
@@ -114,6 +118,9 @@ private:
   double anti_spin_armor_height(const TargetState & state) const;
   Eigen::Vector3d anti_spin_aim_point(const Target & target) const;
   bool anti_spin_fire_ready(const Target & target) const;
+  int select_outpost_armor(Target & target) const;
+  Eigen::Vector3d outpost_wait_aim_point(const Target & target, int selected_armor) const;
+  bool outpost_wait_fire_ready(const Target & target, int selected_armor) const;
   Eigen::Matrix<double, 2, 1> aim(
     const Target & target, double bullet_speed, int selected_armor, bool anti_spin);
   Trajectory get_trajectory(

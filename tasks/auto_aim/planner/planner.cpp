@@ -1,6 +1,7 @@
 #include "planner.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <stdexcept>
 #include <vector>
@@ -79,6 +80,20 @@ Planner::Planner(const std::string & config_path, ConfigScope scope)
     } else {
       throw std::runtime_error("anti_spin_wait_armor must be 'low' or 'high'");
     }
+  }
+  outpost_wait_enable_ = yaml["outpost_wait_enable"].as<bool>(false);
+  if (outpost_wait_enable_) {
+    const auto wait_armor = tools::read<std::string>(yaml, "outpost_wait_armor");
+    if (wait_armor == "low") {
+      outpost_wait_armor_ = WaitArmorHeight::low;
+    } else if (wait_armor == "medium") {
+      outpost_wait_armor_ = WaitArmorHeight::medium;
+    } else if (wait_armor == "high") {
+      outpost_wait_armor_ = WaitArmorHeight::high;
+    } else {
+      throw std::runtime_error("outpost_wait_armor must be 'low', 'medium' or 'high'");
+    }
+    outpost_wait_fire_thresh_ = tools::read<double>(yaml, "outpost_wait_fire_thresh");
   }
   if (const auto iteration_yaml = yaml["fly_time_iteration"]; iteration_yaml) {
     fly_time_iteration_enabled_ = tools::read<bool>(iteration_yaml, "enable");
@@ -226,12 +241,17 @@ Plan Planner::plan(Target target, double bullet_speed)
   }
 
   update_high_speed_state(target.state());
-  const auto anti_spin = anti_spin_enable_ && high_speed_state_;
+  const auto outpost_wait = outpost_wait_enable_ && target.outpost_state_v2().has_value();
+  const auto anti_spin = anti_spin_enable_ && high_speed_state_ &&
+    target.name != ArmorName::outpost && target.armor_xyza_list().size() == 4;
+  auto selected_armor = outpost_wait ? select_outpost_armor(target) : -1;
 
   // 1. Predict fly_time
   Eigen::Vector3d xyz;
   auto min_dist = 1e10;
-  if (anti_spin) {
+  if (outpost_wait) {
+    xyz = outpost_wait_aim_point(target, selected_armor);
+  } else if (anti_spin) {
     xyz = anti_spin_aim_point(target);
   } else {
     for (auto & xyza : target.armor_xyza_list()) {
@@ -255,7 +275,9 @@ Plan Planner::plan(Target target, double bullet_speed)
 
       Eigen::Vector3d future_xyz;
       auto future_min_dist = 1e10;
-      if (anti_spin) {
+      if (outpost_wait) {
+        future_xyz = outpost_wait_aim_point(future_target, selected_armor);
+      } else if (anti_spin) {
         future_xyz = anti_spin_aim_point(future_target);
       } else {
         for (const auto & xyza : future_target.armor_xyza_list()) {
@@ -285,8 +307,9 @@ Plan Planner::plan(Target target, double bullet_speed)
     std::hypot(target_state.center_x(), target_state.center_y());
   auto fire_target = target;
   const auto anti_spin_target_converged = !anti_spin || fire_target.convergened();
-  const auto selected_armor =
-    !anti_spin && armor_selection_hysteresis_enabled_ ? select_armor(target) : -1;
+  if (!outpost_wait && !anti_spin && armor_selection_hysteresis_enabled_) {
+    selected_armor = select_armor(target);
+  }
 
   // 2. Get trajectory
   double yaw0;
@@ -318,6 +341,7 @@ Plan Planner::plan(Target target, double bullet_speed)
   result.debug_armor_pitch = armor_mount_pitch(target.name);
   result.fly_time = fly_time;
   result.anti_spin_active = anti_spin;
+  result.outpost_wait_active = outpost_wait;
 
   auto shoot_offset_ = 2;
   fire_target.predict(DT * shoot_offset_);
@@ -328,6 +352,9 @@ Plan Planner::plan(Target target, double bullet_speed)
         pitch_solver_->work->x(0, HALF_HORIZON + shoot_offset_)) < fire_thresh_;
   if (anti_spin) {
     result.fire = result.fire && anti_spin_target_converged && anti_spin_fire_ready(fire_target);
+  }
+  if (outpost_wait) {
+    result.fire = result.fire && outpost_wait_fire_ready(fire_target, selected_armor);
   }
   if (!valid_plan(result)) return invalid_plan("non-finite MPC output");
   return result;
@@ -495,6 +522,48 @@ bool Planner::anti_spin_fire_ready(const Target & target) const
   return false;
 }
 
+int Planner::select_outpost_armor(Target & target) const
+{
+  // Convergence alone does not guarantee that both V2 height offsets have been observed.
+  if (!target.convergened() || !target.all_armor_ids_seen()) return -1;
+  const auto armors = target.armor_xyza_list();
+  std::array<int, OUTPOST_ARMOR_COUNT> ids{0, 1, 2};
+  std::sort(ids.begin(), ids.end(), [&](int lhs, int rhs) {
+    return armors[lhs].z() < armors[rhs].z();
+  });
+  if (armors[ids[1]].z() - armors[ids[0]].z() < 1e-6 ||
+      armors[ids[2]].z() - armors[ids[1]].z() < 1e-6) {
+    return -1;
+  }
+  if (outpost_wait_armor_ == WaitArmorHeight::low) return ids[0];
+  if (outpost_wait_armor_ == WaitArmorHeight::medium) return ids[1];
+  return ids[2];
+}
+
+Eigen::Vector3d Planner::outpost_wait_aim_point(const Target & target, int selected_armor) const
+{
+  const auto state = target.state();
+  const Eigen::Vector2d center(state.center_x(), state.center_y());
+  const auto center_dist = center.norm();
+  const auto passing_dist = std::max(center_dist - state.radius(), 0.0);
+  const auto passing_xy = center_dist > 0.0 ? center * (passing_dist / center_dist) : center;
+  const auto height = selected_armor >= 0 ? target.armor_xyza_list()[selected_armor].z() :
+                                          state.center_z();
+  return {passing_xy.x(), passing_xy.y(), height};
+}
+
+bool Planner::outpost_wait_fire_ready(const Target & target, int selected_armor) const
+{
+  if (selected_armor < 0) return false;
+  const auto state = target.state();
+  const auto armor = target.armor_xyza_list()[selected_armor];
+  const auto center_dist = std::hypot(state.center_x(), state.center_y());
+  if (armor.head<2>().norm() > center_dist) return false;
+  const auto center_yaw = std::atan2(state.center_y(), state.center_x());
+  const auto armor_yaw = std::atan2(armor.y(), armor.x());
+  return std::abs(tools::limit_rad(armor_yaw - center_yaw)) < outpost_wait_fire_thresh_;
+}
+
 Eigen::Matrix<double, 2, 1> Planner::aim(
   const Target & target, double bullet_speed, int selected_armor, bool anti_spin)
 {
@@ -502,18 +571,24 @@ Eigen::Matrix<double, 2, 1> Planner::aim(
   double yaw;
   auto min_dist = 1e10;
 
-  if (anti_spin) {
+  const auto outpost_wait = outpost_wait_enable_ && target.outpost_state_v2().has_value();
+  if (outpost_wait) {
+    const auto state = target.state();
+    xyz = outpost_wait_aim_point(target, selected_armor);
+    yaw = std::atan2(state.center_y(), state.center_x());
+  } else if (anti_spin) {
     const auto state = target.state();
     xyz = anti_spin_aim_point(target);
     yaw = std::atan2(state.center_y(), state.center_x());
   }
 
   const auto armors = target.armor_xyza_list();
-  if (!anti_spin && selected_armor >= 0 && selected_armor < static_cast<int>(armors.size())) {
+  if (!outpost_wait && !anti_spin && selected_armor >= 0 &&
+      selected_armor < static_cast<int>(armors.size())) {
     const auto & xyza = armors[selected_armor];
     xyz = xyza.head<3>();
     yaw = xyza[3];
-  } else if (!anti_spin) {
+  } else if (!outpost_wait && !anti_spin) {
     for (const auto & xyza : armors) {
       auto dist = xyza.head<3>().norm();
       if (dist < min_dist) {

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <list>
 #include <optional>
@@ -204,6 +205,45 @@ int main()
   assert(small_hit && small_hit->size() == 4);
   assert(big_hit && big_hit->size() == 4);
   assert(cv::norm((*big_hit)[0] - (*big_hit)[1]) > cv::norm((*small_hit)[0] - (*small_hit)[1]));
+
+  // A real outpost wait plan must draw the near-side virtual plate, including its mount pitch.
+  auto wait_config = YAML::LoadFile("configs/standard.yaml");
+  wait_config["outpost_wait_enable"] = true;
+  wait_config["outpost_wait_armor"] = "low";
+  wait_config["anti_spin_enable"] = false;
+  wait_config["decision_speed_enable"] = false;
+  wait_config["max_iter"] = 100;
+  constexpr char wait_config_path[] = "/tmp/outpost_wait_visualizer_test.yaml";
+  std::ofstream(wait_config_path) << wait_config;
+  auto_aim::Planner wait_planner(wait_config_path);
+  std::filesystem::remove(wait_config_path);
+  auto outpost_armor = red_armor;
+  outpost_armor.name = auto_aim::ArmorName::outpost;
+  outpost_armor.type = auto_aim::ArmorType::small;
+  outpost_armor.xyz_in_world = {2.0, 0.0, 0.3};
+  outpost_armor.ypr_in_world = {0.0, 0.0, 0.0};
+  const auto outpost_target = auto_aim::Target::make_outpost_v2(
+    {outpost_armor}, std::chrono::steady_clock::now(), Eigen::VectorXd::Ones(10));
+  const auto wait_plan = wait_planner.plan(outpost_target, 22.0);
+  assert(wait_plan.control && wait_plan.debug_valid);
+  assert(!wait_plan.anti_spin_active);
+  const auto wait_hit = tools::detail::anti_spin_hit_armor(
+    wait_plan, 3, 3, auto_aim::ArmorType::small, projection_solver);
+  assert(wait_hit && wait_hit->size() == 4);
+  const auto expected_wait_hit = projection_solver.reproject_armor(
+    {2.0, 0.0, 0.3}, 0.0, auto_aim::OUTPOST_MOUNT_PITCH, auto_aim::ArmorType::small);
+  for (std::size_t i = 0; i < 4; ++i) {
+    assert(cv::norm((*wait_hit)[i] - expected_wait_hit[i]) < 1e-3);
+  }
+  assert(!tools::detail::anti_spin_hit_armor(
+    wait_plan, 3, 4, auto_aim::ArmorType::small, projection_solver));
+  auto invalid_wait_plan = wait_plan;
+  invalid_wait_plan.debug_valid = false;
+  assert(!tools::detail::anti_spin_hit_armor(
+    invalid_wait_plan, 3, 3, auto_aim::ArmorType::small, projection_solver));
+  const auto normal_wait_plan = wait_planner.plan(auto_aim::Target(5.0, 2.0, 0.2, 0.1), 22.0);
+  assert(!tools::detail::anti_spin_hit_armor(
+    normal_wait_plan, 3, 3, auto_aim::ArmorType::small, projection_solver));
 
   auto buff_plan = inactive_plan;
   buff_plan.control = true;
