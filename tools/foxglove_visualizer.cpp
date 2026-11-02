@@ -768,7 +768,6 @@ public:
   std::optional<foxglove::RawChannel> speed_mode;
   std::optional<foxglove::schemas::CompressedImageChannel> image_raw;
   std::optional<foxglove::schemas::CompressedImageChannel> image;
-  std::optional<foxglove::schemas::CompressedImageChannel> image_detection;
   std::optional<foxglove::schemas::CompressedImageChannel> climber_contours;
   std::optional<foxglove::RawChannel> target_values;
   std::optional<foxglove::RawChannel> outpost_current_values;
@@ -824,9 +823,6 @@ FoxgloveVisualizer::FoxgloveVisualizer(
   create(impl_->image_raw, foxglove::schemas::CompressedImageChannel::create("/image_raw"),
          "/image_raw");
   create(impl_->image, foxglove::schemas::CompressedImageChannel::create("/image"), "/image");
-  create(
-    impl_->image_detection,
-    foxglove::schemas::CompressedImageChannel::create("/image_detection"), "/image_detection");
   create(
     impl_->climber_contours,
     foxglove::schemas::CompressedImageChannel::create("/buff_v2/climber/refine_center_contours"),
@@ -967,21 +963,12 @@ void FoxgloveVisualizer::publish_frame(const FrameSnapshot & frame)
       image, frame.detections.armors, impl_->enemy_color, locked_armor, anti_spin_hit_armor);
     detail::draw_buff_overlay(image, buff_debug);
 
-    cv::Mat detection_image = frame.image.clone();
-    detail::draw_aim_overlay(
-      detection_image, frame.detections.armors, impl_->enemy_color, locked_armor,
-      anti_spin_hit_armor);
-
     if (impl_->image_raw) {
       impl_->image_raw->log(
         compressed_image(detail::prepare_image_for_publish(frame.image)), log_time);
     }
     if (impl_->image) {
       impl_->image->log(compressed_image(detail::prepare_image_for_publish(image)), log_time);
-    }
-    if (impl_->image_detection) {
-      impl_->image_detection->log(
-        compressed_image(detail::prepare_image_for_publish(detection_image)), log_time);
     }
     if (impl_->climber_contours && buff_debug.climber_contours) {
       const auto contour_image = detail::climber_contours_image(
