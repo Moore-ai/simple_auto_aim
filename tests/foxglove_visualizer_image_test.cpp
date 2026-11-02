@@ -183,6 +183,9 @@ int main()
   cv::Mat incomplete_image = cv::Mat::zeros(100, 120, CV_8UC3);
   tools::detail::draw_buff_overlay(incomplete_image, incomplete_buff);
   assert(cv::countNonZero(incomplete_image.reshape(1)) > 0);
+  // Leave the first line free for camera FPS in buff mode.
+  assert(cv::countNonZero(incomplete_image(cv::Rect(0, 0, 120, 28)).reshape(1)) == 0);
+  assert(cv::countNonZero(incomplete_image(cv::Rect(0, 28, 120, 30)).reshape(1)) > 0);
 
   auto_aim::Solver projection_solver("configs/standard.yaml");
   auto_aim::Plan inactive_plan;
